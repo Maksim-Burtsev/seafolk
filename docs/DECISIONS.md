@@ -33,3 +33,25 @@ what it rules out.
   outreach list cannot cite a Release. The Zenodo concept-DOI is the canonical
   address; the other two mirror it and link back. Rules out shipping a version
   that only exists where it cannot be cited.
+- 2026-08-29 (S1) — **Archive timestamps are UTC; store `DateTime('UTC')` and
+  convert to `Europe/Copenhagen` only when rendering an hour-of-day.** Proved by
+  daylight saving rather than by a timetable: the first sailing hour of
+  `AEROESKOEBING`, `ELLEN` and `PRINSESSE ISABELLA` is exactly one hour higher in
+  the January file than in the July file, in the file's own clock — a clock that
+  does not observe DST. Absolute values agree with the published timetables
+  (Ærøskøbing first departure 06:00 local = 04 file-clock in July, 05 in January).
+  Rules out treating the file clock as local time, which would put every
+  hour-of-day chart two hours early in summer and one in winter.
+- 2026-08-29 (S1) — **Read the CSV inside the zip, never unzip to disk.**
+  `file('data/raw/aisdk-*.zip :: *.csv', CSVWithNames, '<columns>')` matches the
+  26 header columns by name and skips the rest via
+  `input_format_skip_unknown_fields=1`; a full scan of a 3.8 GB daily CSV takes
+  ~5 s. Rules out the `unzip -p | clickhouse local` pipe planned for S2 — there is
+  no reason to stream through a pipe when ClickHouse opens the archive itself, and
+  no temporary CSV ever touches the disk.
+- 2026-08-29 (S1) — **Position filter is the Danish bbox, not just `abs(lat)<=90`.**
+  Every impossible coordinate in the archive is exactly `Latitude = 91`
+  (0.1–0.5 % of rows), but ordinary GPS junk inside the valid range (lat −87,
+  lon −168) survives that test. The Danish bbox lat 53–59 / lon 3–17 keeps
+  99.2–99.4 % of rows. Rules out H3 cells scattered over the Pacific in the
+  explorer.
