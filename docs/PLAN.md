@@ -53,12 +53,12 @@ working set requested: `2025-07-12` (Sat), `2025-07-16` (Wed), `2025-01-15`
 (winter Wed), `2025-06-14` (Sjælland Rundt Saturday).
 
 - [x] Files above exist.
-- [ ] `scripts/fetch.sh 2025-07-12 2025-07-16 2025-01-15 2025-06-14` completed
+- [x] `scripts/fetch.sh 2025-07-12 2025-07-16 2025-01-15 2025-06-14` completed
       (`ls data/raw/*.ok` shows four files).
 
 ---
 
-## S1 — First look: does the story exist in the files?
+## S1 — First look: does the story exist in the files? *(done — Gate A passed)*
 
 **Goal:** Open one daily file without loading anything permanently and answer five
 questions with numbers: Is Class B present? What share of active vessels is Class B
@@ -67,30 +67,32 @@ their counts? Is the timestamp UTC or local? Are coordinates decimal-point?
 
 **Files:**
 - Create: `sql/00_peek.sql` — `SELECT` queries over `file('data/raw/…')` via
-  `clickhouse local` with the zip streamed in (`unzip -p … | clickhouse local
-  --query "… FROM table …" --input-format CSVWithNames`).
+  `clickhouse local`. *(Done differently: ClickHouse opens the zip itself with
+  `file('data/raw/aisdk-*.zip :: *.csv', CSVWithNames, '<cols>')`, so the
+  `unzip -p | clickhouse local` pipe was not needed. See `docs/DECISIONS.md`.)*
 - Create: `scripts/ch.sh` — wrapper: `clickhouse local --path data/ch
   --multiquery < "$1"` (and `-q` passthrough). Make it executable.
 - Create: `notes/s1-first-look.md` — the numbers, verbatim query output.
 
 **Do:**
-- [ ] Inspect the zip: `unzip -l data/raw/aisdk-2025-07-12.zip` (how many CSV
-      entries, sizes).
-- [ ] Stream the CSV into `clickhouse local` and run: row count; distinct MMSI by
-      `Type of mobile`; distinct MMSI by `Ship type` for Class B only; count of
-      rows with `Latitude`/`Longitude` outside Danish waters or at 91/181
-      (sentinel); parse check of `Timestamp` with `parseDateTimeBestEffort`.
-- [ ] Timezone test: take the Rødby–Puttgarden or Helsingør–Helsingborg ferries
-      (`Ship type = 'Passenger'`, names containing e.g. `TYCHO BRAHE`, `AURORA`,
-      `HAMLET`), list the first departure hour of the day in the file's clock,
-      compare with the published timetable (first Helsingør departure ≈ 05:xx
-      local). Decide UTC vs Europe/Copenhagen and record it in
-      `docs/DECISIONS.md`.
-- [ ] Repeat the Class B share query on `aisdk-2025-01-15.zip`.
+- [x] Inspect the zip: one CSV member, `aisdk-2025-07-12.csv`, 3.84 GB.
+      Superseded in practice: ClickHouse opens the archive itself, no `unzip`.
+- [x] Read the CSV inside the zip with `file(… :: *.csv)` and run: row count;
+      distinct MMSI by `Type of mobile`; distinct MMSI by `Ship type` for Class B
+      only; count of rows with `Latitude`/`Longitude` outside Danish waters or at
+      the 91/181 sentinel; parse check of `Timestamp`. All six checks are in
+      `sql/00_peek.sql`, output in `notes/s1-first-look.md`.
+- [x] Timezone test → **UTC**, recorded in `docs/DECISIONS.md`. Done by the
+      daylight-saving shift rather than by trusting a timetable: the island
+      ferries `AEROESKOEBING`, `ELLEN` and `PRINSESSE ISABELLA` each start
+      sailing exactly one hour later in the January file than in the July file,
+      in the file's own clock. `TYCHO BRAHE` (Helsingør–Helsingborg) was
+      rejected as a probe — it moves in all 24 hours and has no first departure.
+- [x] Repeat the Class B share query on `aisdk-2025-01-15.zip`. 27.6 % vs 57–66 %.
 
 **Validate:**
 ```bash
-scripts/ch.sh sql/00_peek.sql        # prints the five answers as small tables
+scripts/ch.sh sql/00_peek.sql        # prints the answers as small tables, ~41 s
 ```
 Expected: Class B distinct MMSI on 2025-07-12 is in the thousands; `Ship type`
 contains `Sailing` and `Pleasure`; winter Class B share is clearly lower than
@@ -245,6 +247,10 @@ resume, progress, one log line per file, and a summary at the end.
   message counts; the coverage-drift reference used in S10.
 
 **Do:**
+- [ ] **Confirm `clickhouse local` opens a monthly zip64 archive** (14–19 GB, and
+      the 2017 `all_sources_*` variants) with `file('… :: *.csv')`. If it cannot,
+      fall back to the `unzip -p | clickhouse local` pipe. See the S1 entry in
+      `docs/DECISIONS.md`.
 - [ ] Implement the guards; test with `--dry-run` on `queues/ref-years.txt`.
 - [ ] Start `queues/2024-2026.txt`; record MB/s and per-file seconds in
       `docs/STATUS.md` after the first night.

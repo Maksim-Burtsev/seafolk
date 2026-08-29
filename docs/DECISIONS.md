@@ -46,12 +46,26 @@ what it rules out.
   `file('data/raw/aisdk-*.zip :: *.csv', CSVWithNames, '<columns>')` matches the
   26 header columns by name and skips the rest via
   `input_format_skip_unknown_fields=1`; a full scan of a 3.8 GB daily CSV takes
-  ~5 s. Rules out the `unzip -p | clickhouse local` pipe planned for S2 — there is
-  no reason to stream through a pipe when ClickHouse opens the archive itself, and
-  no temporary CSV ever touches the disk.
-- 2026-08-29 (S1) — **Position filter is the Danish bbox, not just `abs(lat)<=90`.**
-  Every impossible coordinate in the archive is exactly `Latitude = 91`
-  (0.1–0.5 % of rows), but ordinary GPS junk inside the valid range (lat −87,
-  lon −168) survives that test. The Danish bbox lat 53–59 / lon 3–17 keeps
-  99.2–99.4 % of rows. Rules out H3 cells scattered over the Pacific in the
-  explorer.
+  ~5 s. Measured only on **daily** zips (0.6–0.8 GB, one CSV member), which is all
+  S2 and S3 need. The `unzip -p | clickhouse local` pipe planned for S2 stays the
+  documented fallback and is *not* ruled out: the monthly files S4 loads are
+  14–19 GB, past the zip64 boundary, and `docs/DATA.md` notes 2017 also ships
+  `all_sources_2017-MM.zip` variants of unknown member layout. **S4 must confirm
+  ClickHouse opens a monthly zip64 archive before the bulk run**, and fall back to
+  the pipe if it cannot.
+- 2026-08-29 (S1) — **Quality filter: `abs(Latitude) <= 90`.** Every impossible
+  coordinate in the four sampled days is exactly `Latitude = 91, Longitude = 0`
+  (0.1–0.5 % of rows). There is no second sentinel and no partially-broken value,
+  so this one test is sufficient. Rules out inventing a cleaning heuristic.
+- 2026-08-29 (S1) — **Scope filter: the Danish bbox lat 53–59 / lon 3–17 — a
+  choice about what the project is about, not a cleaning step.** It keeps
+  96.6–99.5 % of rows across the four sampled days (96.6 % on 2025-06-14,
+  99.5 % on 2025-07-16). What it drops is mostly *not* junk: on 2025-06-14 the
+  ~894 k out-of-bbox rows form one coherent southern-Baltic cluster (5° cells
+  lat 50–55 / lon 15–20, 364 k messages alone), i.e. real traffic the Danish
+  receivers picked up beyond Danish waters. A little genuine junk (lat −87,
+  lon −168) is inside the valid range and is removed by the same filter.
+  Consequences: the essay says "Danish waters" and means it; **S10's coverage
+  layer must report the dropped share per day**, because it varies by a factor
+  of seven between days and would otherwise look like a change in traffic; and
+  S2's loader must count what it drops rather than discard it silently.

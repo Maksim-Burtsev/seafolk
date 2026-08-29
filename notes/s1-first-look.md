@@ -103,10 +103,30 @@ aisdk-2025-07-16.csv   20398510            23261       23261        20299568  -8
   exactly `Latitude = 91` (with `Longitude = 0`)**. There is no second sentinel and
   no partially-broken value. `abs(Latitude) <= 90` is a sufficient filter.
 - Sentinels are 0.1–0.5 % of rows.
-- Beyond the sentinels there is ordinary GPS junk *inside* the valid range
-  (lat −87, lon −168). It is small: the Danish bbox (lat 53–59, lon 3–17) holds
-  **99.2–99.4 %** of all rows. The loader must filter on the bbox, not only on
-  `abs(lat) <= 90`.
+- The Danish bbox (lat 53–59, lon 3–17) holds **96.6 % – 99.5 %** of all rows —
+  99.51 % on 2025-07-16, 99.36 % on 07-12, 99.21 % on 01-15, but only **96.56 %**
+  on 2025-06-14. That is a sevenfold swing in what a bbox filter throws away,
+  between days three weeks apart.
+- **What falls outside the bbox is mostly not junk.** Grouped into 5° cells, the
+  ~894 k out-of-bbox rows of 2025-06-14 are one coherent block in the southern
+  Baltic, not scatter:
+
+  ```
+  lat5  lon5     msgs
+    50    15   364499
+    55    15   201953
+    55    20    93694
+    50    20    64183
+    55    10    47040
+    55     5    28520
+  ```
+
+  There *is* ordinary GPS junk inside the valid range too (lat −87, lon −168), but
+  it is a rounding error next to this. So the bbox is a **scope** decision — "this
+  project is about Danish waters" — and not a cleaning step, and it must be kept
+  separate from the `abs(lat) <= 90` quality filter. Consequence for S10: the
+  dropped share has to be reported per day, or it will look like a change in
+  traffic when it is a change in what the receivers reached.
 
 ## 5. Timestamps parse cleanly, and there is only one reading
 
@@ -142,6 +162,12 @@ PRINSESSE ISABELLA         21          4          3        21                   
 ```
 
 All three shift by exactly +1 h in winter. **The archive timestamps are UTC.**
+
+`ANHOLT` is in the query's ferry list but not in this table: it sails in July only,
+and the `HAVING countIf(day = …) > 0` guard drops it. That is deliberate — without
+the guard, `minIf` over the empty January group returns 0 rather than nothing, and
+`ANHOLT` would report a confident `winter_shift_hours` of −6. If it ever shows up
+in this output, the guard is broken and every number in the table is suspect.
 
 Sanity check on the absolute values: Ærøfærgerne's `AEROESKOEBING` first sails at
 04 file-clock in July = **06:00 CEST**, and 05 file-clock in January = **06:00 CET**

@@ -109,9 +109,16 @@ FROM (
         count()                                            AS c
     FROM file('data/raw/aisdk-2025-{01-15,07-12}.zip :: *.csv', CSVWithNames,
               '`# Timestamp` String, Name String, SOG Nullable(Float32)')
-    WHERE SOG > 3 AND Name IN ('PRINSESSE ISABELLA', 'AEROESKOEBING', 'ELLEN')
+    -- ANHOLT sails in July only; it is in the list on purpose, as the check that
+    -- the HAVING guard below fires. If it ever appears in the output, the guard
+    -- is broken and every shift in this table is suspect.
+    WHERE SOG > 3
+      AND Name IN ('PRINSESSE ISABELLA', 'AEROESKOEBING', 'ELLEN', 'ANHOLT')
     GROUP BY Name, day, h
     HAVING c > 20
 )
 GROUP BY ferry
+-- A ferry missing from one of the two days must drop out, not contribute a zero:
+-- minIf over an empty group returns 0, which would read as a -6 h "winter shift".
+HAVING countIf(day = '01-15') > 0 AND countIf(day = '07-12') > 0
 ORDER BY ferry;
