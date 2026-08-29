@@ -40,7 +40,7 @@ export, with a test.
 | 0 · Prove the story | S1–S3 | Three real charts from a few days and two full months; Class B confirmed |
 | 1 · Fill the lake | S4–S5 | 2024 → today daily + reference years aggregated; context layers loaded |
 | 2 · Analyse | S6–S10 | One notebook of findings per chapter + the honesty layer |
-| 3 · Publish data | S11 | Parquet on GitHub Releases + Hugging Face, data card, privacy test |
+| 3 · Publish data | S11 | Parquet on GitHub Releases + Hugging Face + Zenodo (DOI), data card, privacy test |
 | 4 · Tell it | S12–S14 | Essay (RU/EN), explorer, posters |
 | 5 · Launch | S15 | HN / Reddit / Habr / outreach mails / ClickHouse example-dataset PR |
 
@@ -426,6 +426,26 @@ curve is written down.
   citation.
 - Create: `scripts/publish_hf.sh` — `huggingface-cli upload` to
   `datasets/<user>/seafolk-danish-ais` (dependency line in DECISIONS).
+- Create: `CITATION.cff` (repo root) — GitHub renders a "Cite this repository"
+  button from it natively, no dependency. Filled in with the Zenodo concept-DOI
+  once it is minted.
+
+**Do:**
+- [ ] **Read the DMA terms of use verbatim before exporting anything.** The
+      published licence line in `README.md` (CC BY 4.0 on the aggregates) is
+      currently an assumption, not a checked fact. Copy the exact required
+      attribution string and any disclaimer — AIS providers commonly require a
+      "not for navigation" notice — into `docs/DATA.md`, and use that exact
+      wording in the data card. If the terms forbid redistribution of
+      derivatives or impose share-alike, stop: the licence claim in `README.md`
+      is wrong and has to change before anything is published.
+- [ ] Export, then publish to three places: GitHub Release, Hugging Face, and a
+      Zenodo record under CC BY 4.0. Take the Zenodo **concept** DOI — it always
+      resolves to the newest version — and write it into `dist/dataset/README.md`,
+      `CITATION.cff`, the root `README.md` and the Hugging Face card. One
+      canonical address, two mirrors pointing back at it. Releases and Hugging
+      Face are where people download; only the DOI is something a paper can cite,
+      and the researchers in the S15 outreach list need exactly that.
 
 **Validate:**
 ```bash
@@ -433,7 +453,9 @@ scripts/export.sh          # PASS from test_export, sizes printed
 ```
 
 **You verify:** open one Parquet in DuckDB/Polars, try to find any Class B cell
-with < 5 vessels. There must be none.
+with < 5 vessels. There must be none. The DOI resolves to the dataset, and the
+data card carries a ready-to-paste "cite as" block and the DMA attribution string
+copied word for word.
 
 **Commit:** `feat(s11): privacy-checked dataset export and data card`
 
@@ -453,13 +475,31 @@ with < 5 vessels. There must be none.
   line, and a "reproduce" link to the SQL file.
 - Create: `scripts/build_site_data.sh` — SQL → `site/data/*.json`.
 - Create: `.github/workflows/pages.yml` — deploy `site/` to GitHub Pages.
+- Create: `site/method.html` (EN) and `site/ru/method.html` — the privacy method
+  note: what a Class B transponder is, why every other pipeline throws it away,
+  k ≥ 5, H3 res 7, what is never published and why that is enough. Compiled from
+  `docs/DECISIONS.md` and the data card — not new work. Linked from the essay,
+  the data card and the root `README.md`. "Are you tracking private boats?" is
+  the first question the project will be asked in public; the answer has to
+  already exist at a URL, not be improvised in a comment thread.
+- Create: a Danish summary of the essay, ~300 words — `site/da/index.html` or a
+  `lang="da"` section. Not a full translation. Waves 2 and 3 in S15 are addressed
+  to Danish clubs, island municipalities and local papers; they will read an
+  English page but they forward a Danish one.
+- Add: a `<script type="application/ld+json">` block, `@type: Dataset` — `name`,
+  `description`, `license`, `identifier` (the S11 DOI), `creator`,
+  `temporalCoverage`, `spatialCoverage`, `distribution` — on whichever page ends
+  up being the dataset's landing page. This is what Google Dataset Search
+  indexes; without it the dataset does not exist for it. Independent of where the
+  site is hosted.
 
 **Validate:** Lighthouse ≥ 90 perf/accessibility locally; every chart has a
 table fallback; page renders without JS errors in Safari and Chrome; dark mode
-checked.
+checked; `validator.schema.org` reports no errors on the dataset landing page.
 
 **You verify:** read it end to end in both languages as a stranger. Three
-sailors read the draft.
+sailors read the draft, and one Danish reader checks the Danish summary and the
+island and storm names in it.
 
 **Commit:** `feat(s12): essay site`
 
@@ -472,7 +512,8 @@ sailors read the draft.
   GeoJSON → PMTiles (tippecanoe; dependency line), one layer per `ship_group`.
 - Create: `site/explore/` — MapLibre + deck.gl H3HexagonLayer, year/month slider,
   group toggles, island pages (`site/explore/islands/<slug>.html`) fed by
-  `ferry_daily.parquet`.
+  `ferry_daily.parquet`. Each island page opens with a Danish paragraph — these
+  pages are what wave 3 in S15 mails to Ærø, Samsø, Læsø, Anholt and Bornholm.
 
 **Validate:** tiles ≤ 300 MB total; first paint < 2 s on a laptop; no per-vessel
 data reachable from the browser (grep the built assets for `mmsi`).

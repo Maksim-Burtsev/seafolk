@@ -6,6 +6,11 @@ Last verified: 2026-08-29. Anything marked *(unverified)* still needs a check.
 
 - Index: <http://aisdata.ais.dk/> (static page listing an S3 bucket
   `aisdata.ais.dk.s3.eu-central-1.amazonaws.com`). Free under the Danish PSI act.
+- **Terms of use: not yet read verbatim.** The PSI act is the general basis, but
+  the archive's own terms have not been opened. S11 reads them before the export
+  and records here the exact attribution string DMA requires, any disclaimer
+  (AIS providers often require "not for navigation"), and whether redistribution
+  of derivatives under CC BY 4.0 is actually allowed.
 - Listing (checked by enumerating the bucket, 1 128 keys):
   - `YYYY/aisdk-YYYY-MM.zip` — monthly, 2006-03 → 2024-02 (a few months missing
     in 2016–2017; 2017 also has `all_sources_2017-MM.zip` variants).

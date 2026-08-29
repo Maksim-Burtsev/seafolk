@@ -27,3 +27,9 @@ what it rules out.
 - 2026-08-29 — **Cloud only as an accelerator, at the end, if at all.** A Hetzner
   box for one week (~€25) if the laptop download proves too slow. Never as a
   permanent host.
+- 2026-08-29 — **Zenodo alongside GitHub Releases and Hugging Face.** Hugging Face
+  gives a viewer and traffic, a Release gives the download next to the code,
+  neither gives a citable immutable address — and the researchers in the S15
+  outreach list cannot cite a Release. The Zenodo concept-DOI is the canonical
+  address; the other two mirror it and link back. Rules out shipping a version
+  that only exists where it cannot be cited.
