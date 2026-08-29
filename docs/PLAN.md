@@ -1,4 +1,4 @@
-# human-sea — session plan
+# Seafolk — session plan
 
 > **For Claude Code sessions:** one session = one section below. Read `CLAUDE.md`
 > and `docs/STATUS.md` first. Each section has a **Goal**, the **Files** it owns,
@@ -425,7 +425,7 @@ curve is written down.
   DMA attribution), grain, privacy rule, known biases (from S10), schema,
   citation.
 - Create: `scripts/publish_hf.sh` — `huggingface-cli upload` to
-  `datasets/<user>/danish-ais-human-sea` (dependency line in DECISIONS).
+  `datasets/<user>/seafolk-danish-ais` (dependency line in DECISIONS).
 
 **Validate:**
 ```bash

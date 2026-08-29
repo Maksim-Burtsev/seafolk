@@ -1,4 +1,4 @@
-# human-sea — project memory
+# Seafolk — project memory
 
 Read this first, then `docs/STATUS.md` (where we are), then the session you were
 asked to run in `docs/PLAN.md`. Do not start coding before those three are read.

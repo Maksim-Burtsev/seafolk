@@ -1,4 +1,6 @@
-# human-sea
+# Seafolk
+
+*Sea folk* — the people on the water, not the cargo.
 
 Twenty years of Danish waters seen through the people on them — sailors, island
 ferries, fishermen, and everyone who waits out a storm — built from the open AIS
