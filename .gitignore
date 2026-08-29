@@ -1,0 +1,22 @@
+# data — never committed
+data/
+*.zip
+*.csv
+*.parquet
+*.pmtiles
+
+# local tooling
+.venv/
+__pycache__/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.ipynb_checkpoints/
+node_modules/
+dist/
+.DS_Store
+
+# local-only Claude Code state and the Russian roadmap (lives as a Claude artifact)
+.claude/settings.local.json
+roadmap*.html
+scratch/
