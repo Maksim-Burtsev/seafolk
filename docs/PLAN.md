@@ -269,6 +269,18 @@ resume, progress, one log line per file, and a summary at the end.
       found` after finishing all 92 files, because the file was edited under
       the running process. Stop the runner, edit, restart — it resumes from
       `load_log`.
+- [ ] **Deal with the part directories `clickhouse local` never collects.**
+      92 days left **2 881 part directories / 54 183 files** under `data/ch/store`
+      — 31 directories a day, against 134 parts that `system.parts` admits to.
+      Each load runs three `DELETE` mutations, every mutation writes a new part
+      version hardlinking the unchanged columns, and the background cleaner
+      never runs because `clickhouse local` exits first (the same mechanism as
+      S2's stage-table finding). Space is fine — the hardlinks mean 28.99 GB of
+      nominal content costs 1.43 GB — but 909 days projects to ~28 500
+      directories and ~535 000 files, and every `scripts/ch.sh` invocation
+      scans them at startup (1.1 s today). Measure the startup cost as the run
+      grows; the likely fix is a periodic `OPTIMIZE TABLE … FINAL` or a lower
+      `old_parts_lifetime`, not more RAM.
 - [ ] **Progress reporting reads `data/progress.tsv`, never the store.**
       `clickhouse local` locks `--path` exclusively and a stray query can make
       the *loader* fail, not just itself (`docs/DECISIONS.md`).

@@ -236,6 +236,15 @@ times rather than from the review.
   S4's progress reporting must read `data/progress.tsv`, never the store.
 - **Before choosing scope (b), measure a 2015 reference month.** Finding 8's
   ~72 GB straight-line is an overestimate of unknown size.
+- **`data/ch` is 2 881 part directories and 54 183 files for 92 days**, of which
+  52 699 are hardlinks: 28.99 GB of nominal content over 1.43 GB of unique
+  inodes. `system.parts` reports only 134 parts, so the rest are mutation
+  versions the background cleaner never collected — `clickhouse local` exits
+  before it runs. Harmless at this size (a query is 0.6 s), but it is 31
+  directories per loaded day and S4 loads 909 of them. Two practical
+  consequences: watch the startup cost as the run grows, and **never copy
+  `data/ch` with a tool that breaks hardlinks onto a non-APFS volume** — the
+  copy is 29 GB there. On APFS `cp -a` clones and costs nothing.
 - `scripts/test_load.sh` SKIPs its cross-file assert whenever `data/raw` holds
   fewer than two archives — which is always, now. S4 should decide whether the
   test fetches its own fixture or stays opportunistic.
