@@ -41,11 +41,17 @@ MONTH_NAME = {"202501": "January 2025", "202506": "June 2025", "202507": "July 2
 
 def rows(sql_file):
     """Run a query file and return its rows as lists of strings (TSV)."""
-    out = subprocess.run(
+    p = subprocess.run(
         [str(ROOT / "scripts" / "ch.sh"), str(ROOT / "sql" / sql_file)],
-        capture_output=True, text=True, check=True,
-    ).stdout
-    r = [line.split("\t") for line in out.splitlines() if line]
+        capture_output=True, text=True,
+    )
+    if p.returncode:
+        # check=True would report the exit status and swallow the reason. The
+        # most likely reason has a known cause worth naming.
+        sys.exit(f"{sql_file} failed (exit {p.returncode}):\n{p.stderr.strip()}\n"
+                 "  'Cannot lock file data/ch/status' means a load is running:\n"
+                 "  clickhouse local locks the store (docs/DECISIONS.md).")
+    r = [line.split("\t") for line in p.stdout.splitlines() if line]
     assert r, f"{sql_file} returned no rows -- nothing to plot"
     return r
 
@@ -219,7 +225,7 @@ def numbers(season_data, week_data, day_data):
         wk = sum(series.get(d, 0) for d in range(1, 6)) / 5
         we = sum(series.get(d, 0) for d in (6, 7)) / 2
         print(f"{m} {grp:9s} {mobile}  " + " ".join(f"{100*series.get(d,0):5.1f}" for d in range(1, 8))
-              + f"   weekend/weekday {we/wk:.2f}x")
+              + (f"   weekend/weekday {we/wk:.2f}x" if wk else ""))
 
     print("\n== day (peak local hour, and 22:00-05:00 share) ==")
     for (m, daytype, grp, mobile), series in sorted(day_data.items()):

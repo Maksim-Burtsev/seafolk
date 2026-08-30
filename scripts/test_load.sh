@@ -131,6 +131,20 @@ else
   echo "SKIP  cross-file merge — only one archive file on disk"
 fi
 
+# 13. scripts/run_queue.sh skips a date already in load_log — WITHOUT fetching
+#     it. This is the branch that decides whether a resumed queue re-downloads
+#     72 GB it already has, and load.sh's own skip cannot cover it: that one
+#     fires after the file is on disk, and leaves it there. AIS_RAW and
+#     QUEUE_LOG point the runner at throwaway paths, so a broken skip lands in
+#     the scratch directory instead of data/raw.
+d1=$(basename "$z1" .zip); d1=${d1#aisdk-}
+printf '%s\n' "$d1" > "$LINKS/queue.txt"
+rq_out=$(AIS_RAW="$LINKS/raw" QUEUE_LOG="$LINKS/queue.log" scripts/run_queue.sh "$LINKS/queue.txt")
+case "$rq_out" in *"skip    aisdk-$d1.zip"*) said_skip=1;; *) said_skip=0;; esac
+assert "run_queue skips a date already in load_log" 1 "$said_skip"
+assert "…and downloads nothing while doing it" 0 \
+  "$(ls "$LINKS/raw" 2>/dev/null | wc -l | tr -d ' ')"
+
 echo
 [ "$fail" = 0 ] && echo "ALL PASS" || echo "FAILURES ABOVE"
 exit "$fail"

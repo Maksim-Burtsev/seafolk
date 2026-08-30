@@ -14,8 +14,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 q="${1:?usage: scripts/run_queue.sh <dates-file>}"
-mkdir -p data
-exec > >(tee -a data/queue.log) 2>&1
+# Where the archive lands is fetch.sh's rule, not this script's — read the same
+# variable it reads, or setting AIS_RAW sends the download one place and the
+# load another. QUEUE_LOG follows CH_PATH's precedent so the test can redirect it.
+DEST="${AIS_RAW:-data/raw}"
+log="${QUEUE_LOG:-data/queue.log}"
+mkdir -p "$(dirname "$log")" "$DEST"
+exec > >(tee -a "$log") 2>&1
 
 scripts/ch.sh sql/01_schema.sql            # load_log has to exist before it is read
 loaded="$(scripts/ch.sh -q 'SELECT file FROM load_log')"
@@ -26,11 +31,11 @@ while read -r d _; do
   if grep -qxF "$f" <<<"$loaded"; then echo "skip    $f (already in load_log)"; continue; fi
   echo "===     $(date -u '+%F %T')  $d"
   scripts/fetch.sh "$d"
-  scripts/load.sh "data/raw/$f"            # never --limit: a capped load keeps the zip
+  scripts/load.sh "$DEST/$f"            # never --limit: a capped load keeps the zip
   # A complete load deletes its own archive. A surviving zip therefore means the
   # day is only partly loaded — stop, rather than roll on and fill the disk with
   # 92 of them.
-  [ ! -e "data/raw/$f" ] || { echo "ERROR   $f survived the load — stopping" >&2; exit 1; }
+  [ ! -e "$DEST/$f" ] || { echo "ERROR   $f survived the load — stopping" >&2; exit 1; }
 done < "$q"
 
 echo "queue done: $q"
