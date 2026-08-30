@@ -13,19 +13,29 @@
 -- classified value over 'Undefined', latest wins among those. Both fields come
 -- from ONE argMax over a tuple, so they are read off the same row.
 --
--- Type of mobile: 354 of 3 402 vessels on 2025-01-15 reported BOTH classes in
--- one day. This is the privacy key, so it is NOT resolved by majority or by
--- recency: a vessel that reports Class B even once is Class B for that day.
--- The asymmetry is the point — mislabelling a public ferry as private costs a
--- row in public_track, mislabelling a private boat as public publishes its
--- track. Only one of those is recoverable.
+-- Type of mobile: vessels report BOTH classes in one day — 354 of 3 402 on
+-- 2025-01-15, 526 of 8 364 on 2025-06-14. This is the privacy key, not a
+-- grouping, so it is resolved toward Class B: mislabelling a public ferry as
+-- private costs a row in public_track, mislabelling a private boat as public
+-- publishes its track, and only one of those is recoverable.
+--
+-- The threshold sits in a gap in the data, not in the middle of it. Mixed
+-- vessels are bimodal — a Class A ship with a handful of stray messages, or a
+-- genuinely ambiguous transponder — and almost nothing lies between:
+--   2025-01-15  229 vessels < 0.1 % B | 110 at 0.1-1 % |  15 above 1 %
+--   2025-06-14  439 vessels < 1 % B                    |  87 above 1 %
+--   2025-07-12  533 vessels < 1 % B                    |  98 above 1 %
+-- 'Class B even once' would therefore file ~340 obvious Class A ships as
+-- private and cost chapter 03 a sixth of its ferries (public_track fell 21 %
+-- when it was tried). 1 % keeps them and still sends every ambiguous
+-- transponder to the private side.
 TRUNCATE TABLE ais_vessel_stage;
 
 INSERT INTO ais_vessel_stage
 SELECT
     day,
     mmsi,
-    if(countIf(mobile = 'Class B') > 0, 'Class B', 'Class A')  AS safe_mobile,
+    if(countIf(mobile = 'Class B') >= 0.01 * count(), 'Class B', 'Class A') AS safe_mobile,
     argMax((ship_type, grp), (ship_type != 'Undefined', ts)).1 AS best_type,
     argMax((ship_type, grp), (ship_type != 'Undefined', ts)).2 AS best_group
 FROM (
