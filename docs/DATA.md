@@ -28,16 +28,16 @@ Last verified: 2026-08-29. Anything marked *(unverified)* still needs a check.
   | 2 | Type of mobile | Verified values: `Class A`, `Class B`, `AtoN`, `Base Station`, `SAR Airborne`, `Search and Rescue Transponder`, `Emergency PIRB`, `Man Overboard Device`. Only the first two are vessels (6.6 % of a day's rows are the rest). **Not constant per vessel per day** — 354 of 3 402 vessels on 2025-01-15 (10.4 %) and 526 of 8 364 on 2025-06-14 report both `Class A` and `Class B`; see S2's resolution rule in `docs/DECISIONS.md`. |
   | 3 | MMSI | |
   | 4–5 | Latitude, Longitude | **Decimal point** in the real files (the README example is wrong). Single sentinel `Latitude = 91, Longitude = 0`, 0.1–0.5 % of rows; filter on the Danish bbox lat 53–59 / lon 3–17, which keeps **96.6–99.5 %** of all rows (99.51 % on 2025-07-16, 96.56 % on 2025-06-14) — a scope decision, not cleaning; what it drops on 06-14 is a coherent southern-Baltic cluster. |
-  | 6 | Navigational status | text |
+  | 6 | Navigational status | **A Class A field — do not plan around it.** Inside the bbox on 2025-07-12 it is `Unknown value` on 2 704 358 of 2 710 000 Class B messages, and `Under way sailing` covers 6 Class B vessels / 14 messages in a whole day. Populated for Class A (1 988 under way using engine, 1 008 moored, 191 at anchor). Not stored by the S2 loader. |
   | 7–10 | ROT, SOG, COG, Heading | `SOG` is empty on ~6.7 % of rows and carries the AIS sentinel **102.3** ("not available") on 27–66 k rows a day, stored as 102.2 in Float32. Max observed 258 kn. S2 filters `sog < 100`. |
-  | 11 | IMO | |
-  | 12–13 | Callsign, Name | |
+  | 11 | IMO | String: digits or `Unknown`. Fill rate inside the bbox on 2025-07-12: 61 % of Class A passenger vessels, 97 % of cargo, 4 of 3 799 Class B leisure. Stored in `vessel_day.imo` as `toUInt32OrZero`. |
+  | 12–13 | Callsign, Name | `Name` is empty for most Class A cargo rows but populated for ferries. `Callsign` is not stored — redundant beside IMO/Name for public vessels, identifying data for Class B. |
   | 14 | Ship type | Verified: `Undefined`, `Sailing`, `Pleasure`, `Cargo`, `Fishing`, `Passenger`, `Tanker`, `Other`, `Tug`, `SAR`, `HSC`, `Dredging`, `Pilot`, `Military`, `Law enforcement`, `Towing`, `Port tender`, `Reserved`, `Diving`, `Anti-pollution`, `Medical`, `WIG`, `Spare 1/2`, `Towing long/wide`, `Not party to conflict`. Independent of column 2 — Class B `Cargo`/`Fishing`/`Passenger` all exist. |
   | 15 | Cargo type | |
   | 16–17 | Width, Length | `Length` is populated on 18.4 M of 20.4 M rows on 2025-07-16, max 557 m. Carried on static messages, so `vessel_day.length` takes `max()` over the day. |
   | 18 | Type of position fixing device | |
   | 19 | Draught | |
-  | 20–21 | Destination, ETA | |
+  | 20–21 | Destination, ETA | `Destination` is crew-typed free text; 266 of 298 Class A passenger vessels report something. Not stored — S8 assigns ferry routes by endpoints instead. |
   | 22 | Data source type | `AIS` on every one of 20.4 M rows of 2025-07-16. Not read by the loader. |
   | 23–26 | Size A/B/C/D | GPS antenna offsets |
 

@@ -107,14 +107,20 @@ assert "vessels summed over h3_hourly groups == vessel_day rows" \
           (SELECT uniqExactMerge(vessels) AS v FROM h3_hourly
            GROUP BY toDate(hour), mobile, ship_group)")"
 
-# 10. The stage leaves nothing behind. TRUNCATE would leave ~58 MB of inactive
+# 10. imo actually parses. It arrives as the string 'Unknown' or digits, so a
+#     column shift or a silently-zeroing cast would leave the whole thing 0 and
+#     take chapter 03's only link to the ship registries with it.
+assert "imo is populated for passenger vessels" 1 \
+  "$(q "SELECT count() > 0 FROM vessel_day WHERE ship_group = 'passenger' AND imo > 0")"
+
+# 11. The stage leaves nothing behind. TRUNCATE would leave ~58 MB of inactive
 #    parts per daily file that `clickhouse local` never collects — invisible in
 #    a query, fatal to the disk budget over the 900 files of S4.
 assert "no stage parts survive a load" 0 \
   "$(q "SELECT count() FROM system.parts
         WHERE table IN ('ais_raw_stage', 'ais_vessel_stage')")"
 
-# 11. A second file adds to the aggregates rather than replacing them.
+# 12. A second file adds to the aggregates rather than replacing them.
 if [ -n "$z2" ]; then
   ln "$z2" "$LINKS/4/$(basename "$z2")"
   scripts/load.sh --limit "$LIMIT" "$LINKS/4/$(basename "$z2")" > /dev/null

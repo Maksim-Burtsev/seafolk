@@ -27,9 +27,10 @@ SELECT
     ifNull(SOG, -1)                                          AS sog,
     `Ship type`                                              AS ship_type,
     Name                                                     AS name,
-    ifNull(Length, 0)                                        AS length
+    ifNull(Length, 0)                                        AS length,
+    toUInt32OrZero(IMO)                                      AS imo
 FROM file({src:String}, CSVWithNames,
           '`# Timestamp` String, `Type of mobile` String, MMSI UInt32,
            Latitude Float64, Longitude Float64, SOG Nullable(Float32),
-           Name String, `Ship type` String, Length Nullable(UInt16)')
+           Name String, `Ship type` String, Length Nullable(UInt16), IMO String')
 LIMIT {lim:UInt64};

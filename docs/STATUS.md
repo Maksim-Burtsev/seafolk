@@ -173,7 +173,32 @@ rows_public_track:   226340
    no guards at all  26395719   (142x — the phantom first step, every vessel)
    ```
 
-8. **New data facts.** `SOG` carries the AIS sentinel 102.3 ("not available"),
+8. **⚠️ "Under sail or under engine?" cannot be answered from this archive.**
+   `Navigational status` carries `Under way sailing` as a distinct value, which
+   would be the obvious way to ask it — but the field is a Class A message
+   field. On 2025-07-12 inside the bbox it is `Unknown value` on **2 704 358 of
+   2 710 000 Class B messages**, and `Under way sailing` appears for **6 Class B
+   vessels, 14 messages, in a whole day**. For Class A it is populated (1 988
+   under way using engine, 1 008 moored, 191 at anchor, 84 under way sailing).
+   The column is therefore not stored: it is dead for the fleet this project is
+   about, and for Class A it only duplicates what S8 and S9 already take from
+   SOG. If the essay wants to say something about sail versus motor it has to
+   do it from speed and track shape, or not at all.
+
+9. **What was kept and what was dropped, with the numbers behind each.** Raw
+   files are deleted, so this was decided once. Fill rates measured on
+   2025-07-12 inside the bbox:
+
+   | column | kept? | why |
+   |---|---|---|
+   | `length` | **kept** in `vessel_day` | 18.4 M of 20.4 M rows, max 557 m. Boat size is the leisure fleet's one interesting attribute. |
+   | `imo` | **kept** in `vessel_day` | 182 of 298 Class A passenger vessels (61 %; 58 % on 07-16, 97 % for cargo). The only stable key to ship registries — names change, MMSI is reassigned. Chapter 03's electric-ferry question needs it. |
+   | `nav_status` | dropped | finding 8. |
+   | `destination` | dropped | 266 of 298 ferries report it, but it is crew-typed free text; S8 assigns routes by endpoints, which is more reliable. |
+   | `callsign` | dropped | redundant beside IMO and name for public vessels, and for Class B it is identifying data we are required not to keep. |
+   | `cog`, `draught`, `ROT`, `Heading`, `ETA`, `Cargo type`, A/B/C/D | dropped | no planned session reads them, and a mean course over a cell-hour is meaningless. |
+
+10. **New data facts.** `SOG` carries the AIS sentinel 102.3 ("not available"),
    27–66 k rows a day, read back as 102.2 in Float32 — hence the `sog < 100`
    filter. `Data source type` is `AIS` on every one of 20.4 M rows, so the
    column is not read. `Length` is populated on 18.4 M of 20.4 M rows (max
@@ -227,11 +252,11 @@ into `public_track`.
   (`ais_rows`, `ais_clean`) exist beyond the plan's five tables. The stage
   tables are dropped after every load.
 - `load_log` gained the drop counters S1's open questions asked for.
-- `ais_raw_stage` holds 9 typed columns, not the plan's 15: `cog`,
-  `nav_status`, `imo`, `callsign`, `destination`, `draught` are not read by any
-  planned session and are **gone forever for every loaded file**. `length` was
-  added to `vessel_day` instead, as the one irrecoverable attribute worth
-  keeping.
+- `ais_raw_stage` holds 10 typed columns, not the plan's 15. `length` and
+  `imo` were added to `vessel_day` beyond the plan; `cog`, `nav_status`,
+  `callsign`, `destination`, `draught`, `ROT`, `Heading`, `ETA`, `Cargo type`
+  and the antenna offsets are **gone forever for every loaded file**. Each was
+  measured before being dropped — see finding 9.
 - Timestamps are parsed with an explicit `%d/%m/%Y %H:%i:%S` mask rather than
   `--date_time_input_format best_effort`.
 - New quality filter `sog < 100`.

@@ -85,7 +85,7 @@ GROUP BY h3, hour, mobile, ship_group;
 --   no guards at all 26 395 719 (142x — the phantom first step, every vessel)
 INSERT INTO vessel_day
     (day, mmsi, mobile, ship_type, ship_group, first_ts, last_ts,
-     msgs, moving_msgs, dist_nm, home_h3, length)
+     msgs, moving_msgs, dist_nm, home_h3, length, imo)
 SELECT
     day,
     mmsi,
@@ -101,7 +101,8 @@ SELECT
                   AND ts - pts BETWEEN 1 AND 3600
                   AND step_m / (ts - pts) <= 25.7) / 1852 AS dist_nm,
     geoToH3(argMin(lon, ts), argMin(lat, ts), 7) AS home_h3,
-    max(length)                                 AS length   -- static messages only
+    max(length)                                 AS length,  -- static messages only
+    max(imo)                                    AS imo      -- ditto; 0 = never reported
 FROM (
     SELECT
         *,

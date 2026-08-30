@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS ais_raw_stage
     sog       Float32,                 -- -1 where the CSV field is empty
     ship_type LowCardinality(String),
     name      String,
-    length    UInt16                   -- 0 where the CSV field is empty
+    length    UInt16,                  -- 0 where the CSV field is empty
+    imo       UInt32                   -- 0 where the CSV says 'Unknown'
 )
 ENGINE = MergeTree
 ORDER BY (mmsi, ts);
@@ -38,7 +39,8 @@ ORDER BY (mmsi, ts);
 --     "speed not available" sentinel (27-66 k rows/day). Neither is movement.
 CREATE VIEW IF NOT EXISTS ais_rows AS
 SELECT
-    ts, toDate(ts) AS day, mmsi, mobile, lat, lon, sog, ship_type, name, length,
+    ts, toDate(ts) AS day, mmsi, mobile, lat, lon, sog, ship_type, name,
+    length, imo,
     sog > 0.5 AND sog < 100 AS moving
 FROM ais_raw_stage
 WHERE mobile IN ('Class A', 'Class B')
@@ -82,7 +84,7 @@ CREATE VIEW IF NOT EXISTS ais_clean AS
 SELECT
     r.ts AS ts, r.day AS day, r.mmsi AS mmsi,
     r.lat AS lat, r.lon AS lon, r.sog AS sog, r.name AS name,
-    r.length AS length, r.moving AS moving,
+    r.length AS length, r.imo AS imo, r.moving AS moving,
     v.mobile AS mobile, v.ship_type AS ship_type, v.ship_group AS ship_group
 FROM ais_rows AS r
 INNER JOIN ais_vessel_stage AS v ON r.day = v.day AND r.mmsi = v.mmsi;
@@ -135,7 +137,13 @@ CREATE TABLE IF NOT EXISTS vessel_day
     moving_msgs UInt32,
     dist_nm     Float32,
     home_h3     UInt64,                -- H3 of the first position of the day
-    length      UInt16                 -- max reported; 0 if never reported
+    length      UInt16,                -- max reported; 0 if never reported
+    imo         UInt32                 -- 0 if never reported. The stable key to
+                                       -- ship registries: 61 % of Class A
+                                       -- passenger vessels carry it, 4 of 3 799
+                                       -- Class B leisure ones do. Chapter 03
+                                       -- joins on it; nothing else can, since
+                                       -- names change and MMSI is reassigned.
 )
 ENGINE = ReplacingMergeTree
 PARTITION BY toYYYYMM(day)

@@ -129,7 +129,8 @@ original plan):**
   - `vessel_day` (ReplacingMergeTree, PARTITION BY toYYYYMM(day), ORDER BY
     (day, mmsi)): `day`, `mmsi`, `mobile`, `ship_type`, `ship_group`,
     `first_ts`, `last_ts`, `msgs`, `moving_msgs`, `dist_nm` (distance covered
-    *while moving*), `home_h3`, `length`. **Internal only — contains MMSI.**
+    *while moving*), `home_h3`, `length`, `imo` (0 if never reported; the join
+    key for S8's ferry registry lookups). **Internal only — contains MMSI.**
   - `public_track` (MergeTree, PARTITION BY toYYYYMM(ts), ORDER BY (mmsi, ts)):
     1-minute downsampled positions, `mobile = 'Class A' AND ship_group =
     'passenger'`, plus `name`. Chapter 03 reads this.
