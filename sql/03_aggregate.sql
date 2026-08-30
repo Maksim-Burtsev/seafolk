@@ -1,10 +1,43 @@
 -- S2 — turn the staged file into the three permanent tables.
 -- Run with: scripts/ch.sh sql/03_aggregate.sql   (after sql/02_stage.sql)
 --
--- All three read `ais_clean`, the view in sql/01_schema.sql that holds the one
--- definition of a countable row and the one ship_group mapping. scripts/load.sh
--- deletes the file's date range from all three tables before running this, so
--- re-running a file replaces its contribution instead of doubling it.
+-- All three read `ais_clean`, the view in sql/01_schema.sql, so they cannot
+-- drift apart on which rows count or which group a vessel is in.
+-- scripts/load.sh deletes the file's date range from all three tables before
+-- running this, so re-running a file replaces its contribution.
+
+-- 0. Resolve one identity per vessel-day, before ais_clean is readable.
+--
+-- Ship type: a vessel reports several values in a day — position messages
+-- often say 'Undefined' while static messages carry the real type. Prefer any
+-- classified value over 'Undefined', latest wins among those. Both fields come
+-- from ONE argMax over a tuple, so they are read off the same row.
+--
+-- Type of mobile: 354 of 3 402 vessels on 2025-01-15 reported BOTH classes in
+-- one day. This is the privacy key, so it is NOT resolved by majority or by
+-- recency: a vessel that reports Class B even once is Class B for that day.
+-- The asymmetry is the point — mislabelling a public ferry as private costs a
+-- row in public_track, mislabelling a private boat as public publishes its
+-- track. Only one of those is recoverable.
+TRUNCATE TABLE ais_vessel_stage;
+
+INSERT INTO ais_vessel_stage
+SELECT
+    day,
+    mmsi,
+    if(countIf(mobile = 'Class B') > 0, 'Class B', 'Class A')  AS safe_mobile,
+    argMax((ship_type, grp), (ship_type != 'Undefined', ts)).1 AS best_type,
+    argMax((ship_type, grp), (ship_type != 'Undefined', ts)).2 AS best_group
+FROM (
+    SELECT day, mmsi, ts, mobile, ship_type,
+           multiIf(ship_type IN ('Sailing', 'Pleasure'), 'leisure',
+                   ship_type = 'Passenger',             'passenger',
+                   ship_type IN ('Cargo', 'Tanker'),    'cargo',
+                   ship_type = 'Fishing',               'fishing',
+                                                        'other') AS grp
+    FROM ais_rows
+)
+GROUP BY day, mmsi;
 
 -- 1. h3_hourly — the public grain: 5 km2 cell x hour x class x group.
 INSERT INTO h3_hourly
@@ -46,21 +79,10 @@ INSERT INTO vessel_day
 SELECT
     day,
     mmsi,
-    argMax(mobile, ts)                          AS mobile,
-    -- A vessel reports several Ship type values in one day: position messages
-    -- often say 'Undefined' while static messages carry the real type. On
-    -- 2025-07-12, of 4 884 Class B vessels with a position in Danish waters,
-    -- 3 026 said 'Undefined' AND something else; only 301 said 'Undefined' and
-    -- nothing else. Measured, a plain argMax(..., ts) resolves all of them
-    -- correctly anyway (0 vessels differ), because the last message of the day
-    -- is usually the static one — but that is luck about message order, not a
-    -- property. Preferring a classified value makes it a property, at the same
-    -- cost, and taking BOTH fields from one argMax over a tuple is what stops
-    -- ship_type and ship_group from ever being read off different rows.
-    -- The aliases avoid the source column names on purpose: an alias that
-    -- shadows a column used inside its own aggregate is rejected as recursion.
-    argMax((ship_type, ship_group), (ship_type != 'Undefined', ts)).1 AS best_type,
-    argMax((ship_type, ship_group), (ship_type != 'Undefined', ts)).2 AS best_group,
+    -- all three are constant per (day, mmsi): resolved once in step 0
+    any(mobile)                                 AS mobile,
+    any(ship_type)                              AS best_type,
+    any(ship_group)                             AS best_group,
     min(ts)                                     AS first_ts,
     max(ts)                                     AS last_ts,
     count()                                     AS msgs,
@@ -73,12 +95,11 @@ SELECT
 FROM (
     SELECT
         *,
-        toDate(ts)                                       AS day,
         lagInFrame(ts)     OVER w                        AS pts,
         lagInFrame(moving) OVER w                        AS pmoving,
         geoDistance(lagInFrame(lon) OVER w, lagInFrame(lat) OVER w, lon, lat) AS step_m
     FROM ais_clean
-    WINDOW w AS (PARTITION BY mmsi, toDate(ts) ORDER BY ts
+    WINDOW w AS (PARTITION BY mmsi, day ORDER BY ts
                  ROWS BETWEEN 1 PRECEDING AND CURRENT ROW)
 )
 GROUP BY day, mmsi;
@@ -87,6 +108,8 @@ GROUP BY day, mmsi;
 -- The mobile = 'Class A' filter is the privacy rule, not an optimisation:
 -- Class B vessels reporting Ship type = 'Passenger' exist (2 164 rows in the
 -- first 2 M rows of 2025-07-16 alone) and are private transponders.
+-- ship_group here is the vessel-day value from step 0, not the per-message
+-- one: filtering on the message dropped 1.93 % of ferry minutes entirely.
 INSERT INTO public_track
 SELECT
     mmsi,

@@ -11,7 +11,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 export CH_PATH=data/ch_test
-export LOAD_LIMIT=2000000          # ~2 h 43 min of a daily file; ~2 s to stage
+LIMIT=2000000                      # ~2 h 43 min of a daily file; ~2 s to stage
 LINKS=data/raw/.test_links
 
 z1=$(ls data/raw/aisdk-*.zip 2>/dev/null | sed -n 1p || true)
@@ -34,11 +34,11 @@ assert() {  # assert <name> <expected> <actual>
 }
 q() { scripts/ch.sh -q "$1"; }
 
-echo "sample: $(basename "$z1") (first $LOAD_LIMIT rows)"
+echo "sample: $(basename "$z1") (first $LIMIT rows)"
 echo
 
 ln "$z1" "$LINKS/1/$(basename "$z1")"
-scripts/load.sh "$LINKS/1/$(basename "$z1")" > /dev/null
+scripts/load.sh --limit "$LIMIT" "$LINKS/1/$(basename "$z1")" > /dev/null
 
 kept=$(q "SELECT rows_kept FROM load_log")
 msgs=$(q "SELECT sum(msgs) FROM h3_hourly")
@@ -85,37 +85,39 @@ assert "dist_nm: nothing did 1500 nm in a day" 1 "$(q "SELECT max(dist_nm) < 150
 
 # 7. Re-loading the same file replaces its contribution instead of doubling it.
 ln "$z1" "$LINKS/2/$(basename "$z1")"
-scripts/load.sh --force "$LINKS/2/$(basename "$z1")" > /dev/null
+scripts/load.sh --force --limit "$LIMIT" "$LINKS/2/$(basename "$z1")" > /dev/null
 assert "--force reload does not double sum(msgs)" "$msgs" "$(q "SELECT sum(msgs) FROM h3_hourly")"
 assert "--force reload leaves one load_log row" 1 "$(q "SELECT count() FROM load_log")"
 
 # 8. Without --force a logged file is skipped, and nothing changes.
 ln "$z1" "$LINKS/3/$(basename "$z1")"
-skip_out=$(scripts/load.sh "$LINKS/3/$(basename "$z1")")
+skip_out=$(scripts/load.sh --limit "$LIMIT" "$LINKS/3/$(basename "$z1")")
 case "$skip_out" in skip*) said_skip=1;; *) said_skip=0;; esac
 assert "second load without --force says skip" 1 "$said_skip"
 assert "…and sum(msgs) is unchanged" "$msgs" "$(q "SELECT sum(msgs) FROM h3_hourly")"
 rm -f "$LINKS/3"/*
 
-# 9. ship_type and ship_group come from the SAME winning row. They are picked
-#    by one argMax over a tuple precisely so they cannot disagree; two separate
-#    argMax calls would silently file a Sailing boat under 'other'.
-assert "ship_type and ship_group agree" 0 \
-  "$(q "SELECT countIf(ship_type = 'Undefined' AND ship_group != 'other')
-             + countIf(ship_type IN ('Sailing', 'Pleasure') AND ship_group != 'leisure')
-             + countIf(ship_type = 'Passenger' AND ship_group != 'passenger')
-        FROM vessel_day")"
+# 9. The two grains agree. A vessel reports several Ship type values in a day,
+#    so resolving the group per MESSAGE puts one boat in two ship_groups at
+#    once and makes "how many leisure vessels" non-additive. Summing distinct
+#    vessels over h3_hourly's groups must land exactly on the vessel-day count.
+assert "vessels summed over h3_hourly groups == vessel_day rows" \
+  "$(q "SELECT count() FROM vessel_day")" \
+  "$(q "SELECT sum(v) FROM
+          (SELECT uniqExactMerge(vessels) AS v FROM h3_hourly
+           GROUP BY toDate(hour), mobile, ship_group)")"
 
 # 10. The stage leaves nothing behind. TRUNCATE would leave ~58 MB of inactive
 #    parts per daily file that `clickhouse local` never collects — invisible in
 #    a query, fatal to the disk budget over the 900 files of S4.
-assert "no ais_raw_stage parts survive a load" 0 \
-  "$(q "SELECT count() FROM system.parts WHERE table = 'ais_raw_stage'")"
+assert "no stage parts survive a load" 0 \
+  "$(q "SELECT count() FROM system.parts
+        WHERE table IN ('ais_raw_stage', 'ais_vessel_stage')")"
 
 # 11. A second file adds to the aggregates rather than replacing them.
 if [ -n "$z2" ]; then
   ln "$z2" "$LINKS/4/$(basename "$z2")"
-  scripts/load.sh "$LINKS/4/$(basename "$z2")" > /dev/null
+  scripts/load.sh --limit "$LIMIT" "$LINKS/4/$(basename "$z2")" > /dev/null
   assert "two files merge: sum(msgs) == sum(rows_kept)" \
     "$(q "SELECT sum(rows_kept) FROM load_log")" "$(q "SELECT sum(msgs) FROM h3_hourly")"
   assert "…and load_log has two rows" 2 "$(q "SELECT count() FROM load_log")"

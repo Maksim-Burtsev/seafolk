@@ -2,6 +2,7 @@
 # Load one archive file into the aggregates, then delete it.
 #   scripts/load.sh data/raw/aisdk-2025-07-16.zip
 #   scripts/load.sh --force data/raw/aisdk-2025-07-16.zip   reload a logged file
+#   scripts/load.sh --limit 2000000 <zip>                   load a sample only
 #
 # Idempotent two ways. A file already in load_log is skipped (scripts/run_queue.sh
 # in S3 relies on that). And the file's own date range is deleted from all three
@@ -18,7 +19,19 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 force=0
-if [ "${1:-}" = "--force" ]; then force=1; shift; fi
+# UInt64 max, because ClickHouse reads LIMIT 0 as "zero rows".
+limit=18446744073709551615
+while :; do
+  case "${1:-}" in
+    --force) force=1; shift ;;
+    # A cap is a flag, never ambient state. A truncated load that still deleted
+    # its archive would silently lose most of a day with no way to notice: the
+    # log row looks complete, and S3's run_queue.sh would skip the file forever.
+    # So a capped run keeps the zip, and says so.
+    --limit) limit="${2:?--limit needs a row count}"; shift 2 ;;
+    *) break ;;
+  esac
+done
 zip="${1:?usage: scripts/load.sh [--force] <archive.zip>}"
 [ -f "$zip" ] || { echo "no such file: $zip" >&2; exit 1; }
 base="$(basename "$zip")"
@@ -37,9 +50,7 @@ fi
 
 t_start=$(date +%s)
 
-# LIMIT 0 means zero rows in ClickHouse, so "no cap" is UInt64 max.
-# LOAD_LIMIT is how scripts/test_load.sh runs this same statement on a sample.
-ch sql/02_stage.sql --param_src "$zip :: *.csv" --param_lim "${LOAD_LIMIT:-18446744073709551615}"
+ch sql/02_stage.sql --param_src "$zip :: *.csv" --param_lim "$limit"
 
 # One pass over the stage for every number load_log records. The four row
 # counters partition rows_read exactly; test_load.sh asserts that they do.
@@ -94,11 +105,16 @@ INSERT INTO load_log SELECT
 # collected: one daily file leaves ~58 MB of dead stage behind, which over the
 # 900 files of S4 is ~52 GB against a 70 GB budget. sql/01_schema.sql recreates
 # the table at the top of the next load.
-ch -q "DROP TABLE IF EXISTS ais_raw_stage SYNC"
+ch -q "DROP TABLE IF EXISTS ais_raw_stage SYNC; DROP TABLE IF EXISTS ais_vessel_stage SYNC"
 
-# Only now is the raw file expendable.
-rm -f "$zip" "$zip.ok"
+# Only a complete load makes the raw file expendable.
+if [ "$limit" = 18446744073709551615 ]; then
+  rm -f "$zip" "$zip.ok"
+  disposition="zip removed"
+else
+  disposition="CAPPED at $limit rows — zip KEPT, this day is incomplete"
+fi
 trap - ERR
 
-printf 'loaded  %s: %s rows read, %s kept in %ss (%s rows/s), zip removed\n' \
-  "$base" "$rows_read" "$kept" "$secs" "$(( rows_read / (secs > 0 ? secs : 1) ))"
+printf 'loaded  %s: %s rows read, %s kept in %ss (%s rows/s), %s\n' \
+  "$base" "$rows_read" "$kept" "$secs" "$(( rows_read / (secs > 0 ? secs : 1) ))" "$disposition"

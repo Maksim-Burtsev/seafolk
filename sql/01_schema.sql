@@ -25,8 +25,7 @@ CREATE TABLE IF NOT EXISTS ais_raw_stage
 ENGINE = MergeTree
 ORDER BY (mmsi, ts);
 
--- The single definition of "a row this project counts", shared by all three
--- aggregate INSERTs so they cannot drift apart.
+-- The single definition of "a row this project counts".
 --   * mobile filter: 'Type of mobile' has eight values, only two are vessels.
 --   * abs(lat) <= 90 is implied by the bbox and removes the lat=91 sentinel
 --     (the only impossible coordinate in the archive — S1 finding 4).
@@ -37,25 +36,73 @@ ORDER BY (mmsi, ts);
 --     read as a change in traffic.
 --   * sog = -1 means the CSV field was empty; sog >= 100 is the AIS 102.3
 --     "speed not available" sentinel (27-66 k rows/day). Neither is movement.
-CREATE VIEW IF NOT EXISTS ais_clean AS
+CREATE VIEW IF NOT EXISTS ais_rows AS
 SELECT
-    ts, mmsi, mobile, lat, lon, sog, ship_type, name, length,
-    multiIf(ship_type IN ('Sailing', 'Pleasure'), 'leisure',
-            ship_type = 'Passenger',             'passenger',
-            ship_type IN ('Cargo', 'Tanker'),    'cargo',
-            ship_type = 'Fishing',               'fishing',
-                                                 'other') AS ship_group,
-    sog > 0.5 AND sog < 100                               AS moving
+    ts, toDate(ts) AS day, mmsi, mobile, lat, lon, sog, ship_type, name, length,
+    sog > 0.5 AND sog < 100 AS moving
 FROM ais_raw_stage
 WHERE mobile IN ('Class A', 'Class B')
   AND lat BETWEEN 53 AND 59
   AND lon BETWEEN 3 AND 17;
 
--- The one table every published artefact reads. No MMSI: `vessels` is a
--- uniqExact state, read back with uniqExactMerge(vessels).
--- `sog_sum` is summed over MOVING messages only, so
--- sog_sum / moving_msgs is the mean speed *made good*, not an average that
--- counts a boat asleep at anchor as sailing at 0 kn.
+-- One resolved identity per vessel per day, filled by sql/03_aggregate.sql
+-- before anything else reads ais_clean. Dropped with the raw stage.
+--
+-- This table exists because a vessel does NOT report one identity per day.
+-- Measured inside the Danish bbox:
+--   * Ship type varies within a vessel-day — position messages often say
+--     'Undefined' while static messages carry the real type. On 2025-07-12,
+--     of 4 884 Class B vessels 3 026 reported 'Undefined' AND something else,
+--     so grouping on the per-message value put 2 950 vessels in two groups at
+--     once and filed 96 156 leisure messages under 'other'. Of 298 Class A
+--     vessels that ever say 'Passenger', 276 also say 'Undefined', and a
+--     per-message filter dropped 1.93 % of their minutes from public_track.
+--   * Type of mobile varies too: on 2025-01-15, 354 of 3 402 vessels (10.4 %)
+--     reported BOTH 'Class A' and 'Class B'. That one is a privacy key, not a
+--     grouping, so it is resolved in the safe direction — see below.
+CREATE TABLE IF NOT EXISTS ais_vessel_stage
+(
+    day        Date,
+    mmsi       UInt32,
+    mobile     LowCardinality(String),
+    ship_type  LowCardinality(String),
+    ship_group LowCardinality(String)
+)
+ENGINE = MergeTree
+ORDER BY (day, mmsi);
+
+-- What the three aggregate INSERTs read: countable rows carrying the identity
+-- resolved for the whole vessel-day, so every table agrees on the grain.
+-- `mobile` deliberately comes from the join, NOT from the row: the row-level
+-- value is what would let one mislabelled message put a private vessel's
+-- position into public_track.
+-- The join is inner, and it cannot drop a row: ais_vessel_stage is built from
+-- ais_rows itself. test_load.sh asserts that it does not.
+CREATE VIEW IF NOT EXISTS ais_clean AS
+SELECT
+    r.ts AS ts, r.day AS day, r.mmsi AS mmsi,
+    r.lat AS lat, r.lon AS lon, r.sog AS sog, r.name AS name,
+    r.length AS length, r.moving AS moving,
+    v.mobile AS mobile, v.ship_type AS ship_type, v.ship_group AS ship_group
+FROM ais_rows AS r
+INNER JOIN ais_vessel_stage AS v ON r.day = v.day AND r.mmsi = v.mmsi;
+
+-- The spatial grain everything downstream aggregates from. (Daily per-vessel
+-- questions go to vessel_day; S3's leisure-season chart reads that, not this.)
+--
+-- PRIVACY: `vessels` is an exact uniqExact state, which keeps the hashed MMSI
+-- values themselves — that is what makes it exact. Merging a guess into a
+-- published state returns 1 for a hit and 2 for a miss, so a single-vessel
+-- cell is a membership oracle over ~2 M Danish MMSIs (MID 219/220) and hands
+-- back the boat. On 2025-07-16, 70.1 % of Class B cell-hours (59 027 of
+-- 84 187) hold exactly one vessel. This is safe only because data/ch never
+-- leaves the machine. **The state column itself must never cross an export
+-- boundary — S11 exports uniqExactMerge(vessels) as a number, under k >= 5,
+-- and never this column.**
+--
+-- `sog_sum` is summed over MOVING messages only, so sog_sum / moving_msgs is
+-- the mean speed *made good*, not an average that counts a boat asleep at
+-- anchor as sailing at 0 kn.
 CREATE TABLE IF NOT EXISTS h3_hourly
 (
     h3          UInt64,                -- geoToH3(lon, lat, 7) — note the argument order
