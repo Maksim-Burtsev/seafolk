@@ -281,6 +281,13 @@ resume, progress, one log line per file, and a summary at the end.
       scans them at startup (1.1 s today). Measure the startup cost as the run
       grows; the likely fix is a periodic `OPTIMIZE TABLE … FINAL` or a lower
       `old_parts_lifetime`, not more RAM.
+- [ ] **Replace "copy the store" as the way to read it during a load.** S3's
+      working copy of a 1.8 GB store was a real 29.8 GB, because `cp -a` does
+      not preserve the hardlinks that 97 % of the store's files are. The store
+      is heading for ~36 GB, where the same copy would be several hundred GB —
+      the workflow does not survive its own success. Pick one before S4 needs
+      it: `cp -Rc` (clonefile, same APFS volume, near-free), or stop copying
+      and instead pause the queue for the seconds a query takes.
 - [ ] **Progress reporting reads `data/progress.tsv`, never the store.**
       `clickhouse local` locks `--path` exclusively and a stray query can make
       the *loader* fail, not just itself (`docs/DECISIONS.md`).
