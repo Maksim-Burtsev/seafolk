@@ -243,8 +243,12 @@ times rather than from the review.
   before it runs. Harmless at this size (a query is 0.6 s), but it is 31
   directories per loaded day and S4 loads 909 of them. Two practical
   consequences: watch the startup cost as the run grows, and **never copy
-  `data/ch` with a tool that breaks hardlinks onto a non-APFS volume** — the
-  copy is 29 GB there. On APFS `cp -a` clones and costs nothing.
+  `data/ch` with `cp -a`** — it does not preserve hardlinks, so the copy is a
+  real 29.8 GB, measured by `df` before and after deleting one. (An earlier
+  draft of this entry claimed APFS cloning made such a copy free. It does not:
+  macOS `cp` clones only when asked with `-c`.) A working copy for `CH_PATH`
+  is still the right way to read the store while a load holds the lock — just
+  budget the space for it, or reach for `cp -Rc`, and delete it afterwards.
 - `scripts/test_load.sh` SKIPs its cross-file assert whenever `data/raw` holds
   fewer than two archives — which is always, now. S4 should decide whether the
   test fetches its own fixture or stays opportunistic.
