@@ -23,7 +23,10 @@ for d in "$@"; do
   [ -n "$found" ] || { echo "not found: $f" >&2; exit 1; }
 
   echo "get   $found"
-  curl -fL --retry 5 --retry-delay 15 -C - --progress-bar -o "$out" "$found"
+  # A progress bar is for a human. Piped into a log (scripts/run_queue.sh) it is
+  # 90 KB of carriage returns per file — see data/fetch.log.
+  if [ -t 2 ]; then prog=--progress-bar; else prog=--no-progress-meter; fi
+  curl -fL --retry 5 --retry-delay 15 -C - "$prog" -o "$out" "$found"
   if unzip -tq "$out" >/dev/null; then
     touch "$out.ok"; echo "ok    $f ($(du -h "$out" | cut -f1))"
   else
