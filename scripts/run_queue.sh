@@ -29,7 +29,16 @@ while read -r d _; do
   case "$d" in ''|\#*) continue ;; esac
   f="aisdk-$d.zip"
   if grep -qxF "$f" <<<"$loaded"; then echo "skip    $f (already in load_log)"; continue; fi
-  echo "===     $(date -u '+%F %T')  $d"
+  # The one guard that matters for an unattended run: a full disk fails the
+  # load, and a failed load keeps its zip, so the next file starts with less
+  # room than the last. Stop while stopping is still cheap. The rest of S4's
+  # guards (flock, --dry-run, progress/ETA) are S4's.
+  free_gb=$(df -k . | awk 'NR==2 {print int($4/1048576)}')
+  if [ "$free_gb" -lt "${FREE_FLOOR_GB:-30}" ]; then
+    echo "STOP    free disk ${free_gb} GB is under the ${FREE_FLOOR_GB:-30} GB floor" >&2
+    exit 1
+  fi
+  echo "===     $(date -u '+%F %T')  $d  (free ${free_gb} GB)"
   scripts/fetch.sh "$d"
   scripts/load.sh "$DEST/$f"            # never --limit: a capped load keeps the zip
   # A complete load deletes its own archive. A surviving zip therefore means the
