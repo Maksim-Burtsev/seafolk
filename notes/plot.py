@@ -148,9 +148,8 @@ def week():
             xs = [d - 1 + (i - (len(GROUPS) - 1) / 2) * width for d in range(1, 8)]
             ax.bar(xs, [100 * series.get(d, 0) for d in range(1, 8)], width=width * 0.80,
                    color=colour, label=label, linewidth=0)
-        ax.axhline(100 / 7, color=MUTED, linewidth=1, linestyle=(0, (4, 3)))
-        ax.annotate("a flat week", (6.55, 100 / 7), color=MUTED, fontsize=7,
-                    xytext=(0, 3), textcoords="offset points", ha="right")
+        ax.axhline(100 / 7, color=MUTED, linewidth=1, linestyle=(0, (4, 3)),
+                   label="a flat week" if ax is axes[0] else None)
         ax.set_xticks(range(7))
         ax.set_xticklabels(DOW)
         ax.set_title(MONTH_NAME.get(m, m), color=INK, fontsize=10, loc="left")

@@ -25,7 +25,7 @@ fi
 cleanup() { rm -rf "$LINKS" data/ch_test; }
 trap cleanup EXIT
 cleanup
-mkdir -p "$LINKS/1" "$LINKS/2" "$LINKS/3" "$LINKS/4"
+mkdir -p "$LINKS/1" "$LINKS/2" "$LINKS/3" "$LINKS/4" "$LINKS/5"
 
 fail=0
 assert() {  # assert <name> <expected> <actual>
@@ -131,7 +131,21 @@ else
   echo "SKIP  cross-file merge — only one archive file on disk"
 fi
 
-# 13. scripts/run_queue.sh skips a date already in load_log — WITHOUT fetching
+# 13. scripts/ch.sh must not inherit its caller's stdin. `clickhouse local -q
+#     "INSERT INTO t SELECT <constants>"` binds whatever is on stdin as its
+#     implicit input table and writes ONE ROW PER LINE of it. run_queue.sh runs
+#     its loop with stdin on the queue file, so every load under it wrote one
+#     load_log row per line of the queue — found in S3 with 8 919 rows for 92
+#     archives. A --force reload replaces its own row, so the count must not move.
+ln "$z1" "$LINKS/5/$(basename "$z1")"
+printf 'one\ntwo\nthree\n' > "$LINKS/multiline.txt"
+before=$(q "SELECT count() FROM load_log")
+scripts/load.sh --force --limit "$LIMIT" "$LINKS/5/$(basename "$z1")" \
+  < "$LINKS/multiline.txt" > /dev/null
+assert "a load with a multi-line file on stdin writes one load_log row" \
+  "$before" "$(q "SELECT count() FROM load_log")"
+
+# 14. scripts/run_queue.sh skips a date already in load_log — WITHOUT fetching
 #     it. This is the branch that decides whether a resumed queue re-downloads
 #     72 GB it already has, and load.sh's own skip cannot cover it: that one
 #     fires after the file is on disk, and leaves it there. AIS_RAW and
