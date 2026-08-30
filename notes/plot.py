@@ -156,7 +156,7 @@ def week():
         tidy(ax)
     axes[0].set_ylabel("% of the week's movement", color=MUTED, fontsize=9)
     fig.legend(*axes[0].get_legend_handles_labels(), frameon=False, fontsize=8,
-               labelcolor=MUTED, ncol=4, loc="upper right", bbox_to_anchor=(0.99, 1.0))
+               labelcolor=MUTED, ncol=5, loc="upper right", bbox_to_anchor=(0.99, 1.0))
     fig.suptitle("Which day of the week does each fleet move?", color=INK, fontsize=12,
                  x=0.008, ha="left")
     fig.tight_layout(rect=(0, 0, 1, 0.94))

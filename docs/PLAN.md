@@ -187,40 +187,50 @@ test prints ALL PASS.
 
 ---
 
-## S3 — Phase-0 charts: two months, three shapes
+## S3 — Phase-0 charts: three months, three shapes *(done — Gate B2 open for the human)*
 
-**Goal:** Download and load July 2025 and January 2025 in full (≈ 62 daily files,
-≈ 45 GB traffic, nothing kept), plus June 2025 if time allows (Sjælland Rundt,
-Kiel Week). Produce three quick charts and decide whether the story holds.
+**Goal:** Download and load January, June and July 2025 in full (92 daily files,
+~72 GB traffic, nothing kept). Produce three quick charts and decide whether the
+story holds. *(June was promoted from "if time allows" to the queue before the
+run — it is the only month that can answer the regatta question.)*
 
-**Files:**
-- Create: `scripts/run_queue.sh <dates-file>` — reads dates one per line, runs
-  `fetch.sh` then `load.sh` for each, appends to `data/queue.log`, skips dates
-  already in `load_log`, stops on the first failure. Safe to re-run.
-- Create: `queues/phase0.txt` — all days of 2025-01 and 2025-07 (and 2025-06).
-- Create: `sql/10_season_daily.sql` — daily distinct leisure vessels (from
-  `vessel_day`), 7-day rolling mean.
-- Create: `sql/11_week_profile.sql` — leisure `moving_msgs` share by weekday.
-- Create: `sql/12_day_profile.sql` — hourly share of moving vessels by
-  `ship_group` for a summer weekday and a summer Saturday.
-- Create: `notes/s3-phase0.md` with three PNGs under `notes/img/` (matplotlib
-  via `uv run`, `notes/plot.py`; add `uv` project in `notes/pyproject.toml` —
-  matplotlib + clickhouse-connect are the only deps, record in DECISIONS).
+**Files (as built — `docs/STATUS.md` § S3 has why each differs):**
+- `scripts/run_queue.sh <dates-file>` — reads dates one per line, runs
+  `fetch.sh` then `load.sh` for each, appends to `${QUEUE_LOG:-data/queue.log}`,
+  skips dates already in `load_log` *before downloading them*, stops on the
+  first failure. Resolves the archive directory from `${AIS_RAW:-data/raw}`,
+  the same variable `fetch.sh` reads. Safe to re-run.
+- `queues/phase0.txt` — 92 dates: 2025-07, then 2025-01, then 2025-06.
+- `sql/10_season_daily.sql` — per (day, mobile) for leisure: `present`,
+  `active` (= `moving_msgs > 0`), 7-day mean of `active` partitioned by month.
+- `sql/11_week_profile.sql` — mean `moving_msgs` per *occurrence* of each
+  weekday, per month, per (ship_group, mobile), plus each weekday's share.
+- `sql/12_day_profile.sql` — `moving_msgs` by local hour, per month, per
+  daytype (weekday / sat / sun), normalised within each fleet.
+- Both time-of-day queries drop local days that are not fully covered (UTC+2
+  leaves the first local day of a block missing two hours).
+- `notes/s3-phase0.md`, three PNGs under `notes/img/`, `notes/plot.py`,
+  `notes/pyproject.toml`. **`matplotlib` only — no `clickhouse-connect`:** it
+  is a client for a *server*, and this project runs none. `plot.py` shells out
+  to `scripts/ch.sh` and reads TSV.
 
 **Do:**
-- [ ] Write and start `scripts/run_queue.sh queues/phase0.txt` (it can run
-      overnight with `caffeinate -i`).
-- [ ] While it runs, write the three SQL files against the days already loaded.
-- [ ] Plot; write findings with numbers: weekend/weekday ratio, peak hour for
-      leisure vs ferries, Class B share summer vs winter, whether Sjælland Rundt
-      (2025-06-14/15) and Kiel Week (2025-06-21–29) show as spikes.
+- [x] Write and start `scripts/run_queue.sh queues/phase0.txt` under
+      `caffeinate -i`. 92 files in ~2 h 45 m.
+- [x] While it runs, write the three SQL files — against a **copy** of the
+      store via `CH_PATH`, never `data/ch`: `clickhouse local` locks `--path`
+      exclusively and a stray reader can kill the running loader.
+- [x] Plot; findings with numbers in `notes/s3-phase0.md`. Sjælland Rundt and
+      Kiel Week do **not** show as spikes in a national daily count — see
+      finding 6 there, and do the spatial version in S6 instead.
 
 **Validate:**
 ```bash
-scripts/ch.sh -q "SELECT count() FROM load_log"                 # ≈ 62 (or 92)
+scripts/ch.sh -q "SELECT count() FROM load_log"                 # 92
 scripts/ch.sh -q "SELECT day, uniqExact(mmsi) FROM vessel_day WHERE ship_group='leisure' GROUP BY day ORDER BY day LIMIT 5"
+scripts/ch.sh -q "SELECT min(day), max(day), count(DISTINCT day) FROM vessel_day"
 uv run --project notes notes/plot.py                            # writes notes/img/*.png
-du -sh data                                                     # < 5 GB
+du -sh data && df -h . && ls data/raw                           # 1.5 GB, data/raw empty
 ```
 
 **You verify:** look at the three PNGs. Does the Saturday spike read at a glance?
@@ -229,7 +239,9 @@ weekend a spike or nothing?
 
 **Gate B2 (end of phase 0):** the shapes are readable and not noise. Decide the
 scope of phase 1: (a) all 2024 → today dailies + reference years 2015/2018/2021,
-or (b) the full 2014 → 2026 archive.
+or (b) the full 2014 → 2026 archive. **Measured input:** 16.3 MB of store per
+day → (a) is ~15 GB, (b) straight-lines to ~72 GB against a 70 GB budget, so
+(b) needs a 2015 reference month measured first.
 
 **Commit:** `feat(s3): phase-0 queue runner and first three charts`
 
@@ -252,6 +264,14 @@ resume, progress, one log line per file, and a summary at the end.
   message counts; the coverage-drift reference used in S10.
 
 **Do:**
+- [ ] **Never edit a script while a queue is running it.** Bash reads a script
+      by byte offset as it goes; S3's run died with `line 35: t:: command not
+      found` after finishing all 92 files, because the file was edited under
+      the running process. Stop the runner, edit, restart — it resumes from
+      `load_log`.
+- [ ] **Progress reporting reads `data/progress.tsv`, never the store.**
+      `clickhouse local` locks `--path` exclusively and a stray query can make
+      the *loader* fail, not just itself (`docs/DECISIONS.md`).
 - [ ] **Confirm `clickhouse local` opens a monthly zip64 archive** (14–19 GB, and
       the 2017 `all_sources_*` variants) with `file('… :: *.csv')`. If it cannot,
       fall back to the `unzip -p | clickhouse local` pipe. See the S1 entry in

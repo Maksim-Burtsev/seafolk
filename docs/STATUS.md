@@ -3,7 +3,253 @@
 Newest session on top. Each entry: what was done, findings with numbers, open
 questions, and the exact next session. Write it for someone with zero context.
 
-**Next session: S3** (phase-0 charts: two full months, three shapes).
+**Next session: S4** (bulk runner: disk guard, resume, nights).
+
+---
+
+## S3 — Phase-0 charts — 2026-08-30
+
+**Done:** `scripts/run_queue.sh`, `queues/phase0.txt` (92 dates),
+`sql/10_season_daily.sql`, `sql/11_week_profile.sql`, `sql/12_day_profile.sql`,
+`notes/plot.py` + `notes/pyproject.toml`, `notes/img/*.png`,
+`notes/s3-phase0.md`. All of January, June and July 2025 are loaded —
+**92 days, 1 878 644 705 rows read, 1 735 448 756 kept, `data/ch` 1.5 GB,
+`data/raw` empty.**
+
+**Gate B2: three shapes readable, one absent.** The season (32x), the day
+(leisure 12.1 % of its movement in one hour against three fleets that are flat)
+and the week are all readable. The regattas are not present at a national
+daily grain. **The human's look at the three PNGs is what actually decides the
+gate and the scope of phase 1** — see "You verify" below.
+
+### Validate — real output
+
+```
+$ scripts/ch.sh -q "SELECT count() FROM load_log"
+92
+
+$ scripts/ch.sh -q "SELECT day, uniqExact(mmsi) FROM vessel_day WHERE ship_group='leisure' GROUP BY day ORDER BY day LIMIT 5"
+2025-01-01	386
+2025-01-02	416
+2025-01-03	418
+2025-01-04	427
+2025-01-05	419
+
+$ scripts/ch.sh -q "SELECT min(day), max(day), count(DISTINCT day) FROM vessel_day"
+2025-01-01	2025-07-31	92
+
+$ uv run --project notes notes/plot.py
+wrote notes/img/s3-season.png, s3-week.png, s3-day.png     (+ the numbers table)
+
+$ du -sh data data/ch ; df -h . ; ls data/raw
+1.5G	data
+1.5G	data/ch
+/dev/disk3s5   460Gi   143Gi   281Gi    34%
+(data/raw is empty)
+```
+
+The honesty layer, over all 92 files:
+
+```
+rows_read:        1878644705
+rows_kept:        1735448756
+non_vessel:            6.82 %   (AtoN, base stations, SAR, PIRB, MOB)
+sentinel:              0.29 %   (Latitude = 91)
+out_of_bbox:           0.51 %   (55 rows on 2025-01-08 … 4.70 % on 2025-06-30)
+rows_read != non_vessel + sentinel + out_of_bbox + kept:  0 rows
+```
+
+`scripts/test_load.sh` — 20 asserts, run against a freshly fetched
+`aisdk-2025-08-01.zip` (deleted afterwards; `data/raw` is empty by design after
+S3, so the test SKIPs until someone fetches a file):
+
+```
+PASS  h3_hourly sum(msgs) == load_log rows_kept
+PASS  uniqExactMerge(vessels) == count(vessel_day)
+PASS  no Class B vessel in public_track
+PASS  …and Class B 'Passenger' vessels do exist here (assert 3 is not vacuous)
+PASS  public_track is populated
+PASS  every h3 cell maps back into the Danish bbox
+PASS  rows_read == non_vessel + sentinel + out_of_bbox + kept
+PASS  dist_nm: something moved
+PASS  dist_nm: nothing did 1500 nm in a day
+PASS  --force reload does not double sum(msgs)
+PASS  --force reload leaves one load_log row
+PASS  second load without --force says skip
+PASS  …and sum(msgs) is unchanged
+PASS  vessels summed over h3_hourly groups == vessel_day rows
+PASS  imo is populated for passenger vessels
+PASS  no stage parts survive a load
+SKIP  cross-file merge — only one archive file on disk
+PASS  a load with a multi-line file on stdin writes one load_log row
+PASS  run_queue skips a date already in load_log
+PASS  …and downloads nothing while doing it
+
+ALL PASS
+```
+
+### Findings
+
+Full write-up with the charts: `notes/s3-phase0.md`. The eight headlines:
+
+1. **The season has two sizes and a chart must say which.** July against
+   January is **11.2x** on vessels *present* and **32.4x** on vessels that
+   *moved*, from the same query — because in January only **23.5 %** of
+   leisure vessels present ever exceed 0.5 kn, against **67.7 %** in July.
+   S1's 8.6x is confirmed, not corrected: June/January on the present count is
+   7.8x over whole months.
+
+2. **A winter floor of ~96 moving leisure vessels a day**, never below 79.
+   Chapter 01 cannot draw a season that starts at zero.
+
+3. **The weekend effect is strongest when the fleet is smallest.** Leisure
+   weekend/weekday: **June 1.62x, January 1.55x, July 1.11x.** July, the peak
+   month, is nearly flat — the Danish holiday, sailing on a Tuesday. No
+   working fleet does this (ferries 1.01x in July, cargo 1.10x).
+
+4. **Saturday is not the peak day and is the least predictable day.** July
+   mean distinct leisure vessels that moved: Sun 3 690, Fri 3 559, Thu 3 157,
+   Mon 3 084, **Sat 2 986**, Wed 2 841, Tue 2 626. Saturday's range is
+   1 132–5 439 (**4.8x**), the widest of the week. This is S1's warning, now
+   quantified: weather decides a Saturday.
+
+5. **Leisure has a daily shape; the working fleets do not.** July weekday,
+   busiest hour and night share (22:00–05:00, Europe/Copenhagen):
+
+   ```
+   fleet                 peak    that hour   night 22-05
+   leisure   (Class B)   11:00       12.1 %         3.8 %
+   ferries   (Class A)   17:00        5.1 %        22.5 %
+   cargo     (Class A)   02:00        4.8 %        32.7 %
+   fishing   (Class A)   00:00        5.6 %        36.0 %
+   ```
+
+   Flat would be 4.17 % an hour. Cargo and fishing peak *at night*. This is
+   the most striking of the three charts and chapter 02's fingerprint.
+
+6. **⚠️ Neither regatta is visible in a national daily count — a negative
+   result.** Sjælland Rundt's Sunday (2025-06-15) is +9 % against the same
+   weekday ±2 weeks and its Saturday is *below* it. Kiel Week's opening
+   weekend is June's maximum and its closing weekend is June's minimum, so
+   the pattern is weather. Against finding 4's 4.8x Saturday range, +9 % is
+   not a signal. **S6's `sql/22_regatta_spikes.sql` must do this
+   spatially** — it is the right instrument, and it should not repeat the
+   national query.
+
+7. **The out-of-bbox share swings four orders of magnitude between days** —
+   55 rows of 15.1 M on 2025-01-08, 4.70 % on 2025-06-30. S1 saw a sevenfold
+   swing over four days; over 92 it is far wider. S10's obligation stands and
+   now has a real range.
+
+8. **16.3 MB of store per day** (1.5 GB / 92 days; 21.6 M rows in `h3_hourly`,
+   535 k in `vessel_day`, 19.1 M in `public_track`). **S4's option (a) —
+   2024-03 → today, ~900 days — projects to ~15 GB**, well inside budget.
+   Option (b), the full 2014 → 2026 archive at ~4 400 days, straight-lines to
+   ~72 GB and would break the 70 GB budget — but that is an overestimate,
+   since 2015 has far fewer transponders per day than 2025. **Before choosing
+   (b), measure one 2015 reference month.**
+
+### ⚠️ A defect in the S2 loader, found by running it 92 times
+
+`load_log` held **8 919 rows for 92 archives** — ~98 exact duplicates each,
+one per line of `queues/phase0.txt`.
+
+`clickhouse local -q "INSERT INTO t SELECT <constants>"` binds whatever is on
+stdin as its implicit input table and writes **one row per line of it**.
+`scripts/run_queue.sh` runs its loop as `done < "$q"`, and `scripts/ch.sh`
+passed the caller's stdin straight through. Reproduced in isolation: the same
+INSERT emits 1 row with stdin on `/dev/null`, 98 with stdin on a 98-line file.
+
+**The aggregates were never affected, and this was verified rather than
+assumed.** They are written through `ch.sh`'s *file* branch, whose stdin is the
+SQL file. `sum(msgs)` over `h3_hourly` equals `sum(rows_kept)` over `load_log`
+to the row (1 735 448 756); `vessel_day` has 534 827 rows for 534 827 distinct
+`(day, mmsi)`; `public_track` has 19 148 484 rows for as many distinct
+`(mmsi, ts)`. Only `load_log` was damaged and only by exact copies, so
+`OPTIMIZE TABLE load_log FINAL DEDUPLICATE` restored it to 92 rows, after which
+the four counters still partition `rows_read` on every row.
+
+Fixed with one redirect in `scripts/ch.sh` — the wrapper every caller routes
+through — and pinned by `test_load.sh` assert 13, verified to fail without the
+fix ("expected 1, got 3"). **If this had reached S10 unnoticed, every dropped-
+row share in the essay's honesty section would have been computed from sums
+inflated by the length of a queue file.**
+
+### ⚠️ The queue run exited 127 — my mistake, not the data's
+
+`run_queue.sh` finished all 92 dates and then died with
+`line 35: t:: command not found`. Cause: I edited `scripts/run_queue.sh`
+(applying the design-review fixes) **while bash was executing it**. Bash reads
+a script by byte offset as it goes, so the edit shifted the offsets under the
+running process and it resumed mid-token after the loop. The only thing lost
+was the final `echo "queue done"`. **Rule for S4's overnight runs: never edit a
+script that is running.** Everything the queue was supposed to do, it did — 92
+dates in `load_log`, 92 distinct days in `vessel_day`, `data/raw` empty.
+
+### Design review
+
+`punchcard:punchcard` on the S3 diff (`ff8c15c^..HEAD`, touching
+`scripts/run_queue.sh`, `scripts/fetch.sh`, `sql/1*.sql`, `notes/plot.py`).
+Three findings, **all three accepted, none rejected.** Subagents were not
+dispatched (the session forbids them), so the three passes were run in
+sequence by hand.
+
+1. 🟡 *`run_queue.sh` hardcoded `data/raw` while `fetch.sh` resolves
+   `${AIS_RAW:-data/raw}`.* One copy of the archive-location rule was behind
+   the other: setting `AIS_RAW` sent the download to one directory and the
+   load to another, and the "did the zip survive?" guard would have fired on
+   every file. Fixed — the runner reads the same variable, and `QUEUE_LOG`
+   follows `CH_PATH`'s precedent so the test can redirect it.
+2. 🟡 *`notes/plot.py` ran the queries with `check=True`, which reports an
+   exit status and throws away the reason.* The likeliest reason is the store
+   lock this session documented, so the failure now prints ClickHouse's own
+   message and names that cause.
+3. 🔵 *Nothing pinned `run_queue.sh`'s skip branch* — the one that decides
+   whether a resumed queue re-downloads 72 GB it already has. `load.sh`'s own
+   skip cannot cover it: that one fires after the file is on disk and leaves
+   it there. Fixed — two asserts in `test_load.sh` with `AIS_RAW` and
+   `QUEUE_LOG` pointed at throwaway paths, verified not vacuous (a date absent
+   from `load_log` is not skipped; the runner goes to fetch and exits
+   non-zero).
+
+Assert 13 (the stdin defect above) came later, from running the loader 92
+times rather than from the review.
+
+### Deviations from `docs/PLAN.md` § S3
+
+- **No `clickhouse-connect`.** § S3 named it, but it is a client for a
+  ClickHouse *server* and this project deliberately runs none. `notes/plot.py`
+  shells out to `scripts/ch.sh` and parses TSV. One new dependency
+  (`matplotlib`) instead of two.
+- June 2025 is in the queue rather than "if time allows" — confirmed with the
+  user before the run. 92 dates, not 62.
+- `sql/03_coverage_daily.sql` stays in S4, where the plan puts it.
+- The three query files emit **all** months, groups and classes; the charts
+  pick what they draw. January and June come free that way.
+
+### Open questions for S4
+
+- **Never edit a running script.** See the exit-127 note above. S4 leaves a
+  queue running for whole nights.
+- **`clickhouse local` locks `--path` exclusively** (`docs/DECISIONS.md`).
+  A stray query during a bulk run can make *the loader* fail, not just itself.
+  S4's progress reporting must read `data/progress.tsv`, never the store.
+- **Before choosing scope (b), measure a 2015 reference month.** Finding 8's
+  ~72 GB straight-line is an overestimate of unknown size.
+- `scripts/test_load.sh` SKIPs its cross-file assert whenever `data/raw` holds
+  fewer than two archives — which is always, now. S4 should decide whether the
+  test fetches its own fixture or stays opportunistic.
+- Why is Sunday so far above Saturday for leisure in every month (July 3 690
+  against 2 986)? Return legs of weekend trips is the obvious guess; S6 can
+  test it against `first_ts`/`last_ts` and `home_h3`.
+
+### Disk
+
+`data` 1.5 GB, all of it `data/ch`; `data/raw` empty; 281 GB free — unchanged
+from the start of the session, since ~72 GB of archive passed through and was
+deleted file by file. 16.3 MB of store per loaded day.
+
+**Next session: S4 — bulk runner.** Read `docs/PLAN.md` § S4.
 
 ---
 
