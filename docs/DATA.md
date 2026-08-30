@@ -25,20 +25,20 @@ Last verified: 2026-08-29. Anything marked *(unverified)* still needs a check.
   | # | Column | Note |
   |---|--------|------|
   | 1 | Timestamp | `31/12/2015 23:59:59` (`DD/MM/YYYY HH:MM:SS`), from the base station. **UTC** — verified in S1 by the DST test, see `notes/s1-first-look.md` §6. 0 parse failures in 87.6 M rows. |
-  | 2 | Type of mobile | Verified values: `Class A`, `Class B`, `AtoN`, `Base Station`, `SAR Airborne`, `Search and Rescue Transponder`, `Emergency PIRB`, `Man Overboard Device`. Only the first two are vessels. |
+  | 2 | Type of mobile | Verified values: `Class A`, `Class B`, `AtoN`, `Base Station`, `SAR Airborne`, `Search and Rescue Transponder`, `Emergency PIRB`, `Man Overboard Device`. Only the first two are vessels (6.6 % of a day's rows are the rest). **Not constant per vessel per day** — 354 of 3 402 vessels on 2025-01-15 (10.4 %) and 526 of 8 364 on 2025-06-14 report both `Class A` and `Class B`; see S2's resolution rule in `docs/DECISIONS.md`. |
   | 3 | MMSI | |
-  | 4–5 | Latitude, Longitude | **Decimal point** in the real files (the README example is wrong). Single sentinel `Latitude = 91, Longitude = 0`, 0.1–0.5 % of rows; filter on the Danish bbox lat 53–59 / lon 3–17, which keeps 99.2–99.4 %. |
+  | 4–5 | Latitude, Longitude | **Decimal point** in the real files (the README example is wrong). Single sentinel `Latitude = 91, Longitude = 0`, 0.1–0.5 % of rows; filter on the Danish bbox lat 53–59 / lon 3–17, which keeps **96.6–99.5 %** of all rows (99.51 % on 2025-07-16, 96.56 % on 2025-06-14) — a scope decision, not cleaning; what it drops on 06-14 is a coherent southern-Baltic cluster. |
   | 6 | Navigational status | text |
-  | 7–10 | ROT, SOG, COG, Heading | |
+  | 7–10 | ROT, SOG, COG, Heading | `SOG` is empty on ~6.7 % of rows and carries the AIS sentinel **102.3** ("not available") on 27–66 k rows a day, stored as 102.2 in Float32. Max observed 258 kn. S2 filters `sog < 100`. |
   | 11 | IMO | |
   | 12–13 | Callsign, Name | |
   | 14 | Ship type | Verified: `Undefined`, `Sailing`, `Pleasure`, `Cargo`, `Fishing`, `Passenger`, `Tanker`, `Other`, `Tug`, `SAR`, `HSC`, `Dredging`, `Pilot`, `Military`, `Law enforcement`, `Towing`, `Port tender`, `Reserved`, `Diving`, `Anti-pollution`, `Medical`, `WIG`, `Spare 1/2`, `Towing long/wide`, `Not party to conflict`. Independent of column 2 — Class B `Cargo`/`Fishing`/`Passenger` all exist. |
   | 15 | Cargo type | |
-  | 16–17 | Width, Length | |
+  | 16–17 | Width, Length | `Length` is populated on 18.4 M of 20.4 M rows on 2025-07-16, max 557 m. Carried on static messages, so `vessel_day.length` takes `max()` over the day. |
   | 18 | Type of position fixing device | |
   | 19 | Draught | |
   | 20–21 | Destination, ETA | |
-  | 22 | Data source type | |
+  | 22 | Data source type | `AIS` on every one of 20.4 M rows of 2025-07-16. Not read by the loader. |
   | 23–26 | Size A/B/C/D | GPS antenna offsets |
 
 - Coverage: Danish coastal receivers; reaches into the Sound, Kattegat, the
@@ -48,10 +48,16 @@ Last verified: 2026-08-29. Anything marked *(unverified)* still needs a check.
   57.4–66.1 % on June/July days. `Sailing` (2091 vessels) and `Pleasure` (1765) on
   2025-07-12 are almost entirely Class B. Numbers and queries in
   `notes/s1-first-look.md`.
-- **Caveat, verified in S1:** `Ship type = 'Undefined'` is the *largest* Class B
-  group (4026 vessels on 2025-07-12) but carries ~9 positional messages per vessel
-  against ~672 for `Sailing`. A raw distinct-MMSI count is a transponder count, not
-  a boat count.
+- **`Ship type` is not constant per vessel per day — corrected in S2.** S1 read
+  `Undefined` as the largest Class B group (4026 vessels on 2025-07-12) and
+  concluded those were near-empty transponders. They are not: of 4 884 Class B
+  vessels with a position in Danish waters that day, **301 report `Undefined`
+  and nothing else, 3 026 report it alongside their real type, and 1 557 never
+  report it.** Position messages carry `Undefined` while static messages carry
+  the type, so a query grouping on the raw column counts one boat several
+  times. S1's *conclusion* still stands for a different reason: a raw
+  `uniqExact(mmsi)` over raw rows is not a boat count. Use `vessel_day`, which
+  holds one resolved type per vessel-day.
 
 ## Other open sources (context)
 

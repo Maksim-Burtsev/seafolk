@@ -69,3 +69,60 @@ what it rules out.
   layer must report the dropped share per day**, because it varies by a factor
   of seven between days and would otherwise look like a change in traffic; and
   S2's loader must count what it drops rather than discard it silently.
+- 2026-08-30 (S2) — **Vessel identity is resolved once per vessel-day, never
+  per message.** A vessel reports several `Ship type` values in a day (position
+  messages say `Undefined`, static messages carry the real type: 3 026 of 4 884
+  Class B vessels on 2025-07-12 said both) and sometimes both values of `Type of
+  mobile` (354 of 3 402 vessels on 2025-01-15). Grouping on the per-message
+  value made vessel counts non-additive — one boat in two `ship_group`s at once
+  — and dropped 1.93 % of ferry minutes from `public_track`. `ais_vessel_stage`
+  holds one identity per (day, mmsi) and `ais_clean` joins it. Rules out any
+  downstream query grouping on a raw `Ship type` or `Type of mobile` column.
+- 2026-08-30 (S2) — **`Type of mobile` is resolved toward Class B at a 1 %
+  threshold.** A vessel whose messages are at least 1 % Class B is private for
+  that day. Not "Class B even once": that was tried and filed ~340 obvious
+  Class A ships a day as private, cutting `public_track` by 21 %. Not a
+  majority either: the asymmetry is deliberate, because mislabelling a ferry as
+  private costs a row while mislabelling a boat as public publishes its track.
+  The threshold sits in a measured gap — mixed vessels are bimodal, 339 under
+  1 % against 15 above on 2025-01-15. Rules out treating `Type of mobile` as a
+  per-message fact anywhere in the project.
+- 2026-08-30 (S2) — **`h3_hourly.vessels` is an exact uniqExact state and must
+  never cross an export boundary.** `uniqExact` keeps the values, so merging a
+  guess into a published state answers "is this you?" — verified: 1 for a hit,
+  2 for a miss. 70.1 % of Class B cell-hours on 2025-07-16 hold exactly one
+  vessel, and Danish MMSIs live under MID 219/220, so a published state is a
+  recoverable identity over ~2 M candidates. Safe only because `data/ch` never
+  leaves the machine. S11 exports `uniqExactMerge(vessels)` as a number under
+  k >= 5 and never the column itself.
+- 2026-08-30 (S2) — **k >= 5 is not publishable at res 7 / 1 hour for Class B.**
+  Measured on 2025-07-16: the storage grain keeps 7.3 % of Class B cells and
+  47.7 % of their messages; res 5 / day keeps 38.1 % and 91.8 %. The stored
+  grain stays res 7 / hourly (it is what the analysis needs); the *published*
+  leisure layer is res 5 / daily. Rules out publishing the hourly Class B
+  layer at all, at any k.
+- 2026-08-30 (S2) — **Quality filter `sog < 100`.** `SOG` carries the AIS
+  sentinel 102.3 ("speed not available"), 27–66 k rows a day, stored as 102.2
+  in Float32. It is excluded from `moving`, from `moving_msgs`, from `sog_sum`
+  and from `dist_nm`. Rules out reading `mean_sog` as a plain average of the
+  column.
+- 2026-08-30 (S2) — **`dist_nm` is distance covered while moving, not distance
+  between fixes.** Four guards on each step: gap/first-row (`ts - pts` in
+  1–3600 s), 50 kn implied-speed cap, both endpoints moving, and `sog < 100`.
+  Measured contribution on 2025-07-16: 2.2 %, 4.7 %, 5.1 % individually, and
+  142x if all are removed (the first step of every window is otherwise measured
+  from the Gulf of Guinea). Rules out reading `dist_nm` as a track length.
+- 2026-08-30 (S2) — **Timestamps are parsed with an explicit
+  `%d/%m/%Y %H:%i:%S` mask, not `best_effort`.** S1 measured them identical
+  over 87.6 M rows including the ambiguous `12/07/2025`, but the mask costs the
+  same and removes the whole class of silent month/day swap. Rules out relying
+  on a ClickHouse setting for correctness of the project's only time column.
+- 2026-08-30 (S2) — **The row cap is a flag, and a capped load never deletes
+  its archive.** `scripts/load.sh --limit N` exists for the test; it was an
+  ambient environment variable first, which meant a truncated load could log
+  itself as complete and delete the only copy of the day. Rules out any future
+  loader option that changes how much is loaded without changing what is kept.
+- 2026-08-30 (S2) — **Stage tables are dropped with `DROP TABLE ... SYNC`, not
+  truncated.** `TRUNCATE` leaves the old parts inactive and `clickhouse local`
+  exits before the background cleaner runs, so one daily file left ~58 MB of
+  dead stage behind — ~52 GB over the 900 files of S4, against a 70 GB budget.

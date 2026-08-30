@@ -109,74 +109,78 @@ not, stop: chapter 01 is dead, re-plan around chapters 02–04.
 
 ---
 
-## S2 — The loader: one zip in, aggregates out, raw file gone
+## S2 — The loader: one zip in, aggregates out, raw file gone *(done — Gate B1 passed)*
 
 **Goal:** A single command that takes an archive file, streams it through
 ClickHouse, appends to persistent aggregate tables, and deletes the zip. Designed
 once, because raw data is not kept.
 
-**Files:**
-- Create: `sql/01_schema.sql` — DDL, idempotent (`CREATE TABLE IF NOT EXISTS`):
-  - `ais_raw_stage` (Memory or MergeTree, truncated per file): typed columns for
-    the 26 fields; `ts DateTime('UTC')`, `mmsi UInt32`, `mobile LowCardinality
-    (String)`, `lat Float64`, `lon Float64`, `sog Float32`, `cog Float32`,
-    `nav_status LowCardinality(String)`, `ship_type LowCardinality(String)`,
-    `name String`, `length UInt16`, `width UInt16`, `draught Float32`,
-    `imo UInt32`, `destination String`.
-  - `h3_hourly` (AggregatingMergeTree, ORDER BY (h3, hour, mobile, ship_group)):
-    `h3 UInt64` (res 7), `hour DateTime('UTC')`, `mobile`, `ship_group
-    LowCardinality(String)` (mapping: Sailing/Pleasure → `leisure`, Passenger →
-    `passenger`, Cargo/Tanker → `cargo`, Fishing → `fishing`, else `other`),
-    `msgs SimpleAggregateFunction(sum, UInt64)`, `vessels
-    AggregateFunction(uniqExact, UInt32)`, `moving_msgs SimpleAggregateFunction
-    (sum, UInt64)` (SOG > 0.5 kn), `sog_sum SimpleAggregateFunction(sum, Float64)`.
-  - `vessel_day` (ReplacingMergeTree, ORDER BY (day, mmsi)): `day Date`, `mmsi`,
-    `mobile`, `ship_group`, `ship_type`, `first_ts`, `last_ts`, `msgs UInt32`,
-    `moving_msgs UInt32`, `dist_nm Float32` (sum of `geoDistance` between
-    consecutive positions / 1852), `home_h3 UInt64` (H3 of the first position
-    of the day). **Internal only — contains MMSI.**
-  - `public_track` (MergeTree, ORDER BY (mmsi, ts)): 1-minute downsampled
-    positions for `ship_group IN ('passenger')` only. Used by chapter 03.
-  - `load_log` (MergeTree): `file String`, `rows UInt64`, `loaded_at DateTime`,
-    `seconds Float32`.
-- Create: `sql/02_aggregate.sql` — `INSERT … SELECT` from `ais_raw_stage` into
-  the three tables, using `geoToH3(lon, lat, 7)`, `toStartOfHour(ts)`,
-  `uniqExactState(mmsi)`, and a `multiIf` for `ship_group`. Filters: drop
-  sentinel coordinates (lat > 90, lon > 180), drop `mobile` not in
-  (`Class A`, `Class B`).
-- Create: `scripts/load.sh <zip>` — for each CSV entry in the zip: `unzip -p
-  "$zip" "$entry" | clickhouse local --path data/ch --query "INSERT INTO
-  ais_raw_stage FORMAT CSVWithNames" --date_time_input_format best_effort`;
-  then run `sql/02_aggregate.sql`; write `load_log`; `TRUNCATE ais_raw_stage`;
-  `rm "$zip" "$zip.ok"`. Exit non-zero and keep the zip if any step fails.
-- Create: `scripts/test_load.sh` — the one runnable check: loads a 50 000-row
-  sample extracted from a zip into a throwaway `--path data/ch_test`, asserts
-  `sum(msgs)` in `h3_hourly` equals the staged row count after filters, asserts
-  `vessels` merged over a day equals `uniqExact(mmsi)` from the stage, asserts
-  no Class B row exists in `public_track`. Prints PASS/FAIL.
+**Files (as built — see `docs/STATUS.md` § S2 for why each differs from the
+original plan):**
+- `sql/01_schema.sql` — DDL, idempotent. Five permanent tables:
+  - `h3_hourly` (AggregatingMergeTree, PARTITION BY toYYYYMM(hour), ORDER BY
+    (h3, hour, mobile, ship_group)): `h3 UInt64` (res 7, `geoToH3(lon, lat, 7)`),
+    `hour DateTime('UTC')`, `mobile`, `ship_group`,
+    `msgs SimpleAggregateFunction(sum, UInt64)`,
+    `vessels AggregateFunction(uniqExact, UInt32)`,
+    `moving_msgs SimpleAggregateFunction(sum, UInt64)`,
+    `sog_sum SimpleAggregateFunction(sum, Float64)` — summed over moving
+    messages only. **`vessels` is an exact state and must never be exported.**
+  - `vessel_day` (ReplacingMergeTree, PARTITION BY toYYYYMM(day), ORDER BY
+    (day, mmsi)): `day`, `mmsi`, `mobile`, `ship_type`, `ship_group`,
+    `first_ts`, `last_ts`, `msgs`, `moving_msgs`, `dist_nm` (distance covered
+    *while moving*), `home_h3`, `length`. **Internal only — contains MMSI.**
+  - `public_track` (MergeTree, PARTITION BY toYYYYMM(ts), ORDER BY (mmsi, ts)):
+    1-minute downsampled positions, `mobile = 'Class A' AND ship_group =
+    'passenger'`, plus `name`. Chapter 03 reads this.
+  - `load_log` (MergeTree): `file`, `loaded_at`, `seconds`, `ts_min`, `ts_max`,
+    `rows_read`, `rows_non_vessel`, `rows_sentinel`, `rows_out_of_bbox`,
+    `rows_kept`, `rows_h3`, `rows_vessel_day`, `rows_public_track`.
+    The four row counters partition `rows_read` exactly; S10 reads them.
+  - plus two per-file stage tables (`ais_raw_stage`, `ais_vessel_stage`) and two
+    views (`ais_rows` = which rows count, `ais_clean` = those rows joined to one
+    resolved identity per vessel-day). Stage tables are dropped after each load.
+- `sql/02_stage.sql` — `INSERT INTO ais_raw_stage SELECT … FROM
+  file({src:String}, CSVWithNames, …) LIMIT {lim:UInt64}`. Timestamps parsed
+  with an explicit `%d/%m/%Y %H:%i:%S` mask.
+- `sql/03_aggregate.sql` — step 0 resolves one identity per vessel-day into
+  `ais_vessel_stage`, then three `INSERT … SELECT` from `ais_clean`.
+- `scripts/load.sh [--force] [--limit N] <zip>` — stage, read the file's own
+  date range from the staged rows, delete that range from all three tables,
+  aggregate, log, drop the stage, `rm` the zip. Exit non-zero and keep the zip
+  on any failure. A `--limit`ed load never deletes the archive.
+- `scripts/test_load.sh` — runs `load.sh` itself against hard links to the real
+  zips. 17 asserts; prints PASS/FAIL and exits non-zero on any FAIL. SKIPs
+  cleanly when `data/raw` is empty.
+- `scripts/ch.sh` — gained `CH_PATH` so the test gets a throwaway store.
 
-**Interfaces:** later sessions rely on table names and columns exactly as above.
+**Interfaces:** later sessions rely on the table names and columns above.
+**Never group on a raw `Ship type` or `Type of mobile` column** — neither is
+constant within a vessel-day; read the resolved values from `vessel_day` or
+`ais_clean`.
 
 **Do:**
-- [ ] Write `sql/01_schema.sql`; run it; `SHOW TABLES` lists the five tables.
-- [ ] Write `scripts/test_load.sh` first; run it; it fails (no aggregate yet).
-- [ ] Write `sql/02_aggregate.sql` and `scripts/load.sh`; run the test; PASS.
-- [ ] Load `aisdk-2025-07-16.zip` for real; note wall time and rows/s in
-      `docs/STATUS.md`.
+- [x] Write `sql/01_schema.sql`; run it; the tables exist.
+- [x] Write `sql/03_aggregate.sql` and `scripts/load.sh`.
+- [x] Write `scripts/test_load.sh`; ALL PASS. *(Written after the SQL, not
+      before it as planned. Compensated by breaking the logic deliberately and
+      confirming each assert fires — see `docs/STATUS.md` § S2 design review.)*
+- [x] Load `aisdk-2025-07-16.zip` for real: 20 398 510 rows in 8 s
+      (2.55 M rows/s), `data/ch` 7.7 MB.
 
 **Validate:**
 ```bash
-scripts/test_load.sh                                  # PASS
+scripts/test_load.sh                                  # ALL PASS
 scripts/load.sh data/raw/aisdk-2025-07-16.zip         # ends with "loaded … rows in … s", zip removed
 scripts/ch.sh -q "SELECT count(), uniqExactMerge(vessels) FROM h3_hourly"
 du -sh data/ch                                        # tens of MB for one day
 ```
 
 **You verify:** the zip is gone, `data/ch` is small, `load_log` has one row, the
-test prints PASS.
+test prints ALL PASS.
 
-**Gate B1:** loader idempotent and tested; throughput ≥ 300 k rows/s (otherwise
-profile before bulk).
+**Gate B1: PASSED.** Loader idempotent and tested; 2.55–2.91 M rows/s against a
+300 k target.
 
 **Commit:** `feat(s2): streaming loader into hourly H3 aggregates`
 
@@ -424,6 +428,14 @@ curve is written down.
   groups); columns: `h3`, `hour`, `mobile`, `ship_group`, `msgs`, `vessels`,
   `moving_share`, `mean_sog`. Plus `leisure_daily.parquet` (per day, per res-5
   cell) and `ferry_daily.parquet`.
+  **Measured in S2 (2025-07-16): the res-7 hourly Class B layer does not
+  survive k >= 5 — it keeps 7.3 % of cells and 47.7 % of the movement. Res 5 /
+  daily keeps 38.1 % and 91.8 %. So the hourly Class B layer is not published
+  at any k; `leisure_daily.parquet` is the leisure product, and the hourly
+  res-7 export is Class A only.**
+  **`vessels` is exported as `uniqExactMerge(vessels)`, a number. The
+  `AggregateFunction` column itself is a membership oracle over MMSI and must
+  never be written to a file** — see `docs/DECISIONS.md`.
 - Create: `scripts/export.sh` — runs the export into `dist/dataset/`, then
   `scripts/test_export.py` (uv): asserts no row with Class B and vessels < 5,
   asserts no MMSI-like column, asserts row counts vs ClickHouse. Fails loudly.
