@@ -126,3 +126,28 @@ what it rules out.
   truncated.** `TRUNCATE` leaves the old parts inactive and `clickhouse local`
   exits before the background cleaner runs, so one daily file left ~58 MB of
   dead stage behind — ~52 GB over the 900 files of S4, against a 70 GB budget.
+- 2026-08-30 (S3) — **A leisure vessel-day counts as `active` when
+  `moving_msgs > 0`, and there is no minimum message count.** S2 asked S3 to
+  pick a `msgs >= N` floor; measured on 2025-07-16 it is the wrong lever. At
+  N = 100 it drops 19.2 % of leisure vessels but only 0.72 % of their moving
+  messages, and the median `dist_nm` of what it drops is 0 at *every* N — it
+  only ever removes boats that did not move, so say that instead. 32 % of
+  leisure vessel-days (1 457 of 4 554) never exceed 0.5 kn, and only 16 of the
+  3 097 that do move have fewer than 5 messages, so a floor on top of
+  `moving_msgs > 0` would be redundant. Both counts are carried in
+  `sql/10_season_daily.sql`: `present` (a transponder reported) and `active`
+  (the boat moved). Rules out any chart that says "boats" without saying which
+  of the two it counted.
+- 2026-08-30 (S3) — **`matplotlib` is the only new dependency; there is no
+  ClickHouse client library.** `docs/PLAN.md` § S3 named `clickhouse-connect`,
+  but that is a client for a ClickHouse *server* and this project deliberately
+  has none. `notes/plot.py` runs the query files through `scripts/ch.sh` and
+  parses the TSV that comes back. Rules out a notebook or script that talks to
+  the store any other way than through `scripts/ch.sh`.
+- 2026-08-30 (S3) — **`clickhouse local` holds an exclusive lock on `--path`, so
+  nothing may read `data/ch` while a load runs.** A second invocation fails with
+  `Cannot lock file data/ch/status`, and the failure lands on whichever process
+  loses the race — a stray query can therefore kill a bulk run, not merely fail
+  itself. Development against a live queue uses `CH_PATH=<copy> scripts/ch.sh`
+  on a copy of the store. Rules out a progress dashboard, a monitoring query, or
+  any second reader during S4's overnight runs.
