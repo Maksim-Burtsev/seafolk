@@ -524,6 +524,14 @@ copied word for word.
 - Charts: season rings (Canvas), season curves by year, weekend bars, regatta
   spikes, daily fingerprint radial, night share; each with a caption, a source
   line, and a "reproduce" link to the SQL file.
+- **The visual system is already prototyped in `site/day-clocks.html`** (built
+  in S3 as a phase-0 taste): Bodoni Moda / Karla / IBM Plex Mono, a cool marine
+  neutral, and one accent reserved for the leisure fleet while every working
+  fleet shares a muted ink. The "daily fingerprint radial" in the list above is
+  that page. Reuse its tokens rather than inventing a second system, and keep
+  the pattern of embedding each page's numbers in an inline JSON block that
+  `scripts/build_site_data.sh` rewrites — one file that works from `file://`,
+  from Pages, and as a published artifact.
 - Create: `scripts/build_site_data.sh` — SQL → `site/data/*.json`.
 - Create: `.github/workflows/pages.yml` — deploy `site/` to GitHub Pages.
 - Create: `site/method.html` (EN) and `site/ru/method.html` — the privacy method
@@ -580,6 +588,12 @@ data reachable from the browser (grep the built assets for `mmsi`).
   four fingerprints, "the sea empties" frame sequence); `scripts/render_posters.js`
   (node + canvas; dependency line).
 - Animation: 20–30 s, frames → `ffmpeg` (already on the machine).
+- **An animated version of the day clocks** — the four wind roses of
+  `site/day-clocks.html` with a hand sweeping the 24 hours, or the same dial
+  morphing January → July. Short loop, GIF/MP4, made to be posted on its own
+  without the essay around it. Requested after seeing the static page; it is
+  the one chart in the project whose finding is a *cycle*, so it is the one
+  that actually earns motion.
 
 **You verify:** print one poster at A3 and look at it from two metres.
 
