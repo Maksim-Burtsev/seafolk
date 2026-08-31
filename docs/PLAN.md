@@ -247,7 +247,7 @@ day → (a) is ~15 GB, (b) straight-lines to ~72 GB against a 70 GB budget, so
 
 ---
 
-## S4 — Bulk runner: nights, resume, disk guard
+## S4 — Bulk runner: nights, resume, disk guard *(code done; daily queue still loading)*
 
 **Goal:** Make the queue runner safe to leave unattended for nights: disk guard,
 resume, progress, one log line per file, and a summary at the end.
@@ -264,12 +264,13 @@ resume, progress, one log line per file, and a summary at the end.
   message counts; the coverage-drift reference used in S10.
 
 **Do:**
-- [ ] **Never edit a script while a queue is running it.** Bash reads a script
+- [x] **Never edit a script while a queue is running it.** Bash reads a script
       by byte offset as it goes; S3's run died with `line 35: t:: command not
       found` after finishing all 92 files, because the file was edited under
       the running process. Stop the runner, edit, restart — it resumes from
       `load_log`.
 - [ ] **Deal with the part directories `clickhouse local` never collects.**
+      *(still open — carried to S5)*
       92 days left **2 881 part directories / 54 183 files** under `data/ch/store`
       — 31 directories a day, against 134 parts that `system.parts` admits to.
       Each load runs three `DELETE` mutations, every mutation writes a new part
@@ -281,25 +282,29 @@ resume, progress, one log line per file, and a summary at the end.
       scans them at startup (1.1 s today). Measure the startup cost as the run
       grows; the likely fix is a periodic `OPTIMIZE TABLE … FINAL` or a lower
       `old_parts_lifetime`, not more RAM.
-- [ ] **Replace "copy the store" as the way to read it during a load.** S3's
+- [x] **Replace "copy the store" as the way to read it during a load.** Answered:
+      `cp -Rc` clones on APFS and costs nothing — measured, 0.00 GB against
+      1.17 GB for a plain `cp` of the same file. S3's
       working copy of a 1.8 GB store was a real 29.8 GB, because `cp -a` does
       not preserve the hardlinks that 97 % of the store's files are. The store
       is heading for ~36 GB, where the same copy would be several hundred GB —
       the workflow does not survive its own success. Pick one before S4 needs
       it: `cp -Rc` (clonefile, same APFS volume, near-free), or stop copying
       and instead pause the queue for the seconds a query takes.
-- [ ] **Progress reporting reads `data/progress.tsv`, never the store.**
+- [x] **Progress reporting reads `data/progress.tsv`, never the store.**
       `clickhouse local` locks `--path` exclusively and a stray query can make
       the *loader* fail, not just itself (`docs/DECISIONS.md`).
-- [ ] **Confirm `clickhouse local` opens a monthly zip64 archive** (14–19 GB, and
+- [x] *(format only)* **Confirm `clickhouse local` opens a monthly zip64 archive** (14–19 GB, and
       the 2017 `all_sources_*` variants) with `file('… :: *.csv')`. If it cannot,
       fall back to the `unzip -p | clickhouse local` pipe. See the S1 entry in
       `docs/DECISIONS.md`.
-- [ ] Implement the guards; test with `--dry-run` on `queues/ref-years.txt`.
-- [ ] Start `queues/2024-2026.txt`; record MB/s and per-file seconds in
-      `docs/STATUS.md` after the first night.
-- [ ] Then `queues/ref-years.txt`. Monthly zips are 14–19 GB: confirm free disk
-      before each.
+- [x] Implement the guards; `--dry-run`, the mkdir lock, the free-disk floor
+      and `data/progress.tsv` are in, and parallel prefetching was added after
+      measuring that one connection gets a third of the link (3.6x).
+- [x] Started as `queues/daily-2024-2026.txt` (909 dates). 60 s/file after the
+      prefetcher, against 214 s/file before it.
+- [ ] Then `queues/ref-years.txt` — **not written yet.** Load one 2015 month by
+      hand first: the zip64 *format* is confirmed but a >4 GB member is not.
 
 **Validate:**
 ```bash
