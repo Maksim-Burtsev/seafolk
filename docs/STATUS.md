@@ -3,7 +3,155 @@
 Newest session on top. Each entry: what was done, findings with numbers, open
 questions, and the exact next session. Write it for someone with zero context.
 
-**Next session: S4** (bulk runner: disk guard, resume, nights).
+**Next session: S5** (context layers) — but first read S4's "still running" below.
+
+---
+
+## S4 — Bulk runner — 2026-08-31 *(code done, data still loading)*
+
+**Done:** `scripts/prefetch.sh` (new), `scripts/run_queue.sh` (lock, `--dry-run`,
+`data/progress.tsv`, free-disk floor), `scripts/fetch.sh` (retry gap),
+`sql/13_coverage_daily.sql`, `queues/daily-2024-2026.txt` (909 dates).
+`scripts/test_load.sh` is now **23 asserts, ALL PASS**.
+
+**⚠️ Still running.** The phase-1 daily queue is loading in the background:
+**303 of 909 files done, 607 to go, ~15 h left at the current rate.**
+It is detached (`ppid = 1`), holds `data/.queue.lock`, and resumes from
+`load_log` if stopped. Do not query `data/ch` while it runs.
+
+**Gate C is not met yet** — it needs 2024-03 → today loaded. The reference
+years (2015/2018/2021) are not started; see the open questions.
+
+### The measurement that shaped the session
+
+The archive throttles a single connection. Measured by running extra streams
+alongside a live queue:
+
+```
+1 stream    3.78 MB/s
+3 streams   7.81 MB/s aggregate   (3.77 + 2.32 + 1.71)
+link total  ~11 MB/s              (matches the 11.7 MB/s measured in S3)
+```
+
+So serial downloading was wasting two thirds of the bandwidth — ~183 s of the
+~214 s each file took. `scripts/prefetch.sh` downloads up to `AHEAD` (3) files
+at a time while loading stays strictly serial (the store lock). Measured on the
+live run afterwards:
+
+```
+before   214 s/file   →  37 h for the remaining 628 files
+after     60 s/file   →  10.4 h
+```
+
+**3.6x, and it is the whole reason the queue finishes today rather than
+Tuesday.** Disk is bounded by counting ready archives plus live downloads, so
+never more than ~3 GB of raw at once.
+
+### Two overnight failures, both now fixed
+
+1. **A truncated download ended the run.** After 173 files:
+   `curl: (18) transfer closed with 403832654 bytes remaining to read`.
+   `--retry` covers timeouts and 5xx but not error 18, so `fetch.sh` exited
+   non-zero and the queue stopped for the rest of the morning. Fixed with
+   `--retry-all-errors` and 10 retries; `-C -` resumes from the bytes on disk.
+2. **Editing a running script killed it.** S3's run died with
+   `line 35: t:: command not found` after finishing all 92 files, because the
+   file was edited under the running process. **It happened again this session**
+   — I rewrote `run_queue.sh` while the queue was executing it, and had to stop
+   and restart. The data was never at risk (`load_log` is authoritative and
+   `load.sh` rewrites a date's whole range), but the rule stands: stop the
+   runner, edit, restart.
+
+### Validate — real output
+
+```
+$ scripts/run_queue.sh --dry-run queues/daily-2024-2026.txt
+queue    620 dates to load, 289 already in load_log
+--dry-run: would fetch and load these, in order:
+         2024-09-14
+         …
+         free disk 307 GB, floor 30 GB, prefetching 3 ahead
+
+$ tail -2 data/progress.tsv
+2026-08-31 07:12:07	2024-09-25	40	9	608	15.6
+2026-08-31 07:15:12	2024-09-27	21	1	606	3.5
+
+$ scripts/test_load.sh
+… 23 asserts …
+ALL PASS
+
+$ df -h . && du -sh data/ch
+/dev/disk3s5   460Gi   118Gi   306Gi    28%
+5.3G	data/ch
+```
+
+### Findings
+
+1. **zip64 is half-confirmed.** The 2015 monthly archive really is zip64 — its
+   last 64 KB carry both `PK\x06\x06` and `PK\x06\x07` — and ClickHouse reads
+   a forced-zip64 archive correctly (`zip -fz`, returned the right 2 rows).
+   **What is still untested is the size dimension: a member larger than 4 GB.**
+   That needs one real monthly file, ~19 GB, and should wait until the daily
+   queue frees the link.
+2. **`cp -c` clones and costs nothing; plain `cp` does not.** Measured on a
+   1.17 GB file: `cp -c` took 0.00 GB, `cp` took 1.17 GB. This is the answer to
+   S3's open question about copying the store — use `cp -Rc`, same APFS volume.
+3. **Every date in the queue exists.** All 909 checked with HEAD requests
+   against both archive layouts: zero missing. The runner stops on the first
+   failure, so one absent date would have cost a night.
+
+### Design review
+
+`punchcard:punchcard` on `1ddc4c8..HEAD`. Three findings, **all three accepted**,
+and a fourth uncovered while fixing them. Subagents were not used; the three
+passes were run in sequence by hand.
+
+1. 🔴 *`--dry-run` truncated the running queue's work list.* `data/queue.work`
+   was a fixed path written before the dry-run branch, and `--dry-run`
+   deliberately takes no lock — so the file had no owner. Measured live: 620
+   lines to 1, after which the prefetcher hit EOF and silently stopped reading
+   ahead, with no error printed anywhere. **I had told the user `--dry-run` was
+   safe to run at any time.** The list now lives inside the lock directory.
+2. 🟡 *The test isolated `AIS_RAW` and `QUEUE_LOG` but not `QUEUE_LOCK`* — so
+   its runner assert failed with "another runner is already going" during any
+   bulk run. It also drew its sample from `data/raw`, racing the live queue for
+   files and sometimes picking a half-downloaded one. Samples now come from
+   `data/sample`. A follow-up found `PROGRESS` unisolated too, after a test run
+   appended a bogus row to the real progress file.
+3. 🔵 *`prefetch.sh` had no test.* Three asserts now cover it.
+4. **The fourth, found while fixing 3:** `run_queue` took the prefetcher's
+   handle from `$!`, and that pid was **not** the prefetcher — the script's own
+   stdout is a process substitution. `cleanup`'s `kill` therefore hit the
+   caller, and the test suite died with SIGTERM after assert 13 while the
+   prefetcher's own TERM trap never fired. The prefetcher now publishes its pid
+   to a file and the runner kills exactly that.
+
+### Deviations from `docs/PLAN.md` § S4
+
+- `sql/03_coverage_daily.sql` is **`sql/13_coverage_daily.sql`**:
+  `sql/03_aggregate.sql` took that number in S2.
+- `flock` is a `mkdir` lock — macOS ships no `flock(1)`. A lock whose pid is
+  dead is taken over rather than blocking forever.
+- `queues/ref-years.txt` and `queues/full.txt` are **not** written yet; the
+  reference years wait on finding 1.
+- Parallel downloading was not in the plan at all. It came out of the
+  throughput measurement and is the session's largest change.
+
+### Open questions for S5
+
+- **Finish the daily queue and check Gate C** (`data/ch` <= 40 GB — it is on
+  track for ~16 GB).
+- **Load one 2015 month for real** before writing `queues/ref-years.txt`, to
+  settle the >4 GB member question and to measure what a month costs. Until
+  then the ~36 GB projection for scope (a) is an extrapolation.
+- **The part directories still accumulate.** 31 per loaded day, and nothing
+  collects them because `clickhouse local` exits before the cleaner runs. At
+  909 days that is ~28 500 directories. Space is fine (hardlinks); the cost to
+  watch is `scripts/ch.sh` startup, 1.1 s at 92 days.
+- `data/sample/aisdk-2025-08-01.zip` (661 MB) is kept on purpose so
+  `test_load.sh` has a fixture; it is the one raw file the project keeps.
+
+**Next session: S5 — context layers.** Read `docs/PLAN.md` § S5.
 
 ---
 
