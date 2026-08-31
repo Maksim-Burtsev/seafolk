@@ -31,13 +31,19 @@ mkdir -p "$DEST"
 # orphaned and keep writing into data/raw after the runner has stopped.
 trap 'kids=$(jobs -p); [ -n "$kids" ] && kill $kids 2>/dev/null; exit 130' TERM INT
 
-zips() { ls "$DEST"/aisdk-*.zip 2>/dev/null | wc -l | tr -d ' '; }
+# Slots are counted as READY archives (a .ok sidecar, waiting to be loaded)
+# plus this script's own live downloads — never as "zip files on disk".
+# Counting files deadlocked the runner: a restart with half-downloaded archives
+# left over saw three zips, refused to start anything, and the runner then sat
+# waiting for a .ok that nobody was fetching.
+ready()    { ls "$DEST"/aisdk-*.zip.ok 2>/dev/null | wc -l | tr -d ' '; }
+inflight() { jobs -rp | wc -l | tr -d ' '; }
 
 while read -r d _; do
   case "$d" in ''|\#*) continue ;; esac
   [ -f "$DEST/aisdk-$d.zip.ok" ] && continue
 
-  while [ "$(zips)" -ge "$ahead" ]; do sleep 5; done
+  while [ $(( $(ready) + $(inflight) )) -ge "$ahead" ]; do sleep 5; done
 
   free_gb=$(df -k . | awk 'NR==2 {print int($4/1048576)}')
   if [ "$free_gb" -lt "${FREE_FLOOR_GB:-30}" ]; then
