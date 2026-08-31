@@ -27,6 +27,13 @@ ahead="${2:-3}"
 DEST="${AIS_RAW:-data/raw}"
 mkdir -p "$DEST"
 
+# The runner needs to be able to stop this process, and $! is not a reliable
+# handle for it: run_queue's own stdout is a process substitution, and the pid
+# it read back from $! was not this script's — killing it terminated the
+# caller instead, which killed the whole test suite with SIGTERM. So the
+# prefetcher publishes its own pid and the runner kills exactly that.
+[ -n "${PREFETCH_PID_FILE:-}" ] && echo $$ > "$PREFETCH_PID_FILE"
+
 # Killing this script must take its downloads with it. Without this they are
 # orphaned and keep writing into data/raw after the runner has stopped.
 trap 'kids=$(jobs -p); [ -n "$kids" ] && kill $kids 2>/dev/null; exit 130' TERM INT

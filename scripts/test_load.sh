@@ -14,11 +14,17 @@ export CH_PATH=data/ch_test
 LIMIT=2000000                      # ~2 h 43 min of a daily file; ~2 s to stage
 LINKS=data/raw/.test_links
 
-z1=$(ls data/raw/aisdk-*.zip 2>/dev/null | sed -n 1p || true)
-z2=$(ls data/raw/aisdk-*.zip 2>/dev/null | sed -n 2p || true)
+# Samples come from their own directory, never from data/raw: a bulk run is
+# downloading into data/raw and deleting from it, so a sample taken there is
+# both a race and, half the time, a half-downloaded file.
+#   scripts/fetch.sh 2025-08-01   with AIS_RAW=data/sample
+SAMPLES="${SAMPLES:-data/sample}"
+complete=$(ls "$SAMPLES"/aisdk-*.zip 2>/dev/null || true)
+z1=$(printf '%s\n' "$complete" | sed -n 1p)
+z2=$(printf '%s\n' "$complete" | sed -n 2p)
 if [ -z "$z1" ]; then
-  echo "SKIP  no archive file in data/raw — nothing to sample."
-  echo "      Fetch one first:  scripts/fetch.sh 2025-07-16"
+  echo "SKIP  no archive in $SAMPLES — nothing to sample."
+  echo "      Fetch one first:  AIS_RAW=$SAMPLES scripts/fetch.sh 2025-08-01"
   exit 0
 fi
 
@@ -149,15 +155,34 @@ assert "a load with a multi-line file on stdin writes one load_log row" \
 #     it. This is the branch that decides whether a resumed queue re-downloads
 #     72 GB it already has, and load.sh's own skip cannot cover it: that one
 #     fires after the file is on disk, and leaves it there. AIS_RAW and
-#     QUEUE_LOG point the runner at throwaway paths, so a broken skip lands in
+#     QUEUE_LOG and QUEUE_LOCK point the runner at throwaway paths, so a broken
+#     skip lands in
 #     the scratch directory instead of data/raw.
 d1=$(basename "$z1" .zip); d1=${d1#aisdk-}
 printf '%s\n' "$d1" > "$LINKS/queue.txt"
-rq_out=$(AIS_RAW="$LINKS/raw" QUEUE_LOG="$LINKS/queue.log" scripts/run_queue.sh "$LINKS/queue.txt")
-case "$rq_out" in *"skip    aisdk-$d1.zip"*) said_skip=1;; *) said_skip=0;; esac
+rq_out=$(AIS_RAW="$LINKS/raw" QUEUE_LOG="$LINKS/queue.log" QUEUE_LOCK="$LINKS/lock" \
+         scripts/run_queue.sh "$LINKS/queue.txt")
+case "$rq_out" in *"0 dates to load, 1 already in load_log"*) said_skip=1;; *) said_skip=0;; esac
 assert "run_queue skips a date already in load_log" 1 "$said_skip"
 assert "…and downloads nothing while doing it" 0 \
   "$(ls "$LINKS/raw" 2>/dev/null | wc -l | tr -d ' ')"
+
+# 15. scripts/prefetch.sh is where the whole 3.6x download speedup lives, and
+#     it runs unattended for days. Two things it must never do: re-download a
+#     file it already has, and keep downloading past the free-disk floor.
+mkdir -p "$LINKS/pf"
+printf '2024-01-01\n2024-01-02\n' > "$LINKS/pfq1.txt"
+: > "$LINKS/pf/aisdk-2024-01-01.zip.ok"
+: > "$LINKS/pf/aisdk-2024-01-02.zip.ok"
+AIS_RAW="$LINKS/pf" scripts/prefetch.sh "$LINKS/pfq1.txt" 3
+assert "prefetch fetches nothing when every date is already complete" 2 \
+  "$(ls "$LINKS/pf" | wc -l | tr -d ' ')"
+
+printf '2024-01-03\n' > "$LINKS/pfq2.txt"
+pf_out=$(FREE_FLOOR_GB=99999999 AIS_RAW="$LINKS/pf" scripts/prefetch.sh "$LINKS/pfq2.txt" 3 2>&1)
+case "$pf_out" in *"under the"*) floored=1;; *) floored=0;; esac
+assert "prefetch stops at the free-disk floor" 1 "$floored"
+assert "…and downloaded nothing on the way out" 2 "$(ls "$LINKS/pf" | wc -l | tr -d ' ')"
 
 echo
 [ "$fail" = 0 ] && echo "ALL PASS" || echo "FAILURES ABOVE"

@@ -38,10 +38,16 @@ mkdir -p "$(dirname "$log")" "$DEST"
 
 pf=""
 held=0
+work=""
 cleanup() {
-  # wait, or job control prints "Terminated: 15" into the log the human reads
-  [ -n "$pf" ] && { kill "$pf" && wait "$pf"; } 2>/dev/null
-  [ "$held" = 1 ] && rm -rf "$lock"
+  # Read the pid the prefetcher published; see the note in prefetch.sh for why
+  # $! is not usable here. Redirected, or job control prints "Terminated: 15"
+  # into the log the human reads.
+  if [ -n "$pf" ] && [ -f "$pf" ]; then
+    { kill "$(cat "$pf")" && wait; } 2>/dev/null
+  fi
+  [ "$held" = 1 ] && rm -rf "$lock"          # takes the work list with it
+  [ "$dry" = 1 ] && rm -f "$work"
   :                       # last, or a failing kill/rm becomes the exit status
 }
 trap cleanup EXIT
@@ -72,7 +78,13 @@ loaded="$(scripts/ch.sh -q 'SELECT file FROM load_log')"
 
 # The dates still to do, resolved once here because this is the only process
 # that may read the store — the prefetcher cannot, the loader holds the lock.
-work=data/queue.work
+#
+# The list lives INSIDE the lock directory, so it has exactly one owner. It was
+# a fixed data/queue.work, which --dry-run truncated out from under a running
+# queue — measured, 620 lines to 1 — and the running prefetcher then hit EOF and
+# silently stopped reading ahead. --dry-run takes no lock, so it gets a scratch
+# file of its own instead.
+if [ "$dry" = 1 ]; then work="$(mktemp -t seafolk-queue)"; else work="$lock/work"; fi
 : > "$work"
 skipped=0
 while read -r d _; do
@@ -94,9 +106,9 @@ fi
 
 # Download ahead, several at a time: one connection gets a third of the link.
 # PREFETCH=0 falls back to fetching each file inline, one at a time.
-if [ "${PREFETCH:-1}" != 0 ]; then
-  scripts/prefetch.sh "$work" "${AHEAD:-3}" &
-  pf=$!
+if [ "${PREFETCH:-1}" != 0 ] && [ "$total" -gt 0 ]; then
+  pf="$lock/prefetch.pid"
+  PREFETCH_PID_FILE="$pf" scripts/prefetch.sh "$work" "${AHEAD:-3}" &
 fi
 
 [ -f "$prog" ] || printf 'finished_utc\tdate\tseconds\tdone\tremaining\teta_hours\n' > "$prog"
@@ -121,7 +133,8 @@ while read -r d _; do
   # so a genuine failure is visible and stops the run instead of hanging it.
   waited=0
   while [ ! -f "$DEST/$f.ok" ]; do
-    if [ -z "$pf" ] || ! kill -0 "$pf" 2>/dev/null || [ "$waited" -ge 1200 ]; then
+    pfpid=""; [ -n "$pf" ] && [ -f "$pf" ] && pfpid="$(cat "$pf")"
+    if [ -z "$pfpid" ] || ! kill -0 "$pfpid" 2>/dev/null || [ "$waited" -ge 1200 ]; then
       scripts/fetch.sh "$d"
       break
     fi
