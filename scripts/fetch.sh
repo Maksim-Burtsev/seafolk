@@ -26,7 +26,12 @@ for d in "$@"; do
   # A progress bar is for a human. Piped into a log (scripts/run_queue.sh) it is
   # 90 KB of carriage returns per file — see data/fetch.log.
   if [ -t 2 ]; then prog=--progress-bar; else prog=--no-progress-meter; fi
-  curl -fL --retry 5 --retry-delay 15 -C - "$prog" -o "$out" "$found"
+  # --retry alone covers timeouts and 5xx, NOT curl 18 "transfer closed with N
+  # bytes remaining" — a mid-download disconnect. That killed an unattended run
+  # after 173 files: curl exited 18, fetch.sh exited non-zero, and the queue
+  # stopped for the rest of the morning. --retry-all-errors covers it, and -C -
+  # resumes from what is already on disk rather than starting the file over.
+  curl -fL --retry 10 --retry-delay 15 --retry-all-errors -C - "$prog" -o "$out" "$found"
   if unzip -tq "$out" >/dev/null; then
     touch "$out.ok"; echo "ok    $f ($(du -h "$out" | cut -f1))"
   else
