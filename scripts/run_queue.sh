@@ -129,17 +129,31 @@ while read -r d _; do
   t0=$(date +%s)
 
   # Wait for the prefetcher to finish this date. Fall back to fetching it here
-  # if the prefetcher is gone or has fallen too far behind — in the foreground,
-  # so a genuine failure is visible and stops the run instead of hanging it.
-  waited=0
+  # only when nobody is working on the file: the prefetcher is gone, or the
+  # zip has stopped GROWING for 3 minutes (the prefetcher fetches dates in
+  # list order and never comes back, so a failed date would otherwise wait on
+  # it forever — while its other downloads keep every slot full: a deadlock).
+  #
+  # It used to be a flat 20-minute timeout, and that was a corruptor, not a
+  # guard: a monthly archive legitimately downloads for 30-90 minutes, so the
+  # runner started a SECOND curl -C - into the file the prefetcher was still
+  # writing. Two writers, interleaved bytes — aisdk-2015-08.zip failed its
+  # integrity check twice and aisdk-2015-11.zip once before this was found.
+  # The stale partial is removed first so the fallback starts clean rather
+  # than resuming a file whose bytes two processes wrote.
+  last_size=-1; stall=0
   while [ ! -f "$DEST/$f.ok" ]; do
     pfpid=""; [ -n "$pf" ] && [ -f "$pf" ] && pfpid="$(cat "$pf")"
-    if [ -z "$pfpid" ] || ! kill -0 "$pfpid" 2>/dev/null || [ "$waited" -ge 1200 ]; then
+    sz=$(stat -f %z "$DEST/$f" 2>/dev/null || echo 0)
+    if [ "$sz" != "$last_size" ]; then last_size=$sz; stall=0; else stall=$((stall + 5)); fi
+    if [ -z "$pfpid" ] || ! kill -0 "$pfpid" 2>/dev/null || [ "$stall" -ge 180 ]; then
+      # ponytail: a transfer hung mid-byte for 3 min with its curl still alive
+      # would still race here; curl's own retries make that vanishingly rare.
+      rm -f "$DEST/$f"
       scripts/fetch.sh "$d"
       break
     fi
     sleep 5
-    waited=$((waited + 5))
   done
 
   scripts/load.sh "$DEST/$f"            # never --limit: a capped load keeps the zip
