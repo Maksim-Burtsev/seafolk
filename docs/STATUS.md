@@ -3,24 +3,45 @@
 Newest session on top. Each entry: what was done, findings with numbers, open
 questions, and the exact next session. Write it for someone with zero context.
 
-**Next session: S5** (context layers) — but first read S4's "still running" below.
+**Next session: S5** (context layers). S4's remaining tails are under its open questions.
 
 ---
 
-## S4 — Bulk runner — 2026-08-31 *(code done, data still loading)*
+## S4 — Bulk runner — 2026-08-31 → 09-01 *(Gate C passed)*
 
 **Done:** `scripts/prefetch.sh` (new), `scripts/run_queue.sh` (lock, `--dry-run`,
 `data/progress.tsv`, free-disk floor), `scripts/fetch.sh` (retry gap),
 `sql/13_coverage_daily.sql`, `queues/daily-2024-2026.txt` (909 dates).
 `scripts/test_load.sh` is now **23 asserts, ALL PASS**.
 
-**⚠️ Still running.** The phase-1 daily queue is loading in the background:
-**303 of 909 files done, 607 to go, ~15 h left at the current rate.**
-It is detached (`ppid = 1`), holds `data/.queue.lock`, and resumes from
-`load_log` if stopped. Do not query `data/ch` while it runs.
+**Gate C: PASSED — the queue finished, 2026-09-01.**
 
-**Gate C is not met yet** — it needs 2024-03 → today loaded. The reference
-years (2015/2018/2021) are not started; see the open questions.
+```
+909 files, 909 distinct days, 2024-03-01 → 2026-08-26, zero gaps
+17.67 billion rows read, 16.28 billion kept
+sum(msgs) over h3_hourly == rows_kept exactly
+4.42 M vessel-days, 188.29 M rows in public_track
+0 rows where rows_read != non_vessel + sentinel + out_of_bbox + kept
+data/ch 6.2 GB against a 40 GB gate, data/raw empty, 305 GB free
+```
+
+**The store is far smaller than projected: 6.8 MB per day, not 16.3.** The S3
+figure was measured before ClickHouse's background merges had run; over 909
+days they compact the parts by more than half. The part directories peaked at
+**116 161 mid-run and settled at 14 723** once the merges caught up, and a cold
+`scripts/ch.sh -q "SELECT 1"` is **0.43 s** — no lasting startup cost. Scope
+(a)'s reference years (~1 095 days) therefore project to ~7.5 GB and all of
+scope (a) to ~14 GB, against the ~36 GB this entry estimated yesterday.
+
+**But the slowdown during the run was real:** 62 s/file over the first 50 files,
+168 s over the last 25, and the per-load median rose from 40 s to 67 s as the
+part count climbed. It recovered only after the run ended and the merges ran.
+For the reference years — 1 095 files, ten times the tail that hurt here — the
+DELETE-per-load that creates those mutations should be made conditional first;
+in a bulk pass the range is always empty, because the runner already skips
+dates that are in `load_log`.
+
+The reference years (2015/2018/2021) are not started; see the open questions.
 
 ### The measurement that shaped the session
 
@@ -87,7 +108,33 @@ $ df -h . && du -sh data/ch
 
 ### Findings
 
-1. **zip64 is half-confirmed.** The 2015 monthly archive really is zip64 — its
+0. **Two and a half years of season, and the amplitude is growing.** Mean
+   leisure vessels that moved per day, by month:
+
+   ```
+   2024:  Mar 162   May 1417   Jul 2690   Sep 1382   Dec  95
+   2025:  Mar 143   May 1149   Jul 3109   Sep 1129   Dec  91
+   2026:  Mar 179   May 1609   Jul 3356   Aug 2639   (range ends 08-26)
+   ```
+
+   July against the following December, by year: **28.3x, 34.0x, 44.7x.** The
+   summer peak rises (2 690 → 3 109 → 3 356) while the winter floor falls
+   (95 → 91 → 75). Whether that is more boats, more transponders or better
+   reception is exactly what S10 has to separate — it is not a finding yet, it
+   is the question S10 exists for.
+
+   The all-time peak day is **2026-07-21, a Tuesday, 5 890 vessels**, with
+   Sunday 2025-07-20 second. S3's finding that Saturday is not the peak day
+   survives at 909 days.
+
+1. **Class A is a 1.48x instrument, not a constant.** `sql/13_coverage_daily.sql`
+   assumes commercial traffic does not move with the season. Measured over the
+   909 days, the monthly mean of Class A vessels per day runs 2 010 to 2 967 —
+   a 1.48x swing. Against leisure's 44.7x the signal still dominates by a
+   factor of thirty, but S10 must subtract the instrument rather than assume it
+   flat.
+
+2. **zip64 is half-confirmed.** The 2015 monthly archive really is zip64 — its
    last 64 KB carry both `PK\x06\x06` and `PK\x06\x07` — and ClickHouse reads
    a forced-zip64 archive correctly (`zip -fz`, returned the right 2 rows).
    **What is still untested is the size dimension: a member larger than 4 GB.**
