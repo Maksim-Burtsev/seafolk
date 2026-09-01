@@ -128,30 +128,38 @@ while read -r d _; do
   echo "===     $(date -u '+%F %T')  $d  (free ${free_gb} GB)"
   t0=$(date +%s)
 
-  # Wait for the prefetcher to finish this date. Fall back to fetching it here
-  # only when nobody is working on the file: the prefetcher is gone, or the
-  # zip has stopped GROWING for 3 minutes (the prefetcher fetches dates in
-  # list order and never comes back, so a failed date would otherwise wait on
-  # it forever — while its other downloads keep every slot full: a deadlock).
-  #
-  # It used to be a flat 20-minute timeout, and that was a corruptor, not a
-  # guard: a monthly archive legitimately downloads for 30-90 minutes, so the
-  # runner started a SECOND curl -C - into the file the prefetcher was still
-  # writing. Two writers, interleaved bytes — aisdk-2015-08.zip failed its
-  # integrity check twice and aisdk-2015-11.zip once before this was found.
-  # The stale partial is removed first so the fallback starts clean rather
-  # than resuming a file whose bytes two processes wrote.
-  last_size=-1; stall=0
+  # Wait for the prefetcher to deliver this date. Fall back to fetching it
+  # here only when NOBODY is working on the file — a live process (curl
+  # downloading it, unzip integrity-checking it) names the zip in its
+  # arguments, so pgrep -f on the file name is the test. Two earlier guards
+  # both corrupted or wasted downloads:
+  #   * a flat 20-minute timeout started a SECOND curl -C - into a file the
+  #     prefetcher was still writing (a monthly archive downloads for 30-90
+  #     minutes) — two writers, interleaved bytes, aisdk-2015-08.zip failed
+  #     its integrity check twice before this was found;
+  #   * "the file stopped growing for 3 minutes" fired during fetch.sh's own
+  #     unzip -tq, which reads a monthly zip for 4-8 minutes without growing
+  #     it — the runner deleted a COMPLETE archive and re-downloaded it.
+  # 30 s of nobody-working covers the gaps between curl retries and between
+  # curl and unzip. A date the prefetcher failed and moved past goes idle
+  # here in 30 s too, which also breaks the deadlock it used to cause. The
+  # partial is removed first so the fallback never resumes suspect bytes.
+  idle=0
   while [ ! -f "$DEST/$f.ok" ]; do
     pfpid=""; [ -n "$pf" ] && [ -f "$pf" ] && pfpid="$(cat "$pf")"
-    sz=$(stat -f %z "$DEST/$f" 2>/dev/null || echo 0)
-    if [ "$sz" != "$last_size" ]; then last_size=$sz; stall=0; else stall=$((stall + 5)); fi
-    if [ -z "$pfpid" ] || ! kill -0 "$pfpid" 2>/dev/null || [ "$stall" -ge 180 ]; then
-      # ponytail: a transfer hung mid-byte for 3 min with its curl still alive
-      # would still race here; curl's own retries make that vanishingly rare.
+    if [ -z "$pfpid" ] || ! kill -0 "$pfpid" 2>/dev/null; then
       rm -f "$DEST/$f"
       scripts/fetch.sh "$d"
       break
+    fi
+    if pgrep -f "aisdk-$d.zip" >/dev/null; then
+      idle=0
+    elif [ "$idle" -ge 30 ]; then
+      rm -f "$DEST/$f"
+      scripts/fetch.sh "$d"
+      break
+    else
+      idle=$((idle + 5))
     fi
     sleep 5
   done
