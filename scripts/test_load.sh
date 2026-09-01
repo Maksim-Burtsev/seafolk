@@ -45,6 +45,7 @@ echo
 
 ln "$z1" "$LINKS/1/$(basename "$z1")"
 scripts/load.sh --limit "$LIMIT" "$LINKS/1/$(basename "$z1")" > /dev/null
+mut_fresh=$(q "SELECT count() FROM system.mutations")   # judged in assert 16
 
 kept=$(q "SELECT rows_kept FROM load_log")
 msgs=$(q "SELECT sum(msgs) FROM h3_hourly")
@@ -92,6 +93,7 @@ assert "dist_nm: nothing did 1500 nm in a day" 1 "$(q "SELECT max(dist_nm) < 150
 # 7. Re-loading the same file replaces its contribution instead of doubling it.
 ln "$z1" "$LINKS/2/$(basename "$z1")"
 scripts/load.sh --force --limit "$LIMIT" "$LINKS/2/$(basename "$z1")" > /dev/null
+mut_force=$(q "SELECT count() FROM system.mutations")   # judged in assert 16
 assert "--force reload does not double sum(msgs)" "$msgs" "$(q "SELECT sum(msgs) FROM h3_hourly")"
 assert "--force reload leaves one load_log row" 1 "$(q "SELECT count() FROM load_log")"
 
@@ -184,6 +186,19 @@ pf_out=$(FREE_FLOOR_GB=99999999 AIS_RAW="$LINKS/pf" scripts/prefetch.sh "$LINKS/
 case "$pf_out" in *"under the"*) floored=1;; *) floored=0;; esac
 assert "prefetch stops at the free-disk floor" 1 "$floored"
 assert "…and downloaded nothing on the way out" 2 "$(ls "$LINKS/pf" | wc -l | tr -d ' ')"
+
+# 16. load.sh's DELETE guard, from both sides. A DELETE writes a new version of
+#     every part it touches even when it matches nothing, and four per load is
+#     what grew the store to 116 161 part directories mid-way through the S4
+#     daily queue (median load 40 s -> 67 s). system.mutations is the observable:
+#     `clickhouse local` keeps the entries in the store, so a later process still
+#     sees them, and an empty table records one all the same.
+#     Both halves matter. Zero on the fresh load is the fix; four on the --force
+#     reload is the proof the guard does not skip a range that HAS something to
+#     replace — asserts 7 and 13 pin that the numbers stay right, this pins that
+#     they stay right because the rows were deleted and not by luck.
+assert "a fresh range runs no DELETE mutation" 0 "$mut_fresh"
+assert "--force reload does run the four DELETEs" 4 "$mut_force"
 
 echo
 [ "$fail" = 0 ] && echo "ALL PASS" || echo "FAILURES ABOVE"

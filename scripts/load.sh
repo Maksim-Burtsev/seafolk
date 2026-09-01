@@ -6,9 +6,9 @@
 #
 # Idempotent two ways. A file already in load_log is skipped (scripts/run_queue.sh
 # in S3 relies on that). And the file's own date range is deleted from all three
-# tables before the aggregates are written, unconditionally: on a fresh day that
-# is a no-op, on a day left half-loaded by a crash it is the cleanup. Recovery
-# therefore needs no human to remember a flag.
+# tables before the aggregates are written whenever anything is there: on a fresh
+# day that costs nothing, on a day left half-loaded by a crash it is the cleanup.
+# Recovery therefore needs no human to remember a flag.
 #
 # The range comes from min(ts)/max(ts) of the staged data, never from the file
 # name — a name can lie, the rows cannot.
@@ -67,9 +67,34 @@ FROM ais_raw_stage")"
 
 [ "$rows_read" -gt 0 ] || { echo "empty archive: $base — staged 0 rows, zip kept" >&2; exit 1; }
 
-# Delete this file's range first, so a re-run replaces rather than doubles.
-# Monthly partitioning prunes these to the months actually touched.
-ch -q "
+# Delete this file's range first, so a re-run replaces rather than doubles —
+# but only when there is something to replace. A DELETE writes a new version of
+# every part it touches even when it matches no row, and running these four on
+# every load is what grew the store to 116 161 part directories mid-way through
+# the S4 daily queue and took the median load from 40 s to 67 s. A fresh range
+# must cost zero mutations.
+#
+# The guard counts exactly what the four DELETEs would remove, and asks the
+# tables rather than load_log alone: a load killed between the INSERTs of
+# sql/03_aggregate.sql leaves rows behind with NO log row, and that half-loaded
+# day is the case the re-run exists to clean up. --force needs no special case
+# either — its own rows and its own log row are inside the range. These are the
+# same three range counts load_log is filled from below, so the cost is known:
+# 0.5 s over the 6.2 GB store, against the 27 s the skipped mutations cost.
+# Monthly partitioning prunes both the counts and the DELETEs to the months
+# actually touched.
+stale=$(ch -q "
+SELECT (SELECT count() FROM h3_hourly    WHERE hour BETWEEN toStartOfHour(toDateTime({t0:UInt32}, 'UTC'))
+                                                        AND toDateTime({t1:UInt32}, 'UTC'))
+     + (SELECT count() FROM vessel_day   WHERE day  BETWEEN toDate(toDateTime({t0:UInt32}, 'UTC'))
+                                                        AND toDate(toDateTime({t1:UInt32}, 'UTC')))
+     + (SELECT count() FROM public_track WHERE ts   BETWEEN toStartOfMinute(toDateTime({t0:UInt32}, 'UTC'))
+                                                        AND toDateTime({t1:UInt32}, 'UTC'))
+     + (SELECT count() FROM load_log     WHERE file = {f:String})
+" --param_t0 "$ts0" --param_t1 "$ts1" --param_f "$base")
+
+if [ "$stale" != 0 ]; then
+  ch -q "
 DELETE FROM h3_hourly    WHERE hour BETWEEN toStartOfHour(toDateTime({t0:UInt32}, 'UTC'))
                                         AND toDateTime({t1:UInt32}, 'UTC');
 DELETE FROM vessel_day   WHERE day  BETWEEN toDate(toDateTime({t0:UInt32}, 'UTC'))
@@ -78,6 +103,7 @@ DELETE FROM public_track WHERE ts   BETWEEN toStartOfMinute(toDateTime({t0:UInt3
                                         AND toDateTime({t1:UInt32}, 'UTC');
 DELETE FROM load_log     WHERE file = {f:String};
 " --param_t0 "$ts0" --param_t1 "$ts1" --param_f "$base"
+fi
 
 ch sql/03_aggregate.sql
 
