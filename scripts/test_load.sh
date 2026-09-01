@@ -200,6 +200,72 @@ assert "…and downloaded nothing on the way out" 2 "$(ls "$LINKS/pf" | wc -l | 
 assert "a fresh range runs no DELETE mutation" 0 "$mut_fresh"
 assert "--force reload does run the four DELETEs" 4 "$mut_force"
 
+# 17. The pre-2016-10 dialect, on a hand-written archive rather than a 17 GB
+#     download: members under FtpRoot/ais_data/ (so `*.csv` would match nothing
+#     and stage 0 rows in silence), no header row, ';' delimiter, decimal comma.
+#     The MMSIs are synthetic — MID 111 is not assigned to any country — and the
+#     file is generated here rather than committed, so no vessel is in the repo.
+#     Everything after this point must stay at the end of this script: it writes
+#     a load_log row and h3 rows, which the totals above are compared against.
+#     Written through awk so the lines end CRLF, as the real archive's do
+#     (verified: every one of the 364 402 400 rows of aisdk-2015-07.zip).
+mkdir -p "$LINKS/legacy/FtpRoot/ais_data"
+awk '{ printf "%s\r\n", $0 }' > "$LINKS/legacy/FtpRoot/ais_data/aisdk_20150701.csv" <<'EOF'
+01/07/2015 00:00:00;Base Station;111000009;55,000000;12,000000;Unknown value;;;;;Unknown;;;Undefined;;;;Surveyed;;;;AIS
+01/07/2015 00:00:00;Class A;111000001;55,123456;12,654321;Under way using engine;0,0;12,5;90,0;91;9012345;OZTEST;SYNTHETIC FERRY;Passenger;;20;100;GPS;5,5;"TEST;PORT";01/07/2015 06:00:00;AIS
+01/07/2015 00:00:10;Class B;111000002;55,200000;12,700000;Unknown value;;3,5;45,0;;Unknown;;;Sailing;;;;GPS;;;;AIS
+01/07/2015 00:01:00;Class A;111000003;91,000000;181,000000;Unknown value;;;;;Unknown;;;Undefined;;;;Undefined;;;;AIS
+01/07/2015 00:02:00;Class A;111000004;50,000000;0,000000;Under way using engine;0,0;9,0;10,0;9;Unknown;;;Cargo;;;;GPS;;;;AIS
+01/07/2015 00:03:00;Class A;111000005;55,500000;12,500000;Unknown value;;102,3;;;Unknown;;;Cargo;;;;GPS;;;;AIS
+01/07/2015 00:04:00;Class A;111000006;55,600000;12,600000;Unknown value;;;;;Unknown;;;Cargo;;;;GPS;;;;AIS
+01/07/2015 00:05:00;Class B;111000007;55,700000;12,800000;Unknown value;;4,0;30,0;;Unknown;;PRIVATE BOAT;Passenger;;;;GPS;;;;AIS
+EOF
+( cd "$LINKS/legacy" && zip -q -r ../aisdk-2015-07.zip FtpRoot )
+scripts/load.sh --limit "$LIMIT" "$LINKS/aisdk-2015-07.zip" > /dev/null
+
+assert "legacy: all 8 rows staged (so **/*.csv reached the subdirectory)" 8 \
+  "$(q "SELECT rows_read FROM load_log WHERE file = 'aisdk-2015-07.zip'")"
+# One row of each kind is dropped for a different reason: the base station is
+# not a vessel, MMSI …003 sits at the lat=91 sentinel, …004 is outside the bbox.
+assert "legacy: the drop counters name the right rows" "1 1 1 5" \
+  "$(q "SELECT rows_non_vessel, rows_sentinel, rows_out_of_bbox, rows_kept
+        FROM load_log WHERE file = 'aisdk-2015-07.zip'" | tr '\t' ' ')"
+assert "legacy: the timestamp is 2015-07-01, not 2015-01-07" "2015-07-01" \
+  "$(q "SELECT day FROM vessel_day WHERE mmsi = 111000001")"
+
+# Parsing by position means a column read one place left is not an error, just a
+# wrong answer, so every column sql/02_stage_legacy.sql selects is read back
+# from a row where its neighbours hold something ELSE. …001 is built for that:
+# rot 0,0 | sog 12,5 | cog 90,0 | heading 91 | imo 9012345 | callsign OZTEST |
+# name SYNTHETIC FERRY | width 20 | length 100 are nine distinguishable values
+# in a row. `lat` doubles as the decimal-comma check: 55.123456 can only have
+# come from '55,123456'. Its Destination is quoted and contains a ';', which is
+# the one thing a naive splitByChar rewrite would get wrong.
+assert "legacy: lat, lon, name — every neighbour column distinguishable" \
+  "55.123456 12.654321 SYNTHETIC FERRY" \
+  "$(q "SELECT lat, lon, name FROM public_track WHERE mmsi = 111000001" | tr '\t' ' ')"
+assert "legacy: imo, length, sog — read off the right positions" "9012345 100 1" \
+  "$(q "SELECT imo, length, moving_msgs FROM vessel_day WHERE mmsi = 111000001" | tr '\t' ' ')"
+# Class B, and the empty numeric field the modern path gets as NULL: this row
+# reports Ship type 'Sailing' and no Length at all.
+assert "legacy: the Class B sailing boat resolves to leisure, length 0" "Class B leisure 0" \
+  "$(q "SELECT mobile, ship_group, length FROM vessel_day WHERE mmsi = 111000002" | tr '\t' ' ')"
+# Both non-movement markers, on rows that ARE kept: …005 reports the AIS 102.3
+# "speed not available" sentinel, …006 reports nothing, which stages as -1.
+assert "legacy: 102.3 and an empty SOG are both kept and neither is movement" "2 0" \
+  "$(q "SELECT sum(msgs), sum(moving_msgs) FROM vessel_day
+        WHERE mmsi IN (111000005, 111000006)" | tr '\t' ' ')"
+# The privacy rule on the parser that binds `mobile` by POSITION — assert 3
+# runs before this file exists and only ever saw the modern path. …007 is a
+# Class B transponder reporting Ship type 'Passenger', so it is the row that
+# reaches public_track the moment `mobile` is read off the wrong column.
+assert "legacy: no Class B vessel in public_track" 0 \
+  "$(q "SELECT count() FROM public_track
+        WHERE mmsi IN (SELECT mmsi FROM vessel_day WHERE mobile = 'Class B')")"
+assert "…and the legacy fixture has a Class B 'Passenger' to be caught" 1 \
+  "$(q "SELECT count() FROM vessel_day WHERE mmsi = 111000007
+        AND mobile = 'Class B' AND ship_group = 'passenger'")"
+
 echo
 [ "$fail" = 0 ] && echo "ALL PASS" || echo "FAILURES ABOVE"
 exit "$fail"

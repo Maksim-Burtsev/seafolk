@@ -50,7 +50,34 @@ fi
 
 t_start=$(date +%s)
 
-ch sql/02_stage.sql --param_src "$zip :: *.csv" --param_lim "$limit"
+# `**`, not `*`. A daily zip holds one CSV at the root; a monthly zip holds 31
+# under FtpRoot/ais_data/ — and which of the two it is varies month to month
+# (2015-01 root, 2015-07 subdirectory, 2017-01 subdirectory, 2017-07 root), so
+# no rule on the file name can predict it. ClickHouse's `*` does not cross a
+# `/`, and a glob that matches nothing is not an error: the first attempt at a
+# monthly file staged 0 rows in silence. `**` matches both layouts.
+src="$zip :: **/*.csv"
+
+# Two CSV dialects live in this archive. From 2016-10 on: header row, ','
+# delimiter, decimal point. Before it: none of the three (see
+# sql/02_stage_legacy.sql). The era is read from the archive's own first line
+# rather than from its date, because the date rule is only as good as the months
+# somebody probed and this costs 0.05 s even on a 17 GB zip. An unreadable or
+# unrecognised first line stops the load here, before a wrong parser turns a
+# header into a data row or a `;`-delimited line into one 22-field column.
+first_line=$(ch -q "SELECT line FROM file({src:String}, LineAsString) LIMIT 1" --param_src "$src")
+case "$first_line" in
+  '# Timestamp'*) stage=sql/02_stage.sql;        dialect=modern ;;
+  *\;*)           stage=sql/02_stage_legacy.sql; dialect=pre-2016-10 ;;
+  # An empty first line is not a dialect problem and must not be reported as
+  # one: it means the glob matched no member at all, which ClickHouse returns as
+  # zero rows and exit 0. That is the failure the `**` above fixes, and naming
+  # it correctly is what points the next person at the glob.
+  '') echo "no member matched: $src — zip kept" >&2; exit 1 ;;
+  *)  echo "unrecognised CSV dialect in $base — first line: ${first_line:0:80}" >&2; exit 1 ;;
+esac
+
+ch "$stage" --param_src "$src" --param_lim "$limit"
 
 # One pass over the stage for every number load_log records. The four row
 # counters partition rows_read exactly; test_load.sh asserts that they do.
@@ -66,6 +93,17 @@ SELECT count(),
 FROM ais_raw_stage")"
 
 [ "$rows_read" -gt 0 ] || { echo "empty archive: $base — staged 0 rows, zip kept" >&2; exit 1; }
+
+# rows_read > 0 says the CSV parsed. kept > 0 says it parsed into the RIGHT
+# columns, and only the second one is worth anything to a positional parser:
+# sql/02_stage_legacy.sql binds by index, so a column order that is wrong for
+# some era stages every row with `mobile` reading something that is not a class,
+# keeps none of them, and looks from here like a file of nothing but base
+# stations. Without this guard that writes a complete-looking load_log row with
+# a 100 % non-vessel drop, deletes the archive at the end of this script, and
+# leaves run_queue.sh with no reason to ever fetch the month again.
+# No real file is empty this way: the 2015-07 sample keeps 92 % of its rows.
+[ "$kept" -gt 0 ] || { echo "no vessel rows kept from $base — wrong column order for this era? zip kept" >&2; exit 1; }
 
 # Delete this file's range first, so a re-run replaces rather than doubles —
 # but only when there is something to replace. A DELETE writes a new version of
@@ -138,9 +176,17 @@ if [ "$limit" = 18446744073709551615 ]; then
   rm -f "$zip" "$zip.ok"
   disposition="zip removed"
 else
-  disposition="CAPPED at $limit rows — zip KEPT, this day is incomplete"
+  # "the staged range", not "this day": a monthly archive holds 31 members and
+  # ClickHouse decides how many of them a capped read reaches, so ts_min..ts_max
+  # can span several days — all of which were DELETEd above and only partly
+  # rewritten. --limit is a sampling tool; never point it at the real store.
+  disposition="CAPPED at $limit rows — zip KEPT, the staged range is incomplete"
 fi
 trap - ERR
 
-printf 'loaded  %s: %s rows read, %s kept in %ss (%s rows/s), %s\n' \
-  "$base" "$rows_read" "$kept" "$secs" "$(( rows_read / (secs > 0 ? secs : 1) ))" "$disposition"
+# The dialect is in the line so a queue log says which parser ran without
+# anyone deriving it. It is not the record of last resort — load_log.ts_min
+# is: everything before 2016-10 is the legacy dialect by definition.
+printf 'loaded  %s: %s rows read, %s kept in %ss (%s rows/s), %s dialect, %s\n' \
+  "$base" "$rows_read" "$kept" "$secs" "$(( rows_read / (secs > 0 ? secs : 1) ))" \
+  "$dialect" "$disposition"

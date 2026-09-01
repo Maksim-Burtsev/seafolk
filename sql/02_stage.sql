@@ -1,7 +1,11 @@
--- S2 — stage one archive file. Called by scripts/load.sh and, with a small
--- {lim}, by scripts/test_load.sh, so the test exercises the real statement.
+-- S2 — stage one archive file written in the 2016-10-or-later CSV dialect:
+-- header row, ',' delimiter, decimal point, 22 columns (2016-10 … 2020) or 26
+-- (2021 on; the four extra antenna offsets are skipped by name). Everything
+-- older is sql/02_stage_legacy.sql; scripts/load.sh picks between them.
+-- Called by scripts/load.sh and, with a small {lim}, by scripts/test_load.sh,
+-- so the test exercises the real statement.
 --
---   scripts/ch.sh sql/02_stage.sql --param_src 'data/raw/aisdk-2025-07-16.zip :: *.csv' \
+--   scripts/ch.sh sql/02_stage.sql --param_src 'data/raw/aisdk-2025-07-16.zip :: **/*.csv' \
 --                                  --param_lim 18446744073709551615
 --
 -- {lim} is a row cap, not a flag: ClickHouse reads LIMIT 0 as "zero rows", so
