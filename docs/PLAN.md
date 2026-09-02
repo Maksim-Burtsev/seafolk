@@ -247,7 +247,7 @@ day → (a) is ~15 GB, (b) straight-lines to ~72 GB against a 70 GB budget, so
 
 ---
 
-## S4 — Bulk runner: nights, resume, disk guard *(code done; daily queue still loading)*
+## S4 — Bulk runner: nights, resume, disk guard *(done — Gate C passed; tails closed, see STATUS § S4-tails)*
 
 **Goal:** Make the queue runner safe to leave unattended for nights: disk guard,
 resume, progress, one log line per file, and a summary at the end.
@@ -303,8 +303,13 @@ resume, progress, one log line per file, and a summary at the end.
       measuring that one connection gets a third of the link (3.6x).
 - [x] Started as `queues/daily-2024-2026.txt` (909 dates). 60 s/file after the
       prefetcher, against 214 s/file before it.
-- [ ] Then `queues/ref-years.txt` — **not written yet.** Load one 2015 month by
-      hand first: the zip64 *format* is confirmed but a >4 GB member is not.
+- [x] Then `queues/ref-years.txt` — written and completed 2026-09-02: 36
+      monthly archives (2015/2018/2021), 12.8 B rows read, store 13 GB total.
+      The >4 GB member question dissolved: a monthly zip is 31 daily CSVs
+      (member layout varies; glob is `**/*.csv`), and everything before
+      2016-10 is a different CSV dialect — `sql/02_stage_legacy.sql`.
+      `queues/full.txt` is NOT written: scope (a) was chosen at Gate B2, and
+      `aisdk-2017-{02..06}.zip` does not exist in the archive.
 
 **Validate:**
 ```bash

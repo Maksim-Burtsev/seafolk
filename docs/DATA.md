@@ -1,6 +1,6 @@
 # Data sources — verified facts
 
-Last verified: 2026-08-29. Anything marked *(unverified)* still needs a check.
+Last verified: 2026-09-02. Anything marked *(unverified)* still needs a check.
 
 ## Danish Maritime Authority — historical AIS
 
@@ -20,6 +20,30 @@ Last verified: 2026-08-29. Anything marked *(unverified)* still needs a check.
 - Sizes (HTTP Content-Length): `2010/aisdk-2010-06.zip` 14.5 GB,
   `2016/aisdk-2016-06.zip` 18.3 GB, `2020/aisdk-2020-06.zip` 19.1 GB,
   `aisdk-2025-06-15.zip` 0.75 GB.
+- **Monthly zip structure (verified in S4 by loading 36 of them):** one
+  monthly zip holds **31 daily CSV members**, not one big file — sometimes at
+  the archive root, sometimes under `FtpRoot/ais_data/`, varying month to
+  month with no rule (2015-01 root, 2015-07 subdir, 2017-01 subdir, 2017-07
+  root). Read with the `**/*.csv` glob. zip64 offsets past 4 GB read fine;
+  no member exceeds 4 GB anywhere in the probed archive.
+- **Two CSV dialects, boundary at 2016-09/2016-10** (probed by HTTP range
+  reads of first and last members; no month mixes them):
+  - `2006-03 … 2016-09` — **no header row, `;` delimiter, decimal COMMA**,
+    22 columns (the modern 26 minus the four antenna offsets; same order
+    otherwise, same timestamp format). Parsed by `sql/02_stage_legacy.sql`.
+  - `2016-10 → today` — header, `,`, decimal point, 22 columns until ~2020
+    and 26 after. The modern parser handles both widths.
+  `scripts/load.sh` picks the parser by reading the archive's first line, not
+  by date.
+- **`aisdk-2017-{02..06}.zip` is 404 at both URL layouts** — five months of
+  2017 are not fetchable under the standard name (the `all_sources_2017-MM`
+  variants were not probed).
+- **⚠️ The archive duplicates its own feed 2015-08-28 → 2015-09-30:** message
+  counts in that window run ~2.3x the neighbouring months (avg 7 512
+  msgs/vessel-day vs 2 600–3 700; max 352 163 ≈ 4 msg/s sustained, above the
+  physical AIS rate). Crosses three zip files, so it is upstream, not the
+  loader. Distinct-vessel counts and `dist_nm` are structurally immune;
+  message-count charts over that window are not — S10 masks or normalises it.
 - README in the bucket (`!_README_information_CSV_files.txt`) — 26 columns:
 
   | # | Column | Note |

@@ -3,7 +3,166 @@
 Newest session on top. Each entry: what was done, findings with numbers, open
 questions, and the exact next session. Write it for someone with zero context.
 
-**Next session: S5** (context layers). S4's remaining tails are under its open questions.
+**Next session: S5** (context layers). S4 is closed — tails included.
+
+---
+
+## S4-tails — Reference years and the monthly loader — 2026-09-01 → 09-02 *(S4 closed)*
+
+**Done:** all three tails. (1) `load.sh` runs its four DELETEs only when the
+range actually holds something — a fresh range costs **zero mutations** (the
+35 fresh monthly loads produced 0 instead of 140). (2) One 2015 month was
+loaded by hand and the question it was meant to settle **dissolved**: there is
+no >4 GB member — a monthly zip is **31 daily CSVs**, sometimes at the root,
+sometimes under `FtpRoot/ais_data/` (varies month to month with no rule).
+(3) `queues/ref-years.txt` written and completed: **36 monthly archives,
+2015/2018/2021, ~592 GB of traffic, ~26 h wall including incidents.**
+
+```
+load_log: 945 files (909 daily + 36 monthly), 30.49 B rows read, 28.37 B kept
+sum(msgs) over h3_hourly == sum(rows_kept) == 28 368 283 499, exact
+2015: 365 days, 33 328 vessels · 2018: 365, 40 887 · 2021: 365, 35 557
+2004 distinct days total; data/ch 13 GB against the 40 GB gate; data/raw empty
+```
+
+**Gate C re-confirmed at the new size: 13 GB ≤ 40 GB.** A reference month
+costs ~190 MB of store.
+
+### The discovery that rewrote the plan: eras, not archives
+
+The monthly files are not "the same CSV, bigger". Probed by HTTP range reads
+(central directory + inflated first member — no full downloads), then verified
+by loading:
+
+- **Dialect boundary at 2016-09/2016-10.** Before it: no header row, `;`
+  delimiter, decimal **comma**, 22 columns. After: header, `,`, decimal point,
+  22 then 26 columns. No month mixes the two. `sql/02_stage_legacy.sql` parses
+  the old era positionally; `load.sh` picks the parser by reading the
+  archive's own first line (0.05 s on a 17 GB zip), not by trusting a date
+  rule. The 12 columns we do not keep are the same 12 in both eras — nothing
+  was lost to the dialect.
+- **Member layout flips month to month** (2015-01 root, 2015-07 subdir,
+  2017-01 subdir, 2017-07 root) — the glob is now `**/*.csv`.
+- **zip64 offsets past 4 GB work** (last member of 2015-07 starts at ~17 GB
+  and reads fine). The >4 GB *member* case does not exist in this archive.
+- **`aisdk-2017-{02..06}.zip` is 404 at both URL layouts.** Five months of
+  2017 are not fetchable; `queues/full.txt` (scope b) must handle that if it
+  is ever written.
+
+### ⚠️ Data finding for S10: the archive itself duplicates late-Aug/Sep 2015
+
+`msgs` per leisure vessel-day in 2015-09 averages **7 512** against 2 600–3 700
+in every neighbouring month, with a max of **352 163 msgs/vessel-day ≈ 4/s
+sustained for 24 h** — physically above what an AIS transponder emits. The
+elevation runs **2015-08-28 → 2015-09-30** and crosses three different zip
+files, so it is upstream feed duplication in the archive, not our loader (the
+sum(msgs) == rows_kept invariant is exact, and the elevation is in the source
+rows). `vessels` (uniqExact) and `dist_nm` (the ≥1 s step guard drops
+same-second duplicates) are structurally immune; **message counts for that
+window are ~2.3x inflated and S10 must mask or normalise it** before any
+2015-vs-2018-vs-2021 message chart.
+
+### The adoption curve, first sight (present vessels, July, peak day)
+
+```
+2015: 2 055   2018: 3 598   2021: 5 068   2024: 6 903   2025: 7 400   2026: 7 676
+```
+
+3.7x in eleven years. How much is boats vs transponders vs receivers is
+exactly S10's question — but the reference years now exist to answer it.
+
+### Four defects fixed mid-run, all monthly-scale diseases
+
+The daily queue could never have hit any of these:
+
+1. **OOM at 806 M rows** (`a285c0e`). 2015-09 has 2.2x July's rows and blew
+   the 21.6 GiB memory cap inside aggregation. `ch.sh` now sets
+   `max_bytes_before_external_group_by/sort=6 GB` — the same file then loaded
+   in 308 s, invariant exact.
+2. **The 20-minute fetch fallback raced the prefetcher** (`965ce50`). A
+   monthly download takes 30–90 min, so the runner started a second
+   `curl -C -` into a file the prefetcher was still writing. Two writers
+   corrupted `aisdk-2015-08.zip` twice and `2015-11` once — the "corrupt"
+   files were our own interleaved bytes, verified by re-downloading 2015-08
+   single-writer (byte-exact vs Content-Length, full CRC pass).
+3. **"Stopped growing" is not "abandoned"** (`5f9bb6c`). The first fix's
+   3-minute no-growth trigger fired during `fetch.sh`'s own `unzip -tq`
+   (4–8 min on a monthly zip, file static) and deleted a *complete* archive.
+   A date is busy while a live process names its zip (`pgrep`), idle 30 s is
+   the fallback trigger.
+4. **Legacy dialect + glob** (`d434154`, the discovery above), including a
+   `kept > 0` guard so a wrong positional column order can never delete a
+   17 GB archive while logging a "complete" load of zero vessels.
+
+### Validate — real output
+
+```
+$ scripts/run_queue.sh --dry-run queues/ref-years.txt
+queue    0 dates to load, 36 already in load_log
+
+$ tail -3 data/progress.tsv
+2026-09-02 12:56:07	2021-10	245	25	2	1.7
+2026-09-02 12:58:27	2021-11	140	26	1	0.8
+2026-09-02 13:31:22	2021-12	1975	27	0	0.0
+
+$ scripts/ch.sh -q "SELECT toYear(day), count(DISTINCT day), uniqExact(mmsi) FROM vessel_day GROUP BY 1 ORDER BY 1"
+2015	365	33328
+2018	365	40887
+2021	365	35557
+2024	306	40138
+2025	365	43772
+2026	238	41625
+
+$ scripts/test_load.sh
+… ALL PASS
+
+$ df -h . && du -sh data/ch
+305Gi free · 13G data/ch · data/raw empty
+```
+
+### Design review
+
+`punchcard:punchcard` on `cedbbed..HEAD`, three finder passes as subagents.
+Verdict **🟡 Ship with care** — three findings, **all three accepted** and
+fixed in the follow-up commit (see log): the worker-detection wait had no
+upper bound and an orphaned curl — observed live during the run — could pin
+it forever; the runner could read the prefetcher's pid file before it existed
+and start a second writer on the queue's first date; and no test covered the
+crash-between-INSERTs recovery that the DELETE guard was redesigned around
+(its three table terms could be deleted with the suite staying green), nor
+the `kept > 0` and dialect-sniff error arms. Out-of-scope notes recorded:
+the Sep-2015 archive duplication (above, → S10); a latent pre-existing risk
+that one wrong-date row stretches the DELETE range across years (a
+staged-span sanity check is a cheap S5+ addition); `**/*.csv` would match
+`__MACOSX/._*.csv` junk if a pre-2014 archive carries it; the 6 GB spill
+writes into the same disk `FREE_FLOOR_GB` guards, checked only between files;
+`kept > 0` would block a genuinely vessel-free 2006–2008 month (documented
+tradeoff, needs a flag only if scope (b) happens).
+
+### Deviations from the plan of record
+
+- The plan's "conditional DELETE keyed on load_log overlap" was implemented
+  as a count of what the DELETEs would actually remove — the load_log-only
+  version silently breaks crash recovery (demonstrated before coding).
+- `queues/full.txt` is **not** written: scope (a) was chosen at Gate B2, and
+  five 2017 months are missing from the archive anyway.
+- Role note: the incident-response fixes (2–4 above) were implemented
+  directly by the supervising session mid-run rather than dispatched, to keep
+  the queue's downtime short; everything else ran through subagents with
+  review checkpoints.
+
+### Open questions for S5
+
+- **`sql/13_coverage_daily.sql` keys on `toDate(ts_min)`** — with monthly
+  files in load_log, one day per month now carries the whole month's
+  `rows_read` and the other 30 report nothing. S10's coverage query must
+  aggregate differently (h3_hourly knows the truth; load_log no longer maps
+  1:1 to days).
+- The part-directory question (carried from S4 main) stands; 13 GB store,
+  cold `SELECT 1` startup should be re-measured before S6's heavy queries.
+- Sep-2015 duplication needs a mask/normalisation decision in S10 (above).
+
+**Next session: S5 — context layers.** Read `docs/PLAN.md` § S5.
 
 ---
 
