@@ -31,7 +31,7 @@ fi
 cleanup() { rm -rf "$LINKS" data/ch_test; }
 trap cleanup EXIT
 cleanup
-mkdir -p "$LINKS/1" "$LINKS/2" "$LINKS/3" "$LINKS/4" "$LINKS/5"
+mkdir -p "$LINKS/1" "$LINKS/2" "$LINKS/3" "$LINKS/4" "$LINKS/5" "$LINKS/6"
 
 fail=0
 assert() {  # assert <name> <expected> <actual>
@@ -200,7 +200,73 @@ assert "…and downloaded nothing on the way out" 2 "$(ls "$LINKS/pf" | wc -l | 
 assert "a fresh range runs no DELETE mutation" 0 "$mut_fresh"
 assert "--force reload does run the four DELETEs" 4 "$mut_force"
 
-# 17. The pre-2016-10 dialect, on a hand-written archive rather than a 17 GB
+# 17. Recovery from a crash BETWEEN the INSERTs of sql/03_aggregate.sql: rows
+#     already in the tables, no row in load_log, and the re-run gets neither
+#     --force nor a journal entry to go on. Deleting the log row of a loaded file
+#     reproduces exactly that state. What has to clean it up is the stale guard's
+#     three TABLE terms — on the load_log term alone the guard counts 0, skips
+#     the DELETEs, and writes the range a second time on top of itself. Checked
+#     by hand: with the h3_hourly/vessel_day/public_track terms taken out of
+#     load.sh's `stale` query this assert reports twice the msgs.
+#     (The DELETE below is itself a mutation, which is why assert 16 reads counts
+#     captured before this point rather than live ones.)
+b1="$(basename "$z1")"
+ln "$z1" "$LINKS/6/$b1"
+msgs_pre=$(q "SELECT sum(msgs) FROM h3_hourly")
+q "DELETE FROM load_log WHERE file = '$b1'"
+scripts/load.sh --limit "$LIMIT" "$LINKS/6/$b1" > /dev/null
+assert "a load whose log row vanished rewrites its range instead of doubling it" \
+  "$msgs_pre" "$(q "SELECT sum(msgs) FROM h3_hourly")"
+assert "…and the load_log row is written again" 1 \
+  "$(q "SELECT count() FROM load_log WHERE file = '$b1'")"
+
+# 18. The kept > 0 guard, on a file whose rows parse but hold no vessel — which
+#     is what a column order wrong for some era looks like from load.sh. It must
+#     stop before a complete-looking load_log row is written and the archive
+#     deleted, or the month is lost with nothing left to say so. One Base Station
+#     row, the same shape as the one in the legacy fixture below.
+mkdir -p "$LINKS/nonvessel"
+awk '{ printf "%s\r\n", $0 }' > "$LINKS/nonvessel/aisdk_20150702.csv" <<'EOF'
+02/07/2015 00:00:00;Base Station;111000009;55,000000;12,000000;Unknown value;;;;;Unknown;;;Undefined;;;;Surveyed;;;;AIS
+EOF
+( cd "$LINKS/nonvessel" && zip -q ../aisdk-2015-07-02.zip aisdk_20150702.csv )
+# load.sh is EXPECTED to fail here, and this script runs under set -e: capture
+# the status instead of letting the suite abort mid-way.
+rc=0
+out=$(scripts/load.sh "$LINKS/aisdk-2015-07-02.zip" 2>&1) || rc=$?
+assert "a file with no vessel rows fails the load" 1 "$(( rc != 0 ))"
+case "$out" in *"no vessel rows kept"*) said=1;; *) said=0;; esac
+assert "…and names the guard that stopped it" 1 "$said"
+assert "…and writes no load_log row" 0 \
+  "$(q "SELECT count() FROM load_log WHERE file = 'aisdk-2015-07-02.zip'")"
+
+# 19. Both error arms of the dialect sniff, the last thing standing between a
+#     changed archive layout and a silent 0-row load. A zip with no CSV member
+#     reads back as an empty first line (a glob that matches nothing is zero rows
+#     and exit 0, not an error) and must be reported as the glob problem it is; a
+#     first line in neither dialect must not be guessed at. Neither may eat the
+#     archive on the way out — there is nothing to re-download it from.
+mkdir -p "$LINKS/sniff"
+echo 'this zip holds no csv member' > "$LINKS/sniff/readme.txt"
+( cd "$LINKS/sniff" && zip -q ../aisdk-nocsv.zip readme.txt )
+rc=0
+out=$(scripts/load.sh "$LINKS/aisdk-nocsv.zip" 2>&1) || rc=$?
+assert "a zip with no CSV member fails the load" 1 "$(( rc != 0 ))"
+case "$out" in *"no member matched"*) said=1;; *) said=0;; esac
+assert "…and blames the glob, not the dialect" 1 "$said"
+assert "…and leaves the zip on disk" 1 \
+  "$([ -f "$LINKS/aisdk-nocsv.zip" ] && echo 1 || echo 0)"
+
+mkdir -p "$LINKS/sniff2"
+echo 'foo,bar,baz' > "$LINKS/sniff2/aisdk_20990101.csv"
+( cd "$LINKS/sniff2" && zip -q ../aisdk-2099-01-01.zip aisdk_20990101.csv )
+rc=0
+out=$(scripts/load.sh "$LINKS/aisdk-2099-01-01.zip" 2>&1) || rc=$?
+assert "a CSV in neither dialect fails the load" 1 "$(( rc != 0 ))"
+case "$out" in *"unrecognised CSV dialect"*) said=1;; *) said=0;; esac
+assert "…and says so instead of picking a parser at random" 1 "$said"
+
+# 20. The pre-2016-10 dialect, on a hand-written archive rather than a 17 GB
 #     download: members under FtpRoot/ais_data/ (so `*.csv` would match nothing
 #     and stage 0 rows in silence), no header row, ';' delimiter, decimal comma.
 #     The MMSIs are synthetic — MID 111 is not assigned to any country — and the

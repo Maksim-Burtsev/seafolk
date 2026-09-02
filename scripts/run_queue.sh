@@ -109,6 +109,14 @@ fi
 if [ "${PREFETCH:-1}" != 0 ] && [ "$total" -gt 0 ]; then
   pf="$lock/prefetch.pid"
   PREFETCH_PID_FILE="$pf" scripts/prefetch.sh "$work" "${AHEAD:-3}" &
+  # The wait loop below reads that file as "is the prefetcher alive", and a
+  # missing one means dead — it then fetches the date itself. At startup the
+  # file legitimately lags the fork by milliseconds, and reading it that early
+  # started a second curl beside a live prefetcher on the queue's first date.
+  # If it never shows up the prefetcher really is dead; say so and carry on
+  # single-handed, which is slow but not corrupt.
+  for _ in $(seq 25); do [ -s "$pf" ] && break; sleep 0.2; done
+  [ -s "$pf" ] || echo "WARN    prefetcher published no pid in 5 s — treating it as dead"
 fi
 
 [ -f "$prog" ] || printf 'finished_utc\tdate\tseconds\tdone\tremaining\teta_hours\n' > "$prog"
@@ -144,8 +152,23 @@ while read -r d _; do
   # curl and unzip. A date the prefetcher failed and moved past goes idle
   # here in 30 s too, which also breaks the deadlock it used to cause. The
   # partial is removed first so the fallback never resumes suspect bytes.
+  #
+  # And an absolute cap on the whole wait, because every test above is a test of
+  # somebody *working*: an orphaned curl left by a killed run (fetch.sh grew a
+  # trap for exactly that) keeps pgrep true forever, and the queue then waits
+  # forever. A monthly archive at the throttled ~3.5 MB/s took ~100 min, so 4 h
+  # is 2.4x the worst real file — past it the date is not slow, it is stuck.
+  # Stopping is the designed behaviour: starting yet another writer is what
+  # corrupted archives before, and the re-run resumes from load_log anyway.
   idle=0
+  waited=0
   while [ ! -f "$DEST/$f.ok" ]; do
+    if [ "$waited" -ge 14400 ]; then
+      echo "STOP    $d has not arrived after 4 h of waiting — nothing loaded, queue stops here" >&2
+      echo "        processes still naming aisdk-$d.zip:" >&2
+      pgrep -lf "aisdk-$d.zip" >&2 || echo "        (none — the download is stalled with nobody on it)" >&2
+      exit 1
+    fi
     pfpid=""; [ -n "$pf" ] && [ -f "$pf" ] && pfpid="$(cat "$pf")"
     if [ -z "$pfpid" ] || ! kill -0 "$pfpid" 2>/dev/null; then
       rm -f "$DEST/$f"
@@ -162,6 +185,7 @@ while read -r d _; do
       idle=$((idle + 5))
     fi
     sleep 5
+    waited=$((waited + 5))
   done
 
   scripts/load.sh "$DEST/$f"            # never --limit: a capped load keeps the zip

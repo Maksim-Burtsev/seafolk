@@ -31,7 +31,26 @@ for d in "$@"; do
   # after 173 files: curl exited 18, fetch.sh exited non-zero, and the queue
   # stopped for the rest of the morning. --retry-all-errors covers it, and -C -
   # resumes from what is already on disk rather than starting the file over.
-  curl -fL --retry 10 --retry-delay 15 --retry-all-errors -C - "$prog" -o "$out" "$found"
+  #
+  # curl runs in the background so that killing this script takes the download
+  # with it. With curl in the foreground, TERM killed only the bash and the curl
+  # survived as an orphan (observed live) — still writing into data/raw after the
+  # runner had stopped, and on the next run racing the new fetch for the same
+  # file while pinning run_queue.sh's worker-detection guard, which treats any
+  # process naming the zip as somebody working on it.
+  curl -fL --retry 10 --retry-delay 15 --retry-all-errors -C - "$prog" -o "$out" "$found" &
+  cpid=$!
+  trap 'kill "$cpid" 2>/dev/null' TERM INT
+  # `wait` returns the moment the trap runs, before the child is gone, so re-wait
+  # until it is reaped — and keep curl's own exit status, which every caller
+  # branches on.
+  rc=0
+  until wait "$cpid"; do
+    rc=$?
+    kill -0 "$cpid" 2>/dev/null || break
+  done
+  trap - TERM INT
+  [ "$rc" = 0 ] || exit "$rc"
   if unzip -tq "$out" >/dev/null; then
     touch "$out.ok"; echo "ok    $f ($(du -h "$out" | cut -f1))"
   else
