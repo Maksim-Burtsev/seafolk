@@ -124,7 +124,8 @@ $ df -h . && du -sh data/ch
 
 `punchcard:punchcard` on `cedbbed..HEAD`, three finder passes as subagents.
 Verdict **🟡 Ship with care** — three findings, **all three accepted** and
-fixed in the follow-up commit (see log): the worker-detection wait had no
+fixed in `6ae991a` (each fix verified live, incl. reproducing the orphan
+curl with the pre-fix fetch.sh): the worker-detection wait had no
 upper bound and an orphaned curl — observed live during the run — could pin
 it forever; the runner could read the prefetcher's pid file before it existed
 and start a second writer on the queue's first date; and no test covered the
