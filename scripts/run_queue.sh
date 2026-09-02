@@ -84,7 +84,9 @@ loaded="$(scripts/ch.sh -q 'SELECT file FROM load_log')"
 # queue — measured, 620 lines to 1 — and the running prefetcher then hit EOF and
 # silently stopped reading ahead. --dry-run takes no lock, so it gets a scratch
 # file of its own instead.
-if [ "$dry" = 1 ]; then work="$(mktemp -t seafolk-queue)"; else work="$lock/work"; fi
+# mktemp -t with a bare prefix is a macOS-ism: GNU mktemp demands the XXXXXX
+# itself ("too few X's in template"), and --dry-run then died on Linux.
+if [ "$dry" = 1 ]; then work="$(mktemp "${TMPDIR:-/tmp}/seafolk-queue.XXXXXX")"; else work="$lock/work"; fi
 : > "$work"
 skipped=0
 while read -r d _; do

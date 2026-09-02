@@ -1,0 +1,19 @@
+# Named storms that chapter 04 (S9) validates on. Monthly archives, because
+# none of these dates fall in the daily era (2024-03 →) or in the reference
+# years (2015/2018/2021) — see queues/daily-2024-2026.txt and queues/ref-years.txt.
+#
+#   Malik  2022-01-29/30  — the ±72 h window crosses into February, so 2022-02
+#                           is here for the tail, not only for Nora.
+#   Nora   2022-02-18
+#   Otto   2023-02-17
+#   Pia    2023-12-21/22
+#
+# All four verified present via HEAD (2026-09-03), all under the YYYY/ layout
+# (the root layout is 404 for every one of them), 63.4 GB total:
+#   2022-01  16 338 660 470 B   2022-02  15 116 374 340 B
+#   2023-02  14 720 437 553 B   2023-12  17 196 051 933 B
+# Pre-2024 monthly zips are the modern dialect (sql/02_stage.sql).
+2022-01
+2022-02
+2023-02
+2023-12
