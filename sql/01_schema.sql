@@ -107,7 +107,9 @@ INNER JOIN ais_vessel_stage AS v ON r.day = v.day AND r.mmsi = v.mmsi;
 -- anchor as sailing at 0 kn.
 CREATE TABLE IF NOT EXISTS h3_hourly
 (
-    h3          UInt64,                -- geoToH3(lon, lat, 7) — note the argument order
+    h3          UInt64,                -- geoToH3(lat, lon, 7) — (lat, lon) since
+                                       -- ClickHouse 25.5, pinned in scripts/ch.sh,
+                                       -- oracle in scripts/test_load.sh
     hour        DateTime('UTC'),
     mobile      LowCardinality(String),
     ship_group  LowCardinality(String),

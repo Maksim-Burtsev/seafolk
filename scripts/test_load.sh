@@ -71,13 +71,24 @@ assert "…and Class B 'Passenger' vessels do exist here (assert 3 is not vacuou
   "$(q "SELECT count() > 0 FROM vessel_day WHERE mobile = 'Class B' AND ship_group = 'passenger'")"
 assert "public_track is populated" 1 "$(q "SELECT count() > 0 FROM public_track")"
 
-# 4. H3 argument order. geoToH3(lat, lon) does not error — it silently moves
-#    the whole fleet to Kazakhstan. Every cell centre must land back inside the
-#    Danish bbox (+0.1 deg, since a res-7 cell straddles the edge).
+# 4. H3 argument order, against an EXTERNAL oracle. A swap does not error — it
+#    silently mirrors the whole fleet into the Arabian Sea.
+#    The first assert pins the engine and scripts/ch.sh's --geotoh3_argument_order
+#    together: 55.676N 12.568E is Copenhagen, and the cell id is the one the
+#    Python `h3` reference library returns for it (871f05831ffffff). With the
+#    pin removed on a pre-25.5 clickhouse, or the arguments swapped, this is
+#    609739203143532543 instead.
+#    The second reads the tuple with the CORRECT accessor (.1 = lat, since 25.1)
+#    rather than the code's convention. That distinction is the whole assert:
+#    until S4-redo this test read .2 as latitude, exactly as sql/03_aggregate.sql
+#    passed (lon, lat) — symmetric under the swap, so it passed on mirrored data
+#    and S2's mutation check rejected the correct call and certified the bug.
+assert "geoToH3 takes (lat, lon): Copenhagen cell matches the h3 reference library" \
+  608531686258376703 "$(q "SELECT geoToH3(55.676, 12.568, 7)")"
 assert "every h3 cell maps back into the Danish bbox" 0 \
   "$(q "SELECT count() FROM h3_hourly
-        WHERE NOT (h3ToGeo(h3).2 BETWEEN 52.9 AND 59.1
-               AND h3ToGeo(h3).1 BETWEEN  2.9 AND 17.1)")"
+        WHERE NOT (h3ToGeo(h3).1 BETWEEN 52.9 AND 59.1
+               AND h3ToGeo(h3).2 BETWEEN  2.9 AND 17.1)")"
 
 # 5. The drop counters partition the file exactly. If they drift, S10 reports a
 #    dropped share that does not add up.

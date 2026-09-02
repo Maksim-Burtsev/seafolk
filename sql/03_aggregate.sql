@@ -52,9 +52,12 @@ GROUP BY day, mmsi;
 -- 1. h3_hourly — the public grain: 5 km2 cell x hour x class x group.
 INSERT INTO h3_hourly
 SELECT
-    geoToH3(lon, lat, 7)     AS h3,        -- (lon, lat), NOT (lat, lon); a swap
-    toStartOfHour(ts)        AS hour,      -- is silent and lands the fleet in
-    mobile,                                -- Kazakhstan. test_load.sh asserts it.
+    geoToH3(lat, lon, 7)     AS h3,        -- (lat, lon) since ClickHouse 25.5,
+    toStartOfHour(ts)        AS hour,      -- pinned in scripts/ch.sh. A swap is
+    mobile,                                -- silent — it mirrors the fleet into
+                                           -- the Arabian Sea — so test_load.sh
+                                           -- checks a Copenhagen cell id against
+                                           -- the h3 reference library.
     ship_group,
     count()                  AS msgs,
     uniqExactState(mmsi)     AS vessels,
@@ -100,7 +103,7 @@ SELECT
     sumIf(step_m, moving AND pmoving
                   AND ts - pts BETWEEN 1 AND 3600
                   AND step_m / (ts - pts) <= 25.7) / 1852 AS dist_nm,
-    geoToH3(argMin(lon, ts), argMin(lat, ts), 7) AS home_h3,
+    geoToH3(argMin(lat, ts), argMin(lon, ts), 7) AS home_h3,   -- (lat, lon); see above
     max(length)                                 AS length,  -- static messages only
     max(imo)                                    AS imo      -- ditto; 0 = never reported
 FROM (
