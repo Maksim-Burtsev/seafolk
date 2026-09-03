@@ -3,9 +3,12 @@
 #
 #   ssh root@IP 'bash -s' < scripts/vm/bootstrap.sh
 #
-# Idempotent: re-running only re-pulls the repo. It does NOT start the queue —
-# scripts/vm/night.sh does that, explicitly, once you have looked at the disk
-# numbers this prints.
+# Idempotent: re-running only re-pulls the repo — and refuses while the night is
+# running, because `git pull` rewrites scripts bash is reading by byte offset
+# (that has killed two queue runs already, docs/STATUS.md) and the schema step
+# opens the store under the loader's exclusive lock. It does NOT start the
+# queue — scripts/vm/night.sh does that, explicitly, once you have looked at
+# the disk numbers this prints.
 #
 # SEAFOLK_REPO overrides the clone source (used by the Docker test to clone from
 # a local mount instead of GitHub).
@@ -15,11 +18,18 @@ CH_VERSION=26.7.5.10
 REPO="${SEAFOLK_REPO:-https://github.com/Maksim-Burtsev/seafolk.git}"
 DIR=/root/seafolk
 
+if command -v tmux >/dev/null && tmux has-session -t =queue 2>/dev/null; then
+  echo "tmux session 'queue' is running — not touching the repo or the store under it" >&2
+  exit 1
+fi
+
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
+# This script arrives on stdin (`bash -s`); a child that reads stdin would eat
+# the rest of it, so apt-get gets /dev/null.
+apt-get update -qq </dev/null
 # procps is for pgrep: run_queue.sh's "is anybody still downloading this zip"
 # guard is a pgrep, and a minimal cloud image does not always ship it.
-apt-get install -y -qq unzip curl tmux git zstd procps ca-certificates
+apt-get install -y -qq unzip curl tmux git zstd procps ca-certificates </dev/null
 
 if clickhouse --version 2>/dev/null | grep -qF "$CH_VERSION"; then
   echo "clickhouse $CH_VERSION already installed"

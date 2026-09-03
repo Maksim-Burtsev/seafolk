@@ -89,6 +89,13 @@ assert "every h3 cell maps back into the Danish bbox" 0 \
   "$(q "SELECT count() FROM h3_hourly
         WHERE NOT (h3ToGeo(h3).1 BETWEEN 52.9 AND 59.1
                AND h3ToGeo(h3).2 BETWEEN  2.9 AND 17.1)")"
+# vessel_day.home_h3 is the other h3 column, built by a second geoToH3 call in
+# sql/03_aggregate.sql; chapter 02 keys marina proximity on it. Reverting that
+# one call alone left the suite green until this assert existed.
+assert "every home_h3 maps back into the Danish bbox" 0 \
+  "$(q "SELECT count() FROM vessel_day
+        WHERE NOT (h3ToGeo(home_h3).1 BETWEEN 52.9 AND 59.1
+               AND h3ToGeo(home_h3).2 BETWEEN  2.9 AND 17.1)")"
 
 # 5. The drop counters partition the file exactly. If they drift, S10 reports a
 #    dropped share that does not add up.
@@ -323,6 +330,11 @@ assert "legacy: lat, lon, name — every neighbour column distinguishable" \
   "$(q "SELECT lat, lon, name FROM public_track WHERE mmsi = 111000001" | tr '\t' ' ')"
 assert "legacy: imo, length, sog — read off the right positions" "9012345 100 1" \
   "$(q "SELECT imo, length, moving_msgs FROM vessel_day WHERE mmsi = 111000001" | tr '\t' ' ')"
+# …001's only position is 55.123456N 12.654321E, so its home_h3 has an external
+# answer: the h3 reference library gives 871f05469ffffff = 608531670018031615.
+# The bbox asserts above would accept any cell over Denmark; this one accepts one.
+assert "legacy: home_h3 is the h3 reference library's cell for 55.123456/12.654321" \
+  608531670018031615 "$(q "SELECT home_h3 FROM vessel_day WHERE mmsi = 111000001")"
 # Class B, and the empty numeric field the modern path gets as NULL: this row
 # reports Ship type 'Sailing' and no Length at all.
 assert "legacy: the Class B sailing boat resolves to leisure, length 0" "Class B leisure 0" \
