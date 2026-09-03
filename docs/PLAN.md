@@ -38,7 +38,7 @@ export, with a test.
 | Phase | Sessions | Ends with |
 |-------|----------|-----------|
 | 0 · Prove the story | S1–S3 | Three real charts from a few days and two full months; Class B confirmed |
-| 1 · Fill the lake | S4–S5 | 2024 → today daily + reference years aggregated; context layers loaded |
+| 1 · Fill the lake | S4–S5 | 2024 → today daily + reference years + storm months aggregated **with a correct H3 grid** (S4-redo, on a VM); context layers loaded |
 | 2 · Analyse | S6–S10 | One notebook of findings per chapter + the honesty layer |
 | 3 · Publish data | S11 | Parquet on GitHub Releases + Hugging Face + Zenodo (DOI), data card, privacy test |
 | 4 · Tell it | S12–S14 | Essay (RU/EN), explorer, posters |
@@ -119,7 +119,9 @@ once, because raw data is not kept.
 original plan):**
 - `sql/01_schema.sql` — DDL, idempotent. Five permanent tables:
   - `h3_hourly` (AggregatingMergeTree, PARTITION BY toYYYYMM(hour), ORDER BY
-    (h3, hour, mobile, ship_group)): `h3 UInt64` (res 7, `geoToH3(lon, lat, 7)`),
+    (h3, hour, mobile, ship_group)): `h3 UInt64` (res 7, `geoToH3(lat, lon, 7)` —
+    **`(lat, lon)` since ClickHouse 25.5**; this line said `(lon, lat)` until
+    2026-09-03 and the whole first store was mirrored, see § S4-redo),
     `hour DateTime('UTC')`, `mobile`, `ship_group`,
     `msgs SimpleAggregateFunction(sum, UInt64)`,
     `vessels AggregateFunction(uniqExact, UInt32)`,
@@ -247,7 +249,7 @@ day → (a) is ~15 GB, (b) straight-lines to ~72 GB against a 70 GB budget, so
 
 ---
 
-## S4 — Bulk runner: nights, resume, disk guard *(done — Gate C passed; tails closed, see STATUS § S4-tails)*
+## S4 — Bulk runner: nights, resume, disk guard *(done — but every cell was mirrored; the store was deleted 2026-09-03 and is rebuilt in § S4-redo. The runner itself stands.)*
 
 **Goal:** Make the queue runner safe to leave unattended for nights: disk guard,
 resume, progress, one log line per file, and a summary at the end.
@@ -325,6 +327,84 @@ usage, and the next queue to run. Nothing in `data/raw` except the file in fligh
 **Gate C:** ≥ 2024-03 → today loaded; `data/ch` ≤ 40 GB.
 
 **Commit:** `feat(s4): unattended bulk runner with disk guard and resume`
+
+---
+
+## S4-redo — The reload: one rented VM, one command each way *(next)*
+
+**Why:** S4 loaded 945 archives through `geoToH3(lon, lat, 7)` on ClickHouse
+26.7, which has taken `(lat, lon)` since 25.5 (PR #78852, *Backward
+Incompatible Change*). Every `h3_hourly.h3` and `vessel_day.home_h3` was
+mirrored across the lat = lon diagonal into the Arabian Sea, and the S2 test
+could not see it because it read `h3ToGeo` in the same swapped order. The raw
+files were gone (stream-and-delete), so `data/ch` was deleted on 2026-09-03.
+Evidence and the decision not to remap: `docs/STATUS.md` § S4-redo,
+`docs/DECISIONS.md` 2026-09-03. Counts, `dist_nm` and `public_track` were
+never wrong; only the grid was.
+
+**Where:** a rented Linux VM, because the laptop link (~11 MB/s) makes this a
+two-day job and a 1 Gbit machine next to the Danish S3 makes it a night. The
+loader, the runner and the store format are unchanged; only the machine is.
+
+| | |
+|---|---|
+| Machine | Ubuntu 24.04 · 8 vCPU · 32 GB · ≥ 300 GB NVMe · Amsterdam / Frankfurt / Helsinki |
+| Candidates | Vultr `vc2-8c-32gb` $0.219/h (email + SMS + card, no ID) · UpCloud 8xCPU-32GB $0.356/h (card + €10 deposit) · Hetzner CX53 $0.056/h (may ask for ID) |
+| Budget | $10; expected $2–5 |
+| Queue | `queues/daily-2024-2026.txt` (909) → `queues/ref-years.txt` (36) → `queues/storms.txt` (4) — 949 archives, ≈ 1.4 TB in, ≈ 15 GB out |
+| Time | ≈ 9–10 h serial loading if the VM's CPU matches the M4; a second night if it does not — acceptable, decided 2026-09-03 |
+| ClickHouse | pinned to the laptop's **26.7.5.10** by `scripts/vm/bootstrap.sh` |
+| SSH key | `~/.ssh/seafolk_vm` (ed25519, made 2026-09-03; public half goes into the provider console) |
+
+**Files:**
+- Modify: `scripts/ch.sh` (H3 order settings pinned), `sql/03_aggregate.sql`
+  and `sql/01_schema.sql` (`geoToH3(lat, lon, 7)`), `scripts/test_load.sh`
+  (external-oracle assert on Copenhagen's cell id).
+- Create: `scripts/vm/bootstrap.sh` (on the VM: packages, pinned ClickHouse,
+  clone, schema), `scripts/vm/night.sh` (on the VM: the three queues in one
+  `tmux` session, `AHEAD=8`), `scripts/vm/pull.sh IP` (on the laptop: refuses
+  while the queue runs, streams `data/ch` home as a hardlink-preserving
+  tarball, verifies the invariants).
+- Create: `queues/storms.txt` — 2022-01, 2022-02, 2023-02, 2023-12 (Malik,
+  Nora, Otto, Pia: chapter 04's validation storms, never in scope (a)).
+
+**Do — the night:**
+- [ ] Operator (ten minutes, then sleep): create the instance with the public
+      key from `~/.ssh/seafolk_vm.pub`; create a provider API token; hand the
+      session the IP and the token in an environment variable.
+- [ ] `ssh -i ~/.ssh/seafolk_vm root@IP 'bash -s' < scripts/vm/bootstrap.sh`
+- [ ] `ssh -i ~/.ssh/seafolk_vm root@IP 'cd seafolk && scripts/vm/night.sh'`
+- [ ] Every couple of hours: `ssh … tail -3 seafolk/data/progress.tsv`, report
+      ETA, rate and free disk to the user in the chat. Never query the store
+      on the VM while the queue runs (exclusive lock — `docs/DECISIONS.md`).
+- [ ] Morning: `scripts/vm/pull.sh IP` (no `data/ch` may exist locally — the
+      operator deleted it on purpose). Read its verification block.
+- [ ] Destroy the instance through the API, then tell the operator to log out.
+      Check the exact call against the provider's docs that night; the shapes:
+      Vultr `DELETE https://api.vultr.com/v2/instances/{id}` with
+      `Authorization: Bearer $VULTR_API_KEY`; Hetzner
+      `DELETE https://api.hetzner.cloud/v1/servers/{id}`; UpCloud
+      `DELETE https://api.upcloud.com/1.3/server/{uuid}?storages=1` (stop it
+      first). Confirm with a GET that it is gone.
+
+**Validate:**
+```bash
+scripts/test_load.sh                                                   # ALL PASS, incl. the Copenhagen oracle
+scripts/ch.sh -q "SELECT count() FROM load_log"                        # 949
+scripts/ch.sh -q "SELECT sum(msgs) = (SELECT sum(rows_kept) FROM load_log) FROM h3_hourly"   # 1
+scripts/ch.sh -q "SELECT count() FROM h3_hourly WHERE h3 = 608531686258376703"               # > 0: Copenhagen exists
+scripts/ch.sh -q "SELECT count() FROM (SELECT DISTINCT h3 FROM h3_hourly) WHERE h3ToGeo(h3).1 NOT BETWEEN 52.9 AND 59.1"  # 0
+scripts/ch.sh -q "SELECT toYear(day), count(DISTINCT day) FROM vessel_day GROUP BY 1 ORDER BY 1"
+df -h . && du -sh data/ch
+```
+
+**You verify:** the provider console shows no instance and the account has no
+running charges; `data/ch` is on the laptop and nowhere else.
+
+**Gate C′:** 949 files in `load_log`, invariant exact, Copenhagen's cell
+non-empty, zero mirrored cells, VM destroyed, `data/ch` ≤ 40 GB.
+
+**Commit:** `data(s4-redo): store rebuilt on a VM with the correct H3 grid`
 
 ---
 

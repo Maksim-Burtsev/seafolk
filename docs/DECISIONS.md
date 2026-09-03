@@ -151,3 +151,49 @@ what it rules out.
   itself. Development against a live queue uses `CH_PATH=<copy> scripts/ch.sh`
   on a copy of the store. Rules out a progress dashboard, a monitoring query, or
   any second reader during S4's overnight runs.
+- 2026-09-03 (S4-redo) — **`geoToH3(lat, lon, 7)`, and both H3 order settings
+  are pinned in `scripts/ch.sh`.** ClickHouse 25.5 flipped `geoToH3` to
+  `(lat, lon)` ([#78852](https://github.com/ClickHouse/ClickHouse/pull/78852),
+  listed under *Backward Incompatible Change*; setting
+  `geotoh3_argument_order`, legacy `lon_lat`) and 25.1 flipped `h3ToGeo` to
+  return `(lat, lon)` ([#74719](https://github.com/ClickHouse/ClickHouse/pull/74719),
+  setting `h3togeo_lon_lat_result_order`). S0 wrote the pre-25.5 `(lon, lat)`
+  into the plan, S2 implemented it on 26.7.5.10, and every cell of 945 loaded
+  archives was mirrored across the lat = lon diagonal into the Arabian Sea:
+  Copenhagen's true res-7 cell (`608531686258376703`, from the h3 reference
+  library) held 0 rows, its mirror 528; of 217 949 distinct cells, 0 had a
+  centre in the Danish bbox and 217 441 in the mirrored one. The S2 test read
+  `h3ToGeo` in the same swapped order, so it was a tautology — its mutation
+  check fed the *correct* call, saw a failure, and certified the bug. `ch.sh`
+  now passes `--geotoh3_argument_order=lat_lon --h3togeo_lon_lat_result_order=0`
+  so no future default can change the meaning silently, and `test_load.sh`
+  asserts the hard-coded Copenhagen id. **A coordinate-order test must use an
+  external oracle, never a round trip through the same functions.** Rules out
+  any H3 call not routed through `ch.sh`, and any spatial assert without a
+  fixed expected value.
+- 2026-09-03 (S4-redo) — **The store is rebuilt from the archive, not
+  remapped.** A remap from the mirrored cells (un-swap each cell centre, ask
+  for the true cell) was measured on 300–400 k random bbox points: 66 % land in
+  the exact res-7 cell, 100 % within one ring, 93 % agree at res 5; median
+  position error 941 m against the 817 m floor of res 7 itself; 48 % of mirrored
+  footprints sit inside one true cell, 50 % straddle two. Good enough for a
+  chart, not for a dataset whose claim is an exact H3 grid, and the sub-cell
+  position is gone with the raw files (stream-and-delete), so it is a
+  re-download: 909 daily + 36 reference months + 4 storm months (2022-01,
+  2022-02, 2023-02, 2023-12 — Malik, Nora, Otto and Pia were never inside scope
+  (a), so chapter 04 had no data at all) ≈ 1.4 TB. `data/ch` was deleted on
+  2026-09-03. Rules out publishing anything spatial from a remapped store.
+- 2026-09-03 (S4-redo) — **Bulk loading runs on a rented Linux VM; the store
+  comes home as one tarball; the VM is destroyed.** The laptop link is ~11 MB/s
+  (17 h for the dailies alone, two days for everything); on a 1 Gbit VM near
+  the Danish S3 the run is CPU-bound instead (~9–10 h serial on 8 vCPU / 32 GB,
+  a second night if it spills). Cost $2–10 a night (Vultr `vc2-8c-32gb`
+  $0.219/h, UpCloud 8xCPU-32GB $0.356/h, Hetzner CX53 $0.056/h but may ask for
+  ID). ClickHouse on the VM is pinned to the laptop's 26.7.5.10 so the store is
+  byte-compatible. Privacy: `data/ch` holds MMSI of private vessels and the
+  rule says it never leaves the machine; the reading adopted here is that a VM
+  under the user's control, holding the store for hours and destroyed with its
+  disk before the account is closed, is "the machine" for the duration —
+  `scripts/vm/pull.sh` brings the tarball straight to the laptop and nothing is
+  uploaded anywhere else. Rules out snapshots, object-storage copies, or a
+  long-lived VM.

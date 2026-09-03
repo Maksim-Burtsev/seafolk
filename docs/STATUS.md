@@ -3,7 +3,180 @@
 Newest session on top. Each entry: what was done, findings with numbers, open
 questions, and the exact next session. Write it for someone with zero context.
 
-**Next session: S5** (context layers). S4 is closed — tails included.
+**Next session: S4-redo** — the reload on a rented VM, `docs/PLAN.md` § S4-redo.
+The first store was mirrored (below) and has been deleted; S5 runs after it.
+
+---
+
+## S4-redo (prep) — The grid was mirrored; store deleted, reload prepared — 2026-09-03
+
+**What happened.** S5 opened by checking the grid it was about to join
+context layers to, and the grid was wrong. ClickHouse 25.5 changed `geoToH3`
+to take `(lat, lon)` (PR [#78852](https://github.com/ClickHouse/ClickHouse/pull/78852),
+*Backward Incompatible Change*; 25.1 did the same to `h3ToGeo`'s result,
+[#74719](https://github.com/ClickHouse/ClickHouse/pull/74719)). The installed
+binary is 26.7.5.10 (2026-08-21, before any load). S0 had written the pre-25.5
+`geoToH3(lon, lat, 7)` into the plan and S2 implemented it, so **every cell of
+all 945 archives was mirrored across the lat = lon diagonal into the Arabian
+Sea.** The proof, in the order it was gathered:
+
+```
+system.settings: geotoh3_argument_order = lat_lon (default)   ← the engine's own statement
+Python h3 (reference library), Copenhagen 55.676N 12.568E res 7:  608531686258376703
+clickhouse geoToH3(55.676, 12.568, 7)                            608531686258376703   (lat first: same)
+clickhouse geoToH3(12.568, 55.676, 7)  — as in 03_aggregate.sql  609739203143532543
+rows in h3_hourly at the true Copenhagen cell:   0
+rows at the mirrored one:                      528
+distinct cells: 217 949 · centre in Danish bbox: 0 · centre in mirrored bbox (lat 3–17, lon 53–59): 217 441
+six busiest cells, decoded by the h3 library: 10.6N 57.7E … — Skagen, Hirtshals, Hanstholm,
+                                              Esbjerg, Thyborøn, Frederikshavn once the pair is swapped
+```
+
+**Why the test did not catch it.** `test_load.sh` assert 4 read `h3ToGeo(h3).2`
+as latitude — the same swapped convention as the code — so it was symmetric
+under the swap. Worse, the S2 entry below records a mutation check ("swapping
+to `(lat, lon)` moves 13 873 cells out of the bbox") that fed the *correct*
+call, saw the assert fail, and logged that as proof the oracle worked. S1 had
+asked for "one known harbour cell" — the external oracle — and S2 substituted
+the round trip. Chain: S0 `b5ee044` (plan text, Fable 5), S2 `b8cf176` (code
+and test, Opus 5). Reasoning effort is not recorded anywhere.
+
+**What was and was not damaged.** Only `h3_hourly.h3` and
+`vessel_day.home_h3`. Every count, `dist_nm` (uses `geoDistance`, unaffected),
+`public_track` (real lat/lon) and every S1–S4 finding stand.
+
+**Remap was measured and rejected.** Un-swapping each mirrored cell's centre
+and asking for the true cell (300–400 k random bbox points): 66.4 % exact at
+res 7, 100 % within one ring, 85.9 / 93.4 / 97.4 % at res 6 / 5 / 4; median
+position error 941 m against the 817 m floor of res 7 itself; 48 % of mirrored
+footprints lie inside one true cell, 50 % straddle two. Usable for a chart, not
+for a dataset whose claim is an exact H3 grid, and the sub-cell position is
+gone with the raw files — so the store was deleted and is rebuilt from the
+archive. `docs/DECISIONS.md` 2026-09-03 (three entries).
+
+**Two scope facts surfaced on the way.** (1) Chapter 04's validation storms
+Pia (2023-12) and Malik (2022-01) were never in scope (a) — `queues/storms.txt`
+adds 2022-01, 2022-02, 2023-02, 2023-12. (2) The laptop is download-bound at
+~11 MB/s; the reload moves to a rented VM (§ S4-redo in the plan), full scope,
+as many nights as it takes — user's decision 2026-09-03.
+
+**Done today:**
+- `data/ch` deleted (13 GB → 314 GB free); `data/sample/aisdk-2025-08-01.zip`
+  kept as the test fixture.
+- `scripts/ch.sh` pins `--geotoh3_argument_order=lat_lon
+  --h3togeo_lon_lat_result_order=0`; `sql/03_aggregate.sql` and the schema
+  comment use `geoToH3(lat, lon, 7)`; `scripts/test_load.sh` asserts the
+  hard-coded Copenhagen id and reads the bbox with the correct accessor.
+  Verified to **fail on the old SQL** (`expected 0, got 23137`) and pass on
+  the new.
+- `scripts/vm/bootstrap.sh`, `night.sh`, `pull.sh`; `queues/storms.txt`;
+  SSH key `~/.ssh/seafolk_vm`. See "Validate" below for what was run.
+- Design review (below): four findings, four fixes, `3803bdc`.
+- `docs/PLAN.md` § S4-redo, `docs/DECISIONS.md` ×3, this entry.
+
+Commits: `2c1215f` loader fix + oracle test · `c54b4d9` VM scripts, storm
+queue, runner portability · `3803bdc` review fixes · docs follow.
+
+### Validate — real output
+
+Laptop, after the fix (`scripts/test_load.sh` — 44 PASS, 1 SKIP at `2c1215f`; 46 PASS after the review's `home_h3` asserts, `3803bdc`):
+
+```
+PASS  geoToH3 takes (lat, lon): Copenhagen cell matches the h3 reference library
+PASS  every h3 cell maps back into the Danish bbox
+…
+ALL PASS
+exit=0
+```
+
+The same suite with the two calls reverted to `geoToH3(lon, lat, 7)`:
+
+```
+FAIL  every h3 cell maps back into the Danish bbox — expected 0, got 23137
+FAILURES ABOVE
+exit=1
+```
+
+The pin, straight from `clickhouse local`:
+
+```
+--geotoh3_argument_order=lon_lat  → 609739203143532543   (the mirrored id)
+--geotoh3_argument_order=lat_lon  → 608531686258376703   (Copenhagen, = Python h3)
+h3ToGeo(871f05831ffffff) under the pin: (55.6819, 12.5710)   (lat, lon)
+```
+
+`ubuntu:24.04` in Docker (aarch64), `scripts/vm/bootstrap.sh` then one real day:
+
+```
+ClickHouse local version 26.7.5.10 (official build).
+get   http://aisdata.ais.dk/aisdk-2025-08-02.zip
+ok    aisdk-2025-08-02.zip (663M)                                   1m12s
+loaded  aisdk-2025-08-02.zip: 20292239 rows read, 18961928 kept in 8s (2536529 rows/s), zip removed
+SELECT count(), uniqExactMerge(vessels) FROM h3_hourly          → 176429  7156
+sum(msgs) = sum(rows_kept)                                       → 1
+$ scripts/run_queue.sh --dry-run queues/storms.txt
+queue    4 dates to load, 0 already in load_log … free disk 297 GB, floor 30 GB
+$ scripts/vm/night.sh   (queues stubbed to a loaded date)
+chain exited 0 · no lock left behind
+$ scripts/vm/pull.sh    (docker exec standing in for ssh)
+invariant_ok: 1   h3_msgs: 18961928   log_rows_kept: 18961928   files: 1
+```
+
+(The container cloned HEAD before the fix commit, so those 176 429 cells are
+still mirrored — the run proves the Linux pipeline, not the grid.)
+
+```
+$ df -h . && du -sh data
+314Gi free · 661M data (the test fixture) · data/ch absent by design
+```
+
+### Design review
+
+`punchcard:punchcard` on `1949b85..c54b4d9`, three finder passes as subagents.
+Verdict **🟠 Ship after #1** — four findings, **all four accepted**, fixed in
+the follow-up commit, each fix exercised for real:
+
+1. 🔴 *`pull.sh` printed "destroy the instance" on a partial, broken or
+   mirrored store.* Its verify block printed the checks and exited 0 whatever
+   they said; a finder drove a real `run_queue.sh` into the disk-floor STOP
+   and showed the chain's exit, the lock's removal and the tmux session's end
+   all passing the liveness gate, with `invariant_ok: 1, files: 0` — the
+   invariant holds on any prefix and held on the mirrored store too. Fixed:
+   refuse unless `night.log` ends in `chain exited 0`; extract into
+   `data/ch.incoming`; require invariant 1, `load_log` = 949, rows in the
+   ring around the h3 library's Copenhagen cell, zero mirrored centres; only
+   then `mv` to `data/ch`, else exit 1 and say DO NOT DESTROY. Every branch
+   run through ssh/scp shims against a scratch store (exit codes 1,1,1,1,1,1,0).
+2. 🟡 *A re-run of `bootstrap.sh` did `git pull` under the running runner and
+   opened the store under the loader's lock*, while its header said
+   "idempotent". Fixed: refuses while tmux session `=queue` exists (verified
+   on `queue`, and that `queue-old` does not trip it).
+3. 🟡 *`[ -e data/ch ]` could not tell a store from the empty scaffold any
+   `scripts/ch.sh` call leaves behind, or from a truncated tar.* Fixed: only a
+   `data/ch/metadata` refuses; the scaffold is cleared; rubble lands in
+   `data/ch.incoming` and is named as rubble on the next run.
+4. 🟡 *`vessel_day.home_h3` was the one h3 column no assert read* — reverting
+   its `geoToH3` alone left the suite green. Fixed: a bbox assert over
+   `home_h3` and the exact cell `608531670018031615` for the legacy fixture's
+   55.123456/12.654321 from the Python `h3` library. 46 PASS.
+
+Notes taken without cards: `BatchMode=yes` on the pull's ssh (done), `=queue`
+exact matching (done), `apt-get </dev/null` under `bash -s` (done),
+`/root/seafolk` as two literals in `bootstrap.sh` and `pull.sh` (left — one
+value, two files, both in the same directory), and the H3 pins equalling the
+26.7 default so their removal is not caught by a test on this engine (by
+design: they exist for the next engine).
+
+### Open questions for S4-redo (the night)
+
+- Which provider the user picks decides the destroy call; confirm it against
+  the provider's API docs that night before relying on it.
+- Whether the VM's 8 vCPU match the M4 for the serial load (27 s median per
+  daily file at home). If not, the run spills into a second night — accepted.
+- `sql/13_coverage_daily.sql` keys on `toDate(ts_min)` and the part-directory
+  question — both carried from S4-tails, unchanged.
+
+**Next session: S4-redo.** Read `docs/PLAN.md` § S4-redo. S5 follows it.
 
 ---
 
