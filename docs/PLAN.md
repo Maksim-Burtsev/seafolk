@@ -38,7 +38,7 @@ export, with a test.
 | Phase | Sessions | Ends with |
 |-------|----------|-----------|
 | 0 · Prove the story | S1–S3 | Three real charts from a few days and two full months; Class B confirmed |
-| 1 · Fill the lake | S4–S5 | 2024 → today daily + reference years + storm months aggregated **with a correct H3 grid** (S4-redo, done locally 2026-09-08); context layers loaded |
+| 1 · Fill the lake | S4–S5 | 2024 → today daily + reference years + storm months aggregated **with a correct H3 grid** (S4-redo, done locally 2026-09-08); context layers loaded — marinas, ferry routes, land, storms, regattas (S5, done 2026-09-08) |
 | 2 · Analyse | S6–S10 | One notebook of findings per chapter + the honesty layer |
 | 3 · Publish data | S11 | Parquet on GitHub Releases + Hugging Face + Zenodo (DOI), data card, privacy test |
 | 4 · Tell it | S12–S14 | Essay (RU/EN), explorer, posters |
@@ -419,21 +419,34 @@ non-empty, zero mirrored cells, VM destroyed, `data/ch` ≤ 40 GB.
 **Goal:** Everything the chapters join against, loaded once into ClickHouse
 dictionaries/tables.
 
-**Files:**
-- Create: `scripts/fetch_context.sh` — Overpass queries for `leisure=marina` and
-  `route=ferry` within a Denmark bbox → GeoJSON in `data/context/` (gitignored;
-  the *script* is committed). Natural Earth 10 m land polygons download.
-- Create: `sql/04_context.sql` — tables `marina` (name, lat, lon, h3),
-  `ferry_route` (name, from, to, geometry), `land` polygon dictionary,
-  `storm` (name, start, end, source), `regatta` (name, start, end, place, year).
-- Create: `data/context/storms.csv` **committed** (small; from DMI/Wikipedia list)
-  and `data/context/regattas.csv` **committed** (2014–2026 dates collected by hand
-  from event sites; note the source URL per row).
+**Files:** *(done 2026-09-08 — corrected to what exists)*
+- Create: `scripts/fetch_context.sh` — Overpass queries for `leisure=marina`
+  (`out:csv` → `marinas.tsv`) and `route=ferry` (`nwr`, `[out:json] … out geom;`
+  → `ferry_routes.json`) within the project bbox (lat 53–59, lon 3–17), into
+  `data/context/` (gitignored; the *script* is committed). Natural Earth 10 m
+  land polygons as GeoJSON, pinned to release tag v5.1.2. No GeoJSON conversion
+  step — ClickHouse reads all three formats natively.
+- Create: `sql/04_context.sql` — tables `marina` (osm_type, osm_id, name, lat,
+  lon, h3), `ferry_route` (osm_type, osm_id, name, from, to, operator, geom =
+  `Array(Array(Tuple(lon, lat)))`, one entry per member way, not stitched),
+  `land_src` + the `land` polygon dictionary (`POLYGON_INDEX_EACH`, keyed
+  `(lon, lat)`), `storm` (name, start_utc, end_utc, source_url, note),
+  `regatta` (name, year, start_date, end_date, place, lat, lon, source_url).
+- Create: `scripts/test_context.sh` — runs `sql/04_context.sql` itself against a
+  throwaway store `data/ch_test`; 26 asserts (counts, the Troense H3 oracle, the
+  land dictionary in both directions, verbatim CSV headers, coordinate bounds,
+  idempotence).
+- Create: `data/context/storms.csv` **committed** (the DMI named-storm list since
+  2013) and `data/context/regattas.csv` **committed** (dates collected by hand
+  from event sites for the six years the store holds — 2015, 2018, 2021, 2024,
+  2025, 2026; source URL per row).
 
 **Do:**
-- [ ] Fetch, load, count: marinas (expect hundreds), ferry routes (dozens).
-- [ ] Sanity: `SELECT count() FROM h3_hourly WHERE dictHas('land', …)` → what
-      share of leisure hours is "on land" (harbours) vs at sea.
+- [x] Fetch, load, count: marinas 2 833, ferry routes 1 324 (1 001 ways +
+      323 relations), land 11 features / 6 837 polygons, storms 24, regattas 30.
+- [x] Sanity: `dictHas('land', …)` over the distinct leisure cells → 27.3 % of
+      cells, 31.8 % of `msgs`, 8.6 % of `moving_msgs` are "on land". The
+      harbour signal is `marina`, not `land` (see docs/STATUS.md § S5).
 
 **Validate:**
 ```bash
@@ -500,7 +513,9 @@ the big ones as contrast.
 **Files:**
 - Create: `sql/40_ferry_trips.sql` — from `public_track`: sessionise a vessel's
   positions into port stays (SOG < 0.5 kn inside a harbour cell for ≥ 5 min) and
-  crossings; assign crossings to `ferry_route` by endpoints.
+  crossings; assign crossings to `ferry_route` by endpoints (the OSM `from`/`to`
+  tags are empty on 1 049 of the 1 324 rows and 363 rows have no name, so the
+  endpoints must come from `geom`, not from the tags).
 - Create: `sql/41_ferry_daily.sql` — trips per route per day; expected trips
   from a timetable table (`data/context/timetables.csv`, committed, hand-made
   for the small islands); cancellations = expected − observed on storm days.

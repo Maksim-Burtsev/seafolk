@@ -207,3 +207,87 @@ what it rules out.
   ClickHouse time — download-bound at 5–15 MB/s depending on the hour.
   `scripts/vm/*` stay in the repo, tested but unused; if a VM ever becomes
   available the 09-03 entry still describes how to use one.
+- 2026-09-08 (S5) — **Overpass output is read straight into ClickHouse; no
+  GeoJSON conversion step.** Marinas come as Overpass `out:csv` (TSV, because
+  this Overpass build rejects the separator argument) and are read by
+  `file(…, TSV, …)`; ferry routes come as `[out:json]; … out geom;` and are
+  read by `file(…, JSONAsString)` + `JSONExtract`; Natural Earth comes as its
+  own GeoJSON, pinned to release tag **v5.1.2** rather than master because the
+  file is regenerated in place and a silent shape change would move the
+  coastline under an already published chart. ClickHouse parses all three
+  formats natively, so the fetch script is three `curl`s and the loader is one
+  SQL file. Rules out `ogr2ogr`/GDAL, `osmtogeojson`, and any Python conversion
+  step as project dependencies — and rules out `overpass turbo`'s GeoJSON
+  export, which drops the member roles `ferry_route` needs.
+- 2026-09-08 (S5) — **The context bbox is the project bbox (lat 53–59, lon
+  3–17), not "Denmark".** `h3_hourly` covers everything the Danish AIS receivers
+  hear, which includes Kiel, the Swedish west coast and the German shore of
+  Flensburg Fjord; a context layer clipped to the Danish border would leave
+  those cells with no marina and no coastline and make them read as open sea.
+  So Kiel-Schilksee is in `marina` and in `regatta` exactly as it is in
+  `h3_hourly`. Rules out a "Denmark only" clip of the context layers, and means
+  any published count of marinas is a count in the project bbox, never a count
+  of Danish marinas — the essay must say so.
+- 2026-09-08 (S5) — **`ferry_route` is every OSM object tagged `route=ferry`,
+  ways AND relations (`nwr`), one row per object.** In Danish waters most
+  small-island lines are a single tagged way, not a route relation:
+  `relation[route=ferry]` returns 326 objects in this bbox and not one of them
+  is an Ærø route — Svendborg–Ærøskøbing, the line S8 validates chapter 03
+  against, is **way 33847154**. 1 324 rows load: 1 001 ways + 323 relations.
+  `geom` is `Array(Array(Tuple(lon, lat)))` — one entry per member way, in
+  ClickHouse geo order, **not stitched into a single line**, because member
+  order and direction in an OSM relation are not guaranteed and a wrong stitch
+  draws a ferry through land. Member ways with role `platform` /
+  `platform_entry_only` / `platform_exit_only` are excluded (101 of them here,
+  38 relations lose at least one member): they are quay outlines, not the
+  crossing. Rules out treating a row as one polyline, and rules out a
+  relations-only fetch.
+- 2026-09-08 (S5) — **`land` is Natural Earth 10 m as a `POLYGON_INDEX_EACH`
+  dictionary keyed on `(lon, lat)`.** Called as
+  `dictHas('land', (h3ToGeo(h3).2, h3ToGeo(h3).1))` — the swap is mandatory,
+  because H3 is `(lat, lon)` under `scripts/ch.sh`'s pins and ClickHouse geo
+  types are `(x, y) = (lon, lat)`. `POLYGON_INDEX_EACH` over the default
+  `POLYGON` (= `POLYGON_INDEX_CELL`) because every `clickhouse local` process
+  rebuilds the dictionary on first use, so its build cost is paid per query:
+  measured 16.4 s / 150 MB against **3.5 s / 82 MB**, identical answers on all
+  116 289 cell centres. **Oracle rule: a land assert uses an inland point
+  (Viborg, 9.4020 E 56.4531 N) and its mirror, never a coastal one** — at 10 m
+  scale the coast is generalised up to ~1 km inland and Rådhuspladsen in
+  Copenhagen reads as sea, so a coastal assert is 0 whether the dictionary is
+  right or mirrored (that is a tautology, the same class of bug that mirrored
+  the whole store in S4). Consequence for the chapters: **`land` is an
+  open-water / inland split, not a harbour / sea split** — 794 of 2 833 marina
+  cell centres (28 %) read "not land". Rules out using `dictHas('land', …)` as
+  "is this boat in a harbour"; **`marina` is the harbour signal** (1 891 res-7
+  cells hold ≥ 1 marina, 50 hold ≥ 5).
+- 2026-09-08 (S5) — **`data/context/storms.csv` and `regattas.csv` are
+  hand-collected, are the source of record, and are committed by name.** They
+  have no machine source, so the CSV *is* the data; every row carries the URL it
+  was read off, because a named storm's start is an editorial choice and the
+  essay has to be able to show whose. No row without a URL that shows the date —
+  Bornholm Rundt and Watski 2Star could not be sourced and were left out
+  entirely rather than guessed. Both are loaded strictly:
+  `date_time_input_format='basic'` (never `best_effort`, which guesses which
+  half of `05/12/2013` is the month), `input_format_skip_unknown_fields=0`,
+  `input_format_defaults_for_omitted_fields=0`, plus a verbatim header assert in
+  `scripts/test_context.sh` because a column simply *missing* from the header is
+  not an "unknown field" and no setting rejects it. `.gitignore` un-ignores the
+  two files **by name**, not by `*.csv` under `data/context/`, so a stray
+  `INTO OUTFILE` off `vessel_day` can never be one `git add` away from
+  publishing MMSIs. Scope: `regatta` covers the six years the store actually
+  holds (2015, 2018, 2021, 2024, 2025, 2026) — dates for years with no AIS data
+  would be decoration; `storm` is the whole DMI named-storm list since 2013
+  (24 rows), because chapter 04 picks its storms from that list. Rules out
+  scraping either source at build time, and rules out any `*.csv` negation in
+  `.gitignore`.
+- 2026-09-08 (S5) — **Context tables rebuild with `DROP … SYNC` + `CREATE`,
+  never `CREATE OR REPLACE`.** On an Atomic database `CREATE OR REPLACE` renames
+  the old table aside and defers the real drop by
+  `database_atomic_delay_before_drop_table_sec` (480 s); `clickhouse local`
+  exits long before that, no later process picks the work up, and the bytes stay
+  in `data/ch/store` forever with a stub in `data/ch/metadata_dropped`. Measured
+  during S5's own development: 20 orphaned `_tmp_replace_*` tables, 20.7 MB, in
+  one evening of re-runs. This is the same pattern `scripts/load.sh` already
+  uses, and `scripts/test_context.sh` now asserts that a second run of
+  `sql/04_context.sql` orphans no table and does not grow the store. Rules out
+  `CREATE OR REPLACE TABLE` anywhere in this project's SQL.

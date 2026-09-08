@@ -92,17 +92,28 @@ Last verified: 2026-09-02. Anything marked *(unverified)* still needs a check.
 - **EMODnet Human Activities** — monthly vessel density 1 km grid by ship type,
   2017 →, commercial use allowed. Cross-check for coverage drift.
 - **HELCOM** — annual density maps 2006–2024. Cross-check.
-- **DMI** — Danish weather; named storms since 2013 (Allan 2013-10-28, Bodil
-  2013-12-06, Carl 2014-03-15, Dagmar/Egon 2015-01, Freja/Gorm/Helga 2015-11/12,
-  Urd 2016-12-27, Ingolf 2017-10-29, Johanne 2018-08-10, Knud 2018-09-21,
-  Alfrida 2019-01-02, Laura 2020-03-12, Malik 2022-01-29/30, Nora 2022-02-18,
-  Otto 2023-02-17, Pia 2023-12-21/22, Rolf …). Full list: da.wikipedia
-  "Navngivne storme i Danmark".
-- **Regattas** (2025 dates): Palby Fyn Cup May 22–25 (Bogense), Fyn Rundt
-  May 30 – Jun 1 (Kerteminde), Sjælland Rundt Jun 7–15 (Helsingør), Kiel Week
-  Jun 21–29. Historical dates per year: to collect in S5.
-- **OpenStreetMap** — marinas (`leisure=marina`), ferry routes
-  (`route=ferry`), coastline. Natural Earth — land polygons.
+- **DMI** — Danish weather; named storms since 2013. Collected in S5 into
+  `data/context/storms.csv` (24 rows, committed, one source URL per row).
+  22 of the 24 come from DMI's own list,
+  `STORMS_IN_DENMARK_SINCE_1891.pdf` (last updated 2026-04-14); Alexander (2014)
+  and Sif (2024) come from a DMI news-archive page and da.wikipedia
+  "Navngivne storme i Danmark" because DMI never classified them. Where DMI and
+  Wikipedia disagree on a date (Carl, Egon, Freja, Urd, Nora, Otto, Floriane),
+  DMI wins. All rows are date-only — DMI publishes no start hour — so a storm is
+  stored as whole UTC days. Latest named storm: Dave, 2026-04-05.
+- **Regattas** — collected in S5 into `data/context/regattas.csv` (30 rows,
+  committed, one source URL per row): five events × the six years the store
+  holds (2015, 2018, 2021, 2024, 2025, 2026). Sjælland Rundt (Helsingør),
+  Silverrudder (Svendborg), Fyn Cup (Bogense — renamed from Palby Fyn Cup, so
+  the key is `Fyn Cup`), Classic Fyn Rundt (Kerteminde), Kieler Woche
+  (Kiel-Schilksee — 2021 ran in September because of Covid). Dates are the
+  racing period, not the shore week. Bornholm Rundt and Watski 2Star could not
+  be sourced per year and were left out rather than guessed.
+- **OpenStreetMap** — marinas (`leisure=marina`), ferry routes (`route=ferry`).
+  **Natural Earth** — 10 m land polygons. Both fetched by
+  `scripts/fetch_context.sh` and loaded by `sql/04_context.sql`; the files
+  themselves are not committed. See docs/DECISIONS.md 2026-09-08 for the bbox,
+  the `nwr` fetch and what the `land` dictionary can and cannot answer.
 
 ## Prior work (so we don't claim too much)
 

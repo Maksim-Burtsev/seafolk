@@ -3,8 +3,235 @@
 Newest session on top. Each entry: what was done, findings with numbers, open
 questions, and the exact next session. Write it for someone with zero context.
 
-**Next session: S5 — context layers**, `docs/PLAN.md` § S5. The store is
-rebuilt with the correct H3 grid (S4-redo below, Gate C′ passed 2026-09-08).
+**Next session: S6 — chapter 01 analysis**, `docs/PLAN.md` § S6. The store is
+rebuilt with the correct H3 grid (S4-redo, Gate C′ passed 2026-09-08) and the
+context layers are loaded (S5 below).
+
+---
+
+## S5 — Context layers — 2026-09-08 *(done)*
+
+**What was done.** Everything the four chapters join against is now in the
+store: marinas and ferry routes from OpenStreetMap, land polygons from Natural
+Earth, and two hand-collected CSVs — Denmark's named storms and the regatta
+calendar. Three new files (`scripts/fetch_context.sh`, `sql/04_context.sql`,
+`scripts/test_context.sh`) plus a `.gitignore` change that un-ignores the two
+CSVs by name. The work was split between two Opus subagents: **Task A** wrote
+the fetch script, the SQL and the test and loaded the store; **Task B** did the
+hand collection — 24 storm rows and 30 regatta rows, each with the URL it was
+read off. This session (Task C) ran the sanity queries, wrote the docs and
+committed. A `punchcard` design review ran on Task A's diff between the two and
+found nine things; all nine were fixed before anything was committed (below).
+The supervising session re-checked six of the CSV source URLs by hand — DMI's
+storm-list PDF rows for Knud, Malik, Pia and Dave; Sjælland Rundt 2018 and
+2024; Fyn Cup 2025; Silverrudder 2018; Kieler Woche 2021 — 6 of 6 match.
+
+### Validate — real output
+
+```
+$ scripts/ch.sh -q "SELECT count() FROM marina; SELECT count() FROM ferry_route;
+                    SELECT count() FROM storm; SELECT count() FROM regatta"
+2833
+1324
+24
+30
+
+$ scripts/test_context.sh                     → ALL PASS  (26 asserts, 4.4 s,
+                                                 on the throwaway store data/ch_test)
+
+$ du -sh data data/context                    → 12G data · 14M data/context
+$ df -h . | tail -1                           → 251Gi free of 460Gi (41 % used)
+$ ls data/ch/metadata_dropped | wc -l         → 0
+```
+
+Sanity, over the 85 862 distinct H3 cells that hold Class B leisure traffic
+(`mobile = 'Class B' AND ship_group = 'leisure'`; the land lookup is joined once
+per cell, not per row — 4.2 s):
+
+```
+$ scripts/ch.sh -q "WITH cells AS (SELECT h3, sum(msgs) m, sum(moving_msgs) mm
+      FROM h3_hourly WHERE mobile='Class B' AND ship_group='leisure' GROUP BY h3),
+    tagged AS (SELECT h3, m, mm,
+      dictHas('land', (h3ToGeo(h3).2, h3ToGeo(h3).1)) AS is_land,
+      h3 IN (SELECT DISTINCT h3 FROM marina)          AS has_marina FROM cells)
+    SELECT … FROM tagged"
+
+   ┌─what───────────┬─pct_on_land─┬─pct_in_marina_cell─┐
+1. │ distinct cells │       27.33 │               1.65 │
+2. │ msgs           │       31.82 │              59.66 │
+3. │ moving_msgs    │        8.57 │              13.84 │
+   └────────────────┴─────────────┴────────────────────┘
+
+cells 85 862 · msgs 1 704 519 180 · moving_msgs 700 023 679
+on land          23 469 cells ·   542 386 424 msgs ·  59 993 080 moving
+in a marina cell  1 420 cells · 1 016 879 565 msgs ·  96 895 936 moving
+both                880 cells
+
+$ scripts/ch.sh -q "SELECT countIf(l), countIf(NOT l), uniqExact(h3) FROM
+      (SELECT h3, dictHas('land',(h3ToGeo(h3).2, h3ToGeo(h3).1)) l FROM marina)"
+2039 marinas in a 'land' cell · 794 in a 'water' cell · 1 891 distinct cells
+```
+
+### Findings
+
+- **The context layers, in numbers.** `marina` 2 833 rows (1 684 nodes,
+  1 086 ways, 63 relations, arriving as `out center;` points; 475 unnamed, kept
+  — S7 counts places, not names) in **1 891** distinct res-7 cells, of which
+  **50** hold ≥ 5 marinas. `ferry_route` 1 324 rows = **1 001 ways + 323
+  relations** (Overpass returned 1 330 elements; 3 relations carry no member
+  geometry and 3 are `route=ferry` *nodes*, i.e. terminals — all six dropped).
+  `land_src` 11 features holding **6 837** polygon rings. `storm` 24,
+  `regatta` 30.
+- **60 % of all leisure messages come from the 1.65 % of cells that hold a
+  marina — but only 14 % of the *moving* ones.** That is the whole harbour
+  signal in one line: leisure boats broadcast most of their existence tied up.
+  The ratio inverts at sea (8.6 % of moving messages are in an "on land" cell
+  against 31.8 % of all messages).
+- **`land` does not mean "harbour".** Natural Earth 10 m generalises the coast
+  up to ~1 km inland, so **794 of 2 833 marina cell centres (28 %) read "not
+  land"** — Rådhuspladsen in Copenhagen is "not land", and Troense's own cell
+  centre is water (verified independently with shapely against the same
+  GeoJSON). Treat `land` as an **open-water vs inland** split and use `marina`
+  whenever the question is "harbour or sea". S6 onwards must not assert a
+  point near a shore against this dictionary.
+- **Over the whole grid, 35 649 of the 116 289 distinct `h3_hourly` cells
+  (30.7 %) have a centre on land** — the same lookup, all classes.
+- **Dictionary cost: 3.55 s per `clickhouse local` process, every process.**
+  Measured twice back to back (3.58 s / 3.53 s) for a single `dictHas` call,
+  which is the load; the scan over all 116 289 cell centres on top of it costs
+  ~0.5 s (4.0 s total). `POLYGON_INDEX_EACH` bought that — the default
+  `POLYGON` layout was 16.4 s / 150 MB for identical answers.
+- **The OSM `from`/`to` tags are nearly useless.** Both empty on **1 049 of
+  1 324** rows (either one empty on 1 054; both set on only 270), and **363**
+  rows have no `name` at all. S8 must derive crossings from `geom`'s endpoints,
+  not from the tags. Related: Svendborg–Ærøskøbing, the line S8 validates
+  chapter 03 against, is an OSM **way (33847154)**, not a relation — a
+  relations-only fetch returns 326 objects here and not one Ærø route.
+- **101 pier ways were excluded from `geom`.** Ferry relations carry their two
+  quays as member ways with role `platform` / `platform_entry_only` /
+  `platform_exit_only`; fed into `geom` they draw a box on the harbour wall at
+  each end of every line. 38 relations lost at least one member this way; none
+  was left with nothing to draw.
+- **122 ferry rows reach outside the project bbox.** Overpass returns whole
+  objects that merely touch the bbox, so Smyril Line runs to Iceland: the
+  stored points span lon −14.0 … 25.2 and lat 52.5 … 65.3. Expected, not a bug —
+  but S8 must clip, and `scripts/test_context.sh`'s bounds check is loose
+  (50…70 N, −20…30 E) for exactly this reason while still catching a swap.
+- **Storms: 24 rows, 22 of them from DMI's own list.**
+  `STORMS_IN_DENMARK_SINCE_1891.pdf`, last updated 2026-04-14. Alexander (2014)
+  and Sif (2024) are named storms DMI never classified, so they are absent from
+  that PDF and come from a DMI news-archive page and da.wikipedia. Every row is
+  **date-only** — DMI publishes no start hour — stored as whole UTC days. Where
+  DMI and Wikipedia disagree (Carl, Egon, Freja, Urd, Nora, Otto, Floriane),
+  DMI wins. No named storm after **Dave, 2026-04-05**.
+- **A storm↔regatta link for chapter 04 already exists in the data:**
+  **Knud (2018-09-21) postponed the Silverrudder start by one day** to
+  2018-09-22 (DR article, cited in the CSV row). Both 2018 rows are in the
+  store's data, so chapter 04 can show a race start moving inside the archive.
+- **Regattas: 30 rows = 5 events × the 6 years the store holds** (2015, 2018,
+  2021, 2024, 2025, 2026). Dates for years with no AIS data would be
+  decoration. Palby Fyn Cup has been renamed, so the stable key is `Fyn Cup`;
+  Kerteminde's race is `Classic Fyn Rundt` (~50 boats — under the "≥ 100 boats"
+  idea in the plan, but the plan names it); Kieler Woche 2021 ran in
+  **September**, not June (Covid); Sjælland Rundt uses the racing period, not
+  the shore week. Silverrudder and the 2015/2018 Sjælland Rundt rows have
+  `start_date = end_date` because no finish date was published. Bornholm Rundt
+  and Watski 2Star could not be sourced per year and were left out rather than
+  guessed.
+
+### Design review
+
+`punchcard:punchcard` on the first version of the three code files (three
+independent finder passes + a judge): **🟠 Ship after #1–#3**, nine findings.
+All nine were fixed before the first commit.
+
+1. **The CSV loads were `best_effort` with defaults for omitted fields** — a
+   header typo loaded `1970-01-01` silently. Now
+   `date_time_input_format='basic'`, `input_format_skip_unknown_fields=0`,
+   `input_format_defaults_for_omitted_fields=0`, a **verbatim header assert**
+   for both files (a *missing* column is not an "unknown field" — no setting
+   catches it), and range asserts: `start_utc >= 2013`, `year = toYear(start_date)`,
+   every regatta inside the bbox.
+2. **`CREATE OR REPLACE TABLE` leaks the whole table.** Under `clickhouse local`
+   the real drop is deferred 480 s (`database_atomic_delay_before_drop_table_sec`)
+   and the process exits first — **20 orphaned `_tmp_replace_*` tables, 20.7 MB,
+   had accumulated in `data/ch` in one evening of re-runs**. Now `DROP … SYNC` +
+   `CREATE`, the same pattern `scripts/load.sh` uses; the orphans were cleaned
+   once; the test asserts a second run orphans nothing and does not grow the
+   store.
+3. **The test wrote to the production store.** Now runs on
+   `CH_PATH=data/ch_test` like `test_load.sh`, and the `pgrep` guard it needed
+   is gone with it.
+4. **A partial Overpass reply would have been frozen in forever.** Overpass
+   reports a timeout or memory bail as HTTP 200 with a `remark` key and however
+   many elements it managed, and a downloaded file is never re-fetched. Now the
+   `remark` is rejected, and so is a header-only TSV.
+5. **Pier ways were in `geom`** (role `platform*`) — now only route-leg roles.
+6. **`POLYGON` → `POLYGON_INDEX_EACH`** on the `land` dictionary: 16.4 s → 3.5 s
+   per process, same answers.
+7. **A vacuous assert was removed.** The "swapped Copenhagen" land assert is 0
+   whether the dictionary is right or mirrored, because Rådhuspladsen is outside
+   the generalised polygons anyway. Replaced by Viborg, ~50 km inland, which
+   bites in both directions.
+8. **`.gitignore` negated `*.csv` inside `data/context/`** — one stray
+   `INTO OUTFILE` off `vessel_day` away from committing MMSIs. Now the two files
+   are un-ignored **by name**; the anchoring change `data/` → `data/*` that came
+   with it is documented in the file (`data/` matched a `data` directory at any
+   depth, `data/*` only the one at the repo root).
+9. **No stored coordinate was checked against the bbox.** Three hard-coded-bound
+   asserts added — `geom` points, `marina.h3` cell centres (with the 0.1° slack
+   `test_load.sh` uses, since a res-7 cell is ~5 km across), regatta lat/lon.
+
+Two findings the reviewer raised and this session did **not** act on:
+`curl -s` hides the HTTP status when a fetch fails (cosmetic — `-f` still stops
+the script and the URL is right there); and the emptiness of `from`/`to` is a
+fact about OSM, not a defect in the loader (recorded as a finding above and as a
+note in `docs/PLAN.md` § S8 instead).
+
+### Deviations from `docs/PLAN.md` § S5
+
+- **`nwr[route=ferry]`, not `relation[route=ferry]`.** The plan implied route
+  relations. In Danish waters most island lines are a single tagged way and a
+  relations-only fetch has **zero** Ærø routes — including the one S8 validates
+  against. The plan text has been corrected.
+- **TSV and OSM JSON, not GeoJSON.** The plan said "→ GeoJSON in
+  `data/context/`". ClickHouse reads Overpass's `out:csv` and `[out:json]`
+  natively, so no converter (`ogr2ogr`, `osmtogeojson`) enters the project.
+  Natural Earth is still GeoJSON — that is the format it ships.
+- **`scripts/test_context.sh` was added**, which the plan did not list. It runs
+  `sql/04_context.sql` itself against a throwaway store `data/ch_test`, never
+  the production one.
+- **Regattas are scoped to the six years the store holds**, not "2014–2026".
+  Dates for years with no AIS data are decoration.
+- **The land oracle is Viborg, not Copenhagen.** Natural Earth 10 m generalises
+  the coastline ~1 km inland, so a coastal assert proves nothing (finding 7).
+- **`h3_land` was not materialised.** `dictHas` over all 116 289 distinct cells
+  is 4.0 s wall including the 3.55 s dictionary load, which is cheap enough that
+  a precomputed table would only be a second thing to keep in sync.
+
+### Open questions for S6
+
+Carried unchanged from S4-redo:
+
+- `sql/13_coverage_daily.sql` keys on `toDate(ts_min)` and therefore mis-reports
+  a monthly file as a single day. Still unfixed.
+- The part-directory / cold-start question. Measured again this session:
+  `scripts/ch.sh -q "SELECT 1"` is **0.16–0.18 s wall** (0.002 s of it inside
+  ClickHouse), so process start, not the store's part directories, is the whole
+  cold-start cost. Not a problem for S6.
+- The Sep-2015 duplication mask still has to be applied in S10.
+
+New from S5:
+
+- **Materialise `h3_land` if S6 runs more than a few land queries.** The
+  dictionary costs 3.55 s in *every* `clickhouse local` process; a table of
+  116 289 (h3, is_land) rows would pay that once. Not done — see deviations.
+- **S8 must match ferry crossings by `geom` endpoints**, not by the `from`/`to`
+  tags (empty on 1 049 of 1 324 rows).
+- **`land` is not a harbour test.** Use `marina` for "is this cell a harbour";
+  28 % of marina cell centres read "not land".
+
+**Next session: S6 — chapter 01 analysis.** Read `docs/PLAN.md` § S6.
 
 ---
 
