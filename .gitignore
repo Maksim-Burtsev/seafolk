@@ -1,9 +1,25 @@
-# data — never committed
-data/
+# Data is never committed — with one exception: the two hand-collected context
+# CSVs have no machine source, so they ARE the source and they live in git.
+# They are named one by one, not matched by `*.csv`: anything else that lands in
+# data/context/ is machine output, and a stray `INTO OUTFILE 'data/context/x.csv'`
+# off vessel_day would otherwise be one `git add` away from publishing MMSIs.
+# Order matters. A negation cannot resurrect a file whose parent directory is
+# excluded, hence `data/*` + `!data/context/` rather than a blanket `data/`; and
+# the `*.csv` line has to come first, because the last matching pattern wins.
+# Note the anchoring change that came with it: `data/` matched a `data`
+# directory at ANY depth, `data/*` only the one at the repo root. Nested data
+# directories — site/data/ for the S12 build, notes/data/ — are no longer
+# ignored by these lines. site/data is wanted in git; the rest is covered by the
+# extension patterns above.
 *.zip
 *.csv
 *.parquet
 *.pmtiles
+data/*
+!data/context/
+data/context/*
+!data/context/storms.csv
+!data/context/regattas.csv
 
 # local tooling
 .venv/
