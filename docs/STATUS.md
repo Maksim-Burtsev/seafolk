@@ -174,6 +174,7 @@ Sep-2015 duplication mask for S10. New from S6:
 
 **Next session: S7 — chapter 02 analysis: the pulse.** Read `docs/PLAN.md` § S7.
 
+---
 
 ## S5 — Context layers — 2026-09-08 *(done)*
 
