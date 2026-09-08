@@ -3,8 +3,103 @@
 Newest session on top. Each entry: what was done, findings with numbers, open
 questions, and the exact next session. Write it for someone with zero context.
 
-**Next session: S4-redo** — the reload on a rented VM, `docs/PLAN.md` § S4-redo.
-The first store was mirrored (below) and has been deleted; S5 runs after it.
+**Next session: S5 — context layers**, `docs/PLAN.md` § S5. The store is
+rebuilt with the correct H3 grid (S4-redo below, Gate C′ passed 2026-09-08).
+
+---
+
+## S4-redo — The reload, run locally — 2026-09-06 → 09-08 *(Gate C′ passed)*
+
+**What happened.** The plan said a rented VM. On 2026-09-06 the user dropped
+that: one provider had banned the account, the rest want ID or a deposit, and
+he did not want to register anywhere. So the reload ran on the Mac Mini,
+exactly as S4 had, with the fixed loader (`2c1215f`) — the user left for two
+days and this session drove it. `docs/DECISIONS.md` 2026-09-08.
+
+**How it ran.** One `tmux` session `queue`, the three queues chained with `&&`
+in the order **daily → storms → ref-years** (the plan had storms last; the
+short queues first means an early return finds the dailies and the storms
+complete). Started 18:51 local with the runner's default `AHEAD=3`; measured
+the archive at ~1.1–1.4 MB/s per stream with the link idle, stopped the runner
+after 7 files (SIGTERM — lock released, prefetcher and its curls gone, nothing
+orphaned) and restarted at 19:11 with **`AHEAD=8` for the dailies, `4` for
+the monthlies** — the values `scripts/vm/night.sh` was written with. Held the
+machine awake with `caffeinate -i -s -w <chain pid>` (the five-minute
+`caffeinate` that Claude Code itself runs lapses between checks; `sleep 60`
+would have stopped the queue mid-night). No other intervention.
+
+```
+wall        2026-09-06 14:56:59 → 2026-09-08 01:50:30 UTC   = 34 h 54 min
+downloaded  1 233 GB, 949 archives   (909 daily · 4 storm · 36 reference months)
+clickhouse  15 859 s of loading in total  (4.4 h of the 35 — download-bound)
+link        5–15 MB/s by hour of day: ~5 MB/s evenings, ~11 overnight, 15 mid-morning
+incidents   7 "Connection reset by peer" on one batch (curl resumed, no data lost) · 0 STOP
+dialects    12 pre-2016-10 months (2015) · 937 modern
+```
+
+### Validate — real output
+
+```
+$ scripts/test_load.sh                      → ALL PASS  (46 asserts, incl. the Copenhagen oracle)
+$ SELECT count() FROM load_log              → 949
+$ SELECT sum(msgs) = (SELECT sum(rows_kept) FROM load_log) FROM h3_hourly   → 1
+$ SELECT count() FROM h3_hourly WHERE h3 = 608531686258376703               → 35768   (Copenhagen exists)
+$ … DISTINCT h3 WHERE h3ToGeo(h3).1 NOT BETWEEN 52.9 AND 59.1               → 0       (no mirrored cell)
+$ SELECT toYear(day), count(DISTINCT day) FROM vessel_day GROUP BY 1
+    2015 365 · 2018 365 · 2021 365 · 2022 59 · 2023 59 · 2024 306 · 2025 365 · 2026 238   (2 122 days)
+$ df -h . && du -sh data/ch                 → 264 GB free · data/ch 11 GB · data/raw empty
+```
+
+**Gate C′: PASSED.** 949 files, invariant exact, Copenhagen non-empty, zero
+mirrored cells, no VM to destroy, 11 GB ≤ 40 GB.
+
+### Findings
+
+- **The grid is right this time, by three independent readings.** (1) The
+  hard-coded Copenhagen cell from the Python `h3` library holds 35 768 rows.
+  (2) All **116 289** distinct cells have their centre inside the Danish bbox
+  (lat 52.9–59.1, lon 2.9–17.1); the mirrored store had 217 949 cells with
+  0 inside. (3) The six busiest cells decode to real harbours without any
+  swap — the top one at 57.716 N 10.588 E is Skagen (853 M messages), then
+  57.599/9.953, 57.124/8.585, 56.703/8.208, 56.002/8.126, 57.488/10.505: the
+  same Jutland ports the S4-redo prep entry had to un-mirror to recognise.
+- **Every count matches the old store.** 29 669 027 495 rows kept = the
+  mirrored store's 28 368 283 499 + the four storm months' 1 300 743 996,
+  exactly. Nothing but the grid changed, as the prep entry predicted.
+- **`vessel_day.home_h3` is clean too:** 8.84 M vessel-days, 0 with an empty
+  home cell, 0 with a home cell outside the bbox.
+- **The store is smaller than the mirrored one: 11 GB against 13.** Same rows;
+  the cells are now 116 k instead of 218 k (a real grid clusters traffic into
+  fewer cells than a skewed projection did), so the parts compress better.
+- **The link, not the CPU, is the whole clock.** 4.4 h of ClickHouse time in
+  35 h of wall. The archive caps a single stream at ~1.1–1.4 MB/s and the
+  home link at 5–15 MB/s depending on the hour, so `AHEAD=8` roughly doubled
+  the daily throughput over `AHEAD=3` (≈ 30 → 65–85 files/h).
+
+### Design review
+
+Skipped — docs-only session. No line under `sql/`, `scripts/`, `site/` or
+`notes/` changed; the loader ran as reviewed in the prep entry (`3803bdc`).
+
+### Deviations from `docs/PLAN.md` § S4-redo
+
+- Ran on the Mac Mini, not a VM (user's decision 2026-09-06). `scripts/vm/*`
+  and the plan's VM steps stand as written and tested; marked unused.
+- Queue order daily → storms → ref-years instead of daily → ref-years → storms.
+- One restart after 7 files to raise `AHEAD`; the runner resumed from
+  `load_log` and the seven partially downloaded zips resumed with `-C -`.
+- No Opus subagents were dispatched: there was nothing to implement, only to
+  watch. The supervising session made the one intervention itself
+  (memory rule: incident response may be direct, and is recorded here).
+
+### Open questions for S5
+
+Unchanged from S4-tails: `sql/13_coverage_daily.sql` keys on `toDate(ts_min)`
+and mis-reports monthly files; the part-directory / cold-start question; the
+Sep-2015 duplication mask for S10. New: the 2022/2023 storm months exist now
+(59 + 59 days) and chapter 04's validation storms can be checked in S9.
+
+**Next session: S5.** Read `docs/PLAN.md` § S5.
 
 ---
 

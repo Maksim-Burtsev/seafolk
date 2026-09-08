@@ -38,7 +38,7 @@ export, with a test.
 | Phase | Sessions | Ends with |
 |-------|----------|-----------|
 | 0 · Prove the story | S1–S3 | Three real charts from a few days and two full months; Class B confirmed |
-| 1 · Fill the lake | S4–S5 | 2024 → today daily + reference years + storm months aggregated **with a correct H3 grid** (S4-redo, on a VM); context layers loaded |
+| 1 · Fill the lake | S4–S5 | 2024 → today daily + reference years + storm months aggregated **with a correct H3 grid** (S4-redo, done locally 2026-09-08); context layers loaded |
 | 2 · Analyse | S6–S10 | One notebook of findings per chapter + the honesty layer |
 | 3 · Publish data | S11 | Parquet on GitHub Releases + Hugging Face + Zenodo (DOI), data card, privacy test |
 | 4 · Tell it | S12–S14 | Essay (RU/EN), explorer, posters |
@@ -249,7 +249,7 @@ day → (a) is ~15 GB, (b) straight-lines to ~72 GB against a 70 GB budget, so
 
 ---
 
-## S4 — Bulk runner: nights, resume, disk guard *(done — but every cell was mirrored; the store was deleted 2026-09-03 and is rebuilt in § S4-redo. The runner itself stands.)*
+## S4 — Bulk runner: nights, resume, disk guard *(done — but every cell was mirrored; the store was deleted 2026-09-03 and rebuilt in § S4-redo. The runner itself stands.)*
 
 **Goal:** Make the queue runner safe to leave unattended for nights: disk guard,
 resume, progress, one log line per file, and a summary at the end.
@@ -330,7 +330,7 @@ usage, and the next queue to run. Nothing in `data/raw` except the file in fligh
 
 ---
 
-## S4-redo — The reload: one rented VM, one command each way *(next)*
+## S4-redo — The reload *(done — ran locally on the Mac Mini 2026-09-06 → 09-08, Gate C′ passed; the VM scripts below were written and tested but not used)*
 
 **Why:** S4 loaded 945 archives through `geoToH3(lon, lat, 7)` on ClickHouse
 26.7, which has taken `(lat, lon)` since 25.5 (PR #78852, *Backward
@@ -342,9 +342,14 @@ Evidence and the decision not to remap: `docs/STATUS.md` § S4-redo,
 `docs/DECISIONS.md` 2026-09-03. Counts, `dist_nm` and `public_track` were
 never wrong; only the grid was.
 
-**Where:** a rented Linux VM, because the laptop link (~11 MB/s) makes this a
+**Where (as planned):** a rented Linux VM, because the laptop link (~11 MB/s) makes this a
 two-day job and a 1 Gbit machine next to the Danish S3 makes it a night. The
 loader, the runner and the store format are unchanged; only the machine is.
+
+**Where (as run):** the Mac Mini itself — no VM account the user was willing to
+open (`docs/DECISIONS.md` 2026-09-08). The three queues ran chained in one
+`tmux` session, `AHEAD=8` / `4` / `4`, order daily → storms → ref-years so
+the short queues finished first. 34 h 54 min wall, `docs/STATUS.md` § S4-redo.
 
 | | |
 |---|---|
@@ -369,17 +374,17 @@ loader, the runner and the store format are unchanged; only the machine is.
   Nora, Otto, Pia: chapter 04's validation storms, never in scope (a)).
 
 **Do — the night:**
-- [ ] Operator (ten minutes, then sleep): create the instance with the public
+- [x] ~~Operator (ten minutes, then sleep): create the instance~~ *(not done — no VM; the operator said go and left)*: create the instance with the public
       key from `~/.ssh/seafolk_vm.pub`; create a provider API token; hand the
       session the IP and the token in an environment variable.
-- [ ] `ssh -i ~/.ssh/seafolk_vm root@IP 'bash -s' < scripts/vm/bootstrap.sh`
-- [ ] `ssh -i ~/.ssh/seafolk_vm root@IP 'cd seafolk && scripts/vm/night.sh'`
-- [ ] Every couple of hours: `ssh … tail -3 seafolk/data/progress.tsv`, report
+- [x] *(replaced by the local tmux chain)* `ssh -i ~/.ssh/seafolk_vm root@IP 'bash -s' < scripts/vm/bootstrap.sh`
+- [x] *(replaced by the local tmux chain)* `ssh -i ~/.ssh/seafolk_vm root@IP 'cd seafolk && scripts/vm/night.sh'`
+- [x] Every couple of hours: `ssh … tail -3 seafolk/data/progress.tsv`, report
       ETA, rate and free disk to the user in the chat. Never query the store
       on the VM while the queue runs (exclusive lock — `docs/DECISIONS.md`).
-- [ ] Morning: `scripts/vm/pull.sh IP` (no `data/ch` may exist locally — the
+- [x] *(no pull needed — the store was built in place; the same checks ran as Validate)* Morning: `scripts/vm/pull.sh IP` (no `data/ch` may exist locally — the
       operator deleted it on purpose). Read its verification block.
-- [ ] Destroy the instance through the API, then tell the operator to log out.
+- [x] *(nothing to destroy)* Destroy the instance through the API, then tell the operator to log out.
       Check the exact call against the provider's docs that night; the shapes:
       Vultr `DELETE https://api.vultr.com/v2/instances/{id}` with
       `Authorization: Bearer $VULTR_API_KEY`; Hetzner
@@ -403,6 +408,7 @@ running charges; `data/ch` is on the laptop and nowhere else.
 
 **Gate C′:** 949 files in `load_log`, invariant exact, Copenhagen's cell
 non-empty, zero mirrored cells, VM destroyed, `data/ch` ≤ 40 GB.
+**PASSED 2026-09-08** — 949 · exact · 35 768 rows · 0 · no VM existed · 11 GB.
 
 **Commit:** `data(s4-redo): store rebuilt on a VM with the correct H3 grid`
 

@@ -197,3 +197,13 @@ what it rules out.
   `scripts/vm/pull.sh` brings the tarball straight to the laptop and nothing is
   uploaded anywhere else. Rules out snapshots, object-storage copies, or a
   long-lived VM.
+- 2026-09-08 (S4-redo) — **The reload ran on the Mac Mini after all, not on a
+  VM.** Supersedes the 2026-09-03 VM entry for this run: one provider had
+  banned the account, the others want ID or a deposit, and the user chose not
+  to open any (decision 2026-09-06). Same loader, same runner, the three queues
+  chained in one `tmux` session with `AHEAD=8` for dailies and `4` for
+  monthlies; `caffeinate -i -s -w <chain pid>` held the machine awake for the
+  run's lifetime. 949 archives, 1.23 TB, 34 h 54 min wall, ~4.4 h of that
+  ClickHouse time — download-bound at 5–15 MB/s depending on the hour.
+  `scripts/vm/*` stay in the repo, tested but unused; if a VM ever becomes
+  available the 09-03 entry still describes how to use one.
