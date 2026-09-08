@@ -3,11 +3,177 @@
 Newest session on top. Each entry: what was done, findings with numbers, open
 questions, and the exact next session. Write it for someone with zero context.
 
-**Next session: S6 — chapter 01 analysis**, `docs/PLAN.md` § S6. The store is
-rebuilt with the correct H3 grid (S4-redo, Gate C′ passed 2026-09-08) and the
-context layers are loaded (S5 below).
+**Next session: S7 — chapter 02 analysis: the pulse**, `docs/PLAN.md` § S7.
+Chapter 01's findings are in `notes/ch01-findings.md` (S6 below); the store
+and context layers are unchanged since S5.
 
 ---
+
+## S6 — Chapter 01 analysis: the shape of summer — 2026-09-09 *(done)*
+
+**What was done.** The first analysis session. Five query files
+`sql/20_season_bounds.sql` … `sql/24_night.sql`, a plot script
+`notes/plot_ch01.py` (three PNGs in `notes/img/ch01-*.png`, plus every number
+the note quotes, printed) and `notes/ch01-findings.md` with ten numbered
+findings, each with its query file, a claim → query table and a caveats
+section. No line under `scripts/` or `sql/0*` changed; the store was read, never
+written. Roles: two Opus subagents implemented (task A the SQL, task B the
+plots and the note, task C the review fixes); this session reviewed at each
+checkpoint, ran the design review and the Validate commands, wrote the docs
+and committed. `docs/DECISIONS.md` gained two lines (the season definition,
+the evening-departure proxy); `docs/PLAN.md` § S6 was corrected to what
+exists.
+
+### Validate — real output
+
+```
+$ for f in sql/2[0-4]_*.sql; do time scripts/ch.sh "$f" > /dev/null; done
+sql/20_season_bounds.sql     0.44 s
+sql/21_weekend_effect.sql    0.31 s
+sql/22_regatta_spikes.sql    0.37 s
+sql/23_radius.sql            0.32 s
+sql/24_night.sql             1.65 s                      (budget: 60 s each)
+
+$ grep -c 'sql/2[0-4]_' notes/ch01-findings.md         → 43   (≥ 5 required)
+$ grep -rEn '\b[0-9]{9}\b' notes/ch01-findings.md notes/plot_ch01.py | wc -l   → 0   (no MMSI)
+$ uv run --project notes notes/plot_ch01.py            → all asserts pass,
+      wrote notes/img/ch01-season.png, ch01-regatta.png, ch01-radius.png
+$ du -sh data data/ch ; df -h . | tail -1 ; ls data/raw | wc -l
+12G data · 11G data/ch · 251Gi free of 460Gi (41 %) · data/raw empty
+```
+
+The printed numbers behind the note (excerpt of `plot_ch01.py`'s output):
+
+```
+== season bounds (sql/20) ==
+2015  peak 2015-08-07 at 1165.3   25% 05-14..10-05 = 145 d   50% 06-30..08-28 = 60 d
+2018  peak 2018-07-27 at 2177.1   25% 05-04..09-20 = 140 d   50% 05-23..08-19 = 89 d
+2021  peak 2021-07-27 at 3034.6   25% 05-14..09-24 = 134 d   50% 06-09..09-10 = 94 d
+2024  peak 2024-07-25 at 3783.7   25% 05-08..09-27 = 143 d   50% 06-25..09-09 = 77 d   start-censored
+2025  peak 2025-07-20 at 4219.6   25% 05-01..09-25 = 148 d   50% 06-17..08-24 = 69 d
+2026  peak 2026-07-17 at 5178.3   25% 05-14..08-26 = 105 d   50% 06-23..08-19 = 58 d   end-censored
+== weekend / weekday, May-Sep (sql/21) ==
+2015 1.388x · 2018 1.263x · 2021 1.284x · 2024 1.289x · 2025 1.292x · 2026 1.133x (to Aug 26)
+== late start, first position after 15:00 local, May-Sep (sql/21) ==
+2015  Mon-Thu  9.78%  Fri 14.72% (1.50x)  Sat 6.45% (0.66x)  Sun 5.96% (0.61x)
+2025  Mon-Thu 10.26%  Fri 12.35% (1.20x)  Sat 6.99% (0.68x)  Sun 5.34% (0.52x)
+== regattas (sql/22), event mean ratio ==
+Silverrudder 3.13 (2015) · 3.08 · 4.46 · 5.68 (2024) · 5.00 (2025)
+Kieler Woche 2025: 06-21 2.81 · 06-22 3.14 · 06-24 0.21 · 06-27 0.28 · 06-28 0.44
+```
+
+### Findings
+
+Full text with charts: `notes/ch01-findings.md`. The headlines:
+
+1. **The season's edges are fixed, its core is not** (`sql/20`). Over the four
+   uncensored years the 25 % season is **134–148 days** (spread 14) while the
+   fleet in it grew 3.6× (peak 1 165 → 4 220); the 50 % core is **60–94 days**
+   (spread 34) with no trend. The outer edge is a calendar; the middle is
+   weather.
+2. **The peak walked three weeks earlier, monotonically** (`sql/20`):
+   Aug 7 (2015) → Jul 27 → Jul 27 → Jul 25 → Jul 20 → Jul 17 (2026).
+3. **The summer weekend is a flat 1.26–1.29× from 2018 on** (`sql/21`), while
+   the winter ratio falls 1.71 → 1.88 → 1.45 → 1.49 → 1.28.
+4. **Friday late starts are real and the premium is shrinking** (`sql/21`):
+   Friday 1.50× Mon–Thu in 2015/2018, 1.20–1.33× in 2024–2026; Sat/Sun steady
+   at 0.52–0.68×. A proxy, stated as one (`docs/DECISIONS.md` 2026-09-09).
+5. **Silverrudder is the regatta signal: 3.1× → 5.7×** (`sql/22`); the other
+   Danish events wander 1.0–3.0 with no trend.
+6. **The last day of a multi-day regatta is the quiet day** (`sql/22`): mean
+   first-day ratio 2.45, last-day 1.29; the last day is the event minimum in
+   12 of 16 Danish event-years.
+7. **Kieler Woche 2025's collapsed days (0.21 / 0.28 / 0.44) are not a
+   receiver gap** (`sql/22` + ad-hoc): Class A rose on the quiet day (57 → 70
+   vessels, all 24 hours present); only Class B fell (49 → 14).
+8. **43–46 % of all leisure vessel-days never exceed 0.5 kn**, every year
+   (`sql/23`); median moved-day distance 16.8 nm (2015) → 12.6 (2021) → 14.0
+   (2025); share ≥ 30 nm 25.6 % → 18.5 % → 19.9 %.
+9. **82 % of vessel-days begin in a res-7 cell that holds a marina, flat in
+   every year** (`sql/23`, ring 0: 81.9–82.9 %). Ring 1 is saturated at 92 %.
+   Class B fishing scores ~82 % on the same measure, so this is a small-vessel
+   harbour signal, not proof of a marina berth.
+10. **Leisure night share is 4.3–4.8 % every summer against 17.7–23.2 % for
+    ferries** (`sql/24`). Winter leisure night share steps 0.041–0.055
+    (2015/2018) → 0.070–0.082 (2021+) — **an S10 question, not a claim**; the
+    2022/2023 winter samples read 0.18–0.19 and are driven by a handful of
+    cells with < 5 vessels (caveat in the note, nothing cell-level exportable).
+
+### Design review
+
+`punchcard:punchcard` on the six code files, three independent finder passes
+as subagents plus a judge: **🟠 Ship after #1**, five findings, **all five
+accepted and fixed** before the commit (task C), each fix re-run:
+
+1. 🔴 *The ±7-day baseline of a 9-day regatta included its own race days.*
+   Kieler Woche's days 1–2 and 8–9 baselined each other (the 2025-06-28 row
+   had `base_max = 216`, the opening day). Fixed: a baseline day inside the
+   event's own `[start_date, end_date]` is dropped (`base_days` 3 on those
+   rows). Only Kieler Woche rows moved, as predicted; finding 7 was rewritten
+   (0.291 → 0.443, 3.30/3.18 → 2.81/3.14) and says so.
+2. 🟡 *`sql/24`'s `covered` ran before the Sep-2015 exclusion*, so local
+   2015-08-28 survived with two hours, both night. Fixed: the exclusion is
+   applied in a base CTE both `covered` and `local` read. 2015 May–Sep is now
+   118 local days (34 excluded + 2015-06-24, a 21-hour receiver gap).
+3. 🟡 *Two conventions for "is a short day a day"*: sql/11/12/24 drop local
+   days without 24 hours, sql/20–23 count UTC days whole. Exactly two short
+   UTC days exist (2015-06-24 21 h, 2018-05-17 20 h). Accepted the minimal
+   remedy: the four headers say so and why; `plot_ch01.py` asserts day
+   contiguity per year. No filter added.
+4. 🟡 *Data values hard-coded in the plot* (p99 range in a title, y-limits).
+   Now derived from the data.
+5. 🟡 *Vacuous asserts.* Added checks with independent literals: weekend ratio
+   in (0.8, 3); late-start share > 0.08 for Mon–Thu (a UTC-for-local slip
+   halves it to ~0.06 — demonstrated by a finder); `in_cell <= near`;
+   `1 <= base_days <= 4` and `ratio > 0`; the Python 7-day mean at `peak_day`
+   equals `sql/20`'s `peak_7d` within 0.06. `numbers()` now prints the
+   finding-6 and Kieler figures the note quotes.
+
+Notes taken without a card and left as they are: `covered` drops the DST
+spring-forward Sunday every year (inherited from sql/11, now stated in
+sql/24's header); the `May-Sep` season rule is written in sql/21 and sql/24
+separately (two copies, no shared mechanism between clickhouse-local files
+short of a view — not worth one yet); the leisure filter appears in every
+query file, which is the house pattern since sql/10. Three note errors the
+finders caught were fixed: Silverrudder 2018-09-22 is a Saturday, not a
+Friday; finding 9's ring-0 range omitted 2018; finding 9's wording now says
+"a cell that holds a marina".
+
+### Deviations from `docs/PLAN.md` § S6
+
+- **"Friday evening departures (first moving hour after 15:00)" is a proxy**:
+  first *position* after 15:00 local on a day the boat moved. The first moving
+  hour per vessel is not in the aggregates. `docs/DECISIONS.md` 2026-09-09.
+- **The season-bounds year filter is ≥ 200 loaded days**, not 300 as this
+  session first briefed: 2026 has 238 and a 300-day cut would have dropped the
+  one year the `censored = 'end'` case exists for.
+- **`sql/23` has a ring-0 column the plan did not ask for.** The plan's
+  "within 1 cell of a marina" (ring 1) is saturated at 92 %; ring 0 is the
+  number to quote.
+- Weekday buckets use the UTC date of `vessel_day`, not the local calendar:
+  the misfiled share is ~0.1 % of moved vessel-days (measured in review).
+- Ten findings, not five; 2022/2023 are excluded from every chart and
+  headline.
+
+### Open questions for S7
+
+Carried: `sql/13_coverage_daily.sql` keys on `toDate(ts_min)` (unfixed); the
+Sep-2015 duplication mask for S10. New from S6:
+
+- **The winter night-share step (0.04–0.05 → 0.07–0.08 from 2021)** and the
+  winter weekend collapse (1.9× → 1.3×) point the same way: something changed
+  about who carries a Class B transponder in winter. S10 owns this.
+- **Kieler Woche is a weak instrument at a 15 km start region** (13 of 54 race
+  days below baseline). The round-island races (Sjælland Rundt) are also
+  mis-measured by a start-region box; a track-shaped region would need S7's
+  port-breathing machinery.
+- **S7 must reuse the `covered` pattern from sql/24** (exclusion before
+  coverage) for any hour-of-day profile, and decide once whether the DST
+  Sunday is dropped or repaired.
+- `h3_land` still not materialised; S6 ran no land query at all.
+
+**Next session: S7 — chapter 02 analysis: the pulse.** Read `docs/PLAN.md` § S7.
+
 
 ## S5 — Context layers — 2026-09-08 *(done)*
 

@@ -459,23 +459,40 @@ scripts/ch.sh -q "SELECT count() FROM marina; SELECT count() FROM ferry_route; S
 
 ---
 
-## S6 — Chapter 01 analysis: the shape of summer
+## S6 — Chapter 01 analysis: the shape of summer *(done 2026-09-09)*
 
 **Goal:** One notebook of findings with numbers and reproducible SQL.
 
-**Files:**
-- Create: `sql/20_season_bounds.sql` — per year: first/last day when the 7-day
-  mean of distinct leisure vessels crosses 25 % / 50 % of that year's peak;
-  season length in days.
-- Create: `sql/21_weekend_effect.sql` — per year, weekend/weekday ratio; Friday
-  evening departures (first moving hour after 15:00 local).
-- Create: `sql/22_regatta_spikes.sql` — leisure vessel count in the regatta H3
-  region on race days vs the same weekday ±2 weeks.
-- Create: `sql/23_radius.sql` — distribution of `dist_nm` per vessel-day; share
-  of vessel-days with `home_h3` within 1 cell of a marina.
-- Create: `sql/24_night.sql` — share of moving leisure messages 22:00–05:00.
+**Files:** *(corrected to what exists)*
+- Create: `sql/20_season_bounds.sql` — per year (≥ 200 loaded days): peak of the
+  7-day mean of *moved* Class B leisure vessels, first/last day the mean crosses
+  25 % / 50 % of that peak, season length at both thresholds, a `censored`
+  column derived from the data (2024 has no Jan–Feb, 2026 no autumn).
+- Create: `sql/21_weekend_effect.sql` — per year and season (May–Sep / Oct–Apr),
+  weekend/weekday ratio of moved vessels, averaged per weekday occurrence; and
+  the **evening-departure proxy**: share of moved vessel-days whose first
+  position is after 15:00 Europe/Copenhagen, Friday vs Mon–Thu vs Sat vs Sun.
+  "First moving hour" is not recoverable from the aggregates, so the proxy
+  stands in for the plan's "Friday evening departures".
+- Create: `sql/22_regatta_spikes.sql` — per regatta row: distinct leisure vessels
+  in `h3kRing(geoToH3(lat, lon, 7), 2)` on race days vs the same weekday at
+  ±7 / ±14 days, baseline days inside the event's own range excluded.
+- Create: `sql/23_radius.sql` — per year: `dist_nm` quantiles over moved
+  vessel-days, idle share, shares < 5 nm and ≥ 30 nm, share of vessel-days whose
+  `home_h3` is a marina cell (ring 0) and within one ring of one (ring 1,
+  saturated at 92 %).
+- Create: `sql/24_night.sql` — share of moving leisure messages 22:00–05:00
+  local per year and season, Class A ferries as a control; Sep-2015 duplication
+  window excluded.
+- Create: `notes/plot_ch01.py` — three PNGs in `notes/img/ch01-*.png` and every
+  number the note quotes, printed.
 - Create: `notes/ch01-findings.md` — numbers + PNGs, with the claim → query
   mapping.
+
+**Do:**
+- [x] Five queries, each under 2 s.
+- [x] Ten numeric findings with the query file next to each; charts.
+- [x] Design review (punchcard), five findings, all fixed — `docs/STATUS.md` § S6.
 
 **Validate:** each SQL runs under 60 s; `notes/ch01-findings.md` lists at least
 five numeric findings with the query file next to each.

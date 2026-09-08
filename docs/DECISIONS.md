@@ -291,3 +291,25 @@ what it rules out.
   uses, and `scripts/test_context.sh` now asserts that a second run of
   `sql/04_context.sql` orphans no table and does not grow the store. Rules out
   `CREATE OR REPLACE TABLE` anywhere in this project's SQL.
+- 2026-09-09 (S6) — **A season is defined on the 7-day trailing mean of
+  distinct Class B leisure vessels that moved (`moving_msgs > 0`), per calendar
+  year: the outer season is where that mean is ≥ 25 % of the year's peak, the
+  core is ≥ 50 %.** Distinct moved vessels, not messages, so the Sep-2015
+  archive duplication and per-class reporting rates cannot move the edges; a
+  trailing 7-day window, so a rainy weekend does not open or close a season;
+  fractions of the year's own peak, so 2015 (peak 1 165) and 2026 (peak 5 178)
+  are measured on the same scale. A year needs ≥ 200 loaded days to be scored
+  (keeps 2024 and 2026, drops the 59-day storm samples of 2022/2023), and a
+  year whose loaded range starts after Jan 7 or ends before Dec 24 is marked
+  `censored` rather than reported as if its edge were observed. Rules out
+  "first day above N boats" thresholds, which would not survive a fleet that
+  grew 3.6× in eleven years.
+- 2026-09-09 (S6) — **"Friday-evening departure" is measured by a proxy:
+  the share of moved leisure vessel-days whose first position of the day is
+  after 15:00 Europe/Copenhagen.** The aggregates keep `first_ts` (first
+  position) and `moving_msgs` per vessel-day but not the first *moving* hour,
+  and the raw files are gone. A Class B transponder is powered with the boat,
+  so a late first message on a day the boat moved is a late departure to
+  within a switch-on delay. Stated as a proxy wherever it is quoted; the
+  weekday of a vessel-day is its UTC date (a 1–2 h smear that misfiles ~0.1 %
+  of moved vessel-days — measured in S6's review, sql/21 header).
