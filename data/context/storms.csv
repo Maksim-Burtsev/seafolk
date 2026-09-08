@@ -1,0 +1,25 @@
+name,start_utc,end_utc,source_url,note
+Allan,2013-10-28 00:00:00,2013-10-28 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class sw4 hurricane; named by Ekstra Bladet readers
+Bodil,2013-12-05 00:00:00,2013-12-06 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class nw4 hurricane
+Carl,2014-03-14 00:00:00,2014-03-15 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class nw1
+Alexander,2014-12-12 00:00:00,2014-12-12 23:59:59,https://web.archive.org/web/20141227124725/http://www.dmi.dk/nyheder/arkiv/nyheder-2014/12/saadan-passerer-alexander-landet-opdateret-med-kort/,date-only; named by SMHI; not on the DMI storm list
+Dagmar,2015-01-09 00:00:00,2015-01-09 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class w1
+Egon,2015-01-10 00:00:00,2015-01-11 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class w2
+Freja,2015-11-07 00:00:00,2015-11-08 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class W1
+Gorm,2015-11-29 00:00:00,2015-11-29 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class w3 strong storm
+Helga,2015-12-04 00:00:00,2015-12-04 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class w1
+Urd,2016-12-26 00:00:00,2016-12-27 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class w2; named by MET Norway
+Ingolf,2017-10-29 00:00:00,2017-10-29 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class NW1
+Johanne,2018-08-10 00:00:00,2018-08-10 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class W1
+Knud,2018-09-21 00:00:00,2018-09-21 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class sw1; postponed the Silverrudder start by a day
+Alfrida,2019-01-01 00:00:00,2019-01-02 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class nw1; named by SMHI
+Laura,2020-03-12 00:00:00,2020-03-12 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class w1
+Malik,2022-01-29 00:00:00,2022-01-30 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class NW2
+Nora,2022-02-18 00:00:00,2022-02-19 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class W1; called Eunice in the UK and Zeynep in Germany
+Otto,2023-02-17 00:00:00,2023-02-18 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class w2
+Pia,2023-12-21 00:00:00,2023-12-22 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class w2
+Rolf,2024-02-23 00:00:00,2024-02-23 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class SW2
+Sif,2024-12-15 00:00:00,2024-12-16 23:59:59,https://da.wikipedia.org/wiki/Navngivne_storme_i_Danmark,date-only; named by DMI but never classified so it is absent from the DMI storm list
+Floriane,2025-01-07 00:00:00,2025-01-07 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class SW1; named by Meteo-France; Wikipedia gives 6-7 Jan
+Amy,2025-10-04 00:00:00,2025-10-04 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class s1; named by the UK Met Office
+Dave,2026-04-05 00:00:00,2026-04-05 23:59:59,https://www.dmi.dk/fileadmin/user_upload/Bruger_upload/Stormlisten/STORMS_IN_DENMARK_SINCE_1891.pdf,date-only; DMI class SW1; named by the UK Met Office
