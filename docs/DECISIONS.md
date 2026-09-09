@@ -313,3 +313,35 @@ what it rules out.
   within a switch-on delay. Stated as a proxy wherever it is quoted; the
   weekday of a vessel-day is its UTC date (a 1–2 h smear that misfiles ~0.1 %
   of moved vessel-days — measured in S6's review, sql/21 header).
+- 2026-09-09 (S7) — **A local day is covered when it holds every UTC hour it
+  spans — `uniqExact(hour) = dateDiff('hour', toStartOfDay(lt),
+  toStartOfDay(lt) + INTERVAL 1 DAY)` — so the daylight-saving Sundays count.**
+  The rule sql/11, sql/12 and sql/24 use, `uniqExact(toHour(local)) = 24`,
+  fails the 23-hour spring-forward Sunday by construction and dropped one
+  Sunday a year from every hour-of-day result (2015-03-29, 2018-03-25,
+  2021-03-28, 2024-03-31, 2025-03-30, 2026-03-29 — six days, measured). For a
+  chapter whose subject is the clock and the week that is a hole in the
+  deliverable, so sql/30–32 repair it. The count must be of UTC hours, not
+  local ones: on a fall-back day the local clock strikes 02 twice and
+  `uniqExact(toHour(lt))` reads 24 against an expected 25. The three older
+  files are not retrofitted — their output is quoted verbatim in published
+  notes — and the cost of running two conventions was measured at ≤ 0.0010 on
+  sql/24's night shares, all of it in Oct–Apr. Rules out a per-day
+  expected-hour table, which the S6 review had judged too much machinery: the
+  repair is one expression.
+- 2026-09-09 (S7) — **An arrival into a cell is a vessel present in the cell's
+  `uniqExact` state this hour and absent from it the hour before; a departure
+  is the mirror. Both are exact, computed by inclusion–exclusion over merged
+  states, never over MMSI.** |A ∩ B| = |A| + |B| − |A ∪ B| holds for
+  `uniqExact` states, so `appeared = |A_h| − |A_h ∩ A_{h−1}|` is a count with
+  no sampling and no proxy, and the state itself never leaves the query. The
+  appearance is split by whether the vessel was in the cell's ring-1
+  neighbourhood the hour before (`arrived_from_ring`) or nowhere near it
+  (switched on at the berth, or came from further than ~15 km in an hour) —
+  because a Class B transponder is powered with the boat, and without the
+  split a harbour would appear to arrive and depart in the same morning hour.
+  The split is a speed test as much as a transponder test: a ferry at 20 kn
+  outruns the ring in an hour. Certified against an independent MMSI-set
+  computation over `public_track` for one cell-month (sql/33). Rules out
+  `first_ts`/`last_ts` from `vessel_day` as a departure signal — they are
+  first and last message, which for a moored boat is midnight.

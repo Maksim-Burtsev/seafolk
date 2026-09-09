@@ -503,19 +503,51 @@ five numeric findings with the query file next to each.
 
 ---
 
-## S7 — Chapter 02 analysis: the pulse
+## S7 — Chapter 02 analysis: the pulse *(done 2026-09-09)*
 
-**Files:**
-- Create: `sql/30_hour_profiles.sql` — hourly moving share by `ship_group`, split
-  summer/winter, weekday/weekend; normalised per group.
-- Create: `sql/31_port_breathing.sql` — for the ten busiest H3 cells containing
-  a harbour: arrivals/departures by hour.
-- Create: `sql/32_week_shape.sql` — 168-hour week profile per group.
-- Create: `notes/ch02-findings.md`.
+**Goal:** the sea by hour and weekday — the fingerprint of each fleet over six
+years, the 168-hour week, and what a harbour does over a day.
 
-**Validate & verify:** as S6. The radial "fingerprint" of each group must be
-distinct by eye; if leisure and fishing look alike, split fishing further by
-`Ship type`.
+**Files:** *(corrected to what exists)*
+- Create: `sql/30_hour_profiles.sql` — hour-of-day share of `moving_msgs` per
+  (year, season, ship_group, mobile, daytype), normalised per fleet; every
+  fleet pair emitted. Coverage rule repaired for daylight saving
+  (`docs/DECISIONS.md` 2026-09-09).
+- Create: `sql/31_port_breathing.sql` — the ten busiest marina cells by distinct
+  Class B leisure vessels; per (cell, fleet, season, local hour) the mean
+  present / appeared / arrived-from-ring / vanished / left-to-ring per covered
+  day, computed exactly from the `uniqExact` states by inclusion–exclusion.
+  Pools years by design, so 2022/2023 are excluded in SQL rather than in
+  Python. `vessels_seen` is emitted so k ≥ 5 is checkable.
+- Create: `sql/32_week_shape.sql` — 168-slot week per (year, season, fleet),
+  averaged per occurrence of the slot against a calendar denominator.
+- Create: `sql/33_port_oracle.sql` — **not in the original plan.** An
+  independent MMSI-set recomputation of `sql/31`'s Class A half from
+  `public_track` for one cell-month, emitted next to the state-based figures
+  so `notes/plot_ch02.py` can assert they agree. The last unchecked spatial
+  inference in this project cost a 35-hour reload.
+- Create: `notes/plot_ch02.py` — **not in the original plan.** Three PNGs in
+  `notes/img/ch02-*.png` and every number the note quotes; the asserts use
+  independent literals and each is demonstrated to go red on the break its
+  comment names.
+- Create: `notes/ch02-findings.md` — findings 11–22, continuing chapter 01.
+
+**Do:**
+- [x] Four queries, each under 10 s.
+- [x] Twelve numeric findings; two S3 findings overturned (leisure peaks at
+      12:00 over May–Sep, not 11:00; Sunday-over-Saturday was a 2025 artefact).
+- [x] Design review (punchcard): seven findings, all accepted —
+      `docs/STATUS.md` § S7.
+
+**Validate:** each SQL runs under 60 s; `notes/ch02-findings.md` lists at least
+five numeric findings with the query file next to each.
+
+**You verify:** `notes/img/ch02-fingerprint.png` — are the four dials distinct
+at a glance? (Leisure against the three working fleets: yes. The three working
+fleets against each other: no, and that flatness is finding 12.) The plan's
+fallback "split fishing further by `Ship type`" is **not available** —
+`h3_hourly` has no `ship_type` and `vessel_day` has no hour; the available
+split is by `mobile`, which the queries already emit.
 
 **Commit:** `data(s7): chapter 02 findings`
 

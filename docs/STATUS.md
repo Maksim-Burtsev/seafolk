@@ -3,9 +3,219 @@
 Newest session on top. Each entry: what was done, findings with numbers, open
 questions, and the exact next session. Write it for someone with zero context.
 
-**Next session: S7 — chapter 02 analysis: the pulse**, `docs/PLAN.md` § S7.
-Chapter 01's findings are in `notes/ch01-findings.md` (S6 below); the store
-and context layers are unchanged since S5.
+**Next session: S8 — chapter 03 analysis: lifelines**, `docs/PLAN.md` § S8.
+Chapters 01 and 02 are in `notes/ch01-findings.md` and `notes/ch02-findings.md`
+(S6 and S7 below); the store and context layers are unchanged since S5.
+
+---
+
+## S7 — Chapter 02 analysis: the pulse — 2026-09-09 *(done)*
+
+**What was done.** Four query files `sql/30_hour_profiles.sql`,
+`sql/31_port_breathing.sql`, `sql/32_week_shape.sql`, `sql/33_port_oracle.sql`,
+a plot script `notes/plot_ch02.py` (three PNGs in `notes/img/ch02-*.png`, plus
+every number the note quotes, printed) and `notes/ch02-findings.md` with twelve
+numbered findings (11–22, continuing chapter 01), a claim → query table and a
+caveats section. No line under `scripts/` or `sql/0*`–`sql/2*` changed; the
+store was read, never written. Roles: three Opus subagents implemented (task A
+the SQL, task B the plots and the note, task C the review fixes); this session
+planned, verified the two load-bearing assumptions on a throwaway store before
+writing the plan, reviewed at each checkpoint, ran the design review with three
+finder passes as subagents, judged, ran the Validate commands, wrote the docs
+and committed. `docs/DECISIONS.md` gained two entries (the repaired coverage
+rule; what an arrival is and how it is certified); `docs/PLAN.md` § S7 was
+corrected to what exists.
+
+**Two things settled at planning time, both verified before any code was
+written.** (1) Arrivals and departures per cell-hour *are* exactly recoverable
+from `h3_hourly`: `vessels` is a `uniqExact` state, merging two hours' states
+gives |A ∪ B|, so |A ∩ B| = |A| + |B| − |A ∪ B| and `appeared = |A_h| −
+|A_h ∩ A_{h−1}|` — checked on a scratch store with sets {0..9} → {5..14} →
+{30..33} (inter 5 / arrivals 5 / departures 5, then 0 / 4 / 10). (2) The DST
+spring-forward Sunday is *repaired*, not dropped: `uniqExact(hour) =
+dateDiff('hour', toStartOfDay(lt), toStartOfDay(lt) + INTERVAL 1 DAY)`,
+counted on UTC hours (23 / 24 / 25 for spring-forward / ordinary / fall-back;
+the local-hour count reads 24 on a fall-back day and would drop it).
+
+### Validate — real output
+
+```
+$ for f in sql/3[0-3]_*.sql; do time scripts/ch.sh "$f" > /dev/null; done
+measured by the supervising session, three sequential runs after the fixes:
+sql/30_hour_profiles.sql    16.88 s / 17.23 s / 17.03 s
+sql/31_port_breathing.sql   34.28 s / 38.06 s / 33.38 s
+sql/32_week_shape.sql       15.12 s / 22.32 s / 14.66 s
+sql/33_port_oracle.sql       1.64 s /  2.91 s /  1.60 s       (budget: 60 s each)
+CPU-bound, not I/O: sql/30 alone is 71 s user CPU over 13 s wall at a 627 MB
+peak RSS (`/usr/bin/time -l`), i.e. ~5 cores, no spill, data/ch/tmp empty.
+Task A's morning report quoted 4.0 / 8.2 / 3.7 / 1.1 s for the first versions;
+those numbers were never reproduced by this session and should not be quoted.
+
+$ uv run --project notes notes/plot_ch02.py            → exit 0, 28+ asserts pass,
+      wrote notes/img/ch02-fingerprint.png, ch02-week.png, ch02-port.png
+$ grep -c 'sql/3[0-3]_' notes/ch02-findings.md         → 34   (≥ 5 required)
+$ grep -rEn '\b[0-9]{9}\b' notes/ch02-findings.md notes/plot_ch02.py sql/3*.sql | wc -l → 0
+$ scripts/ch.sh -q "SELECT count() FROM load_log"      → 949  (store untouched)
+$ du -sh data/ch ; df -h . | tail -1 ; ls data/raw | wc -l
+11G data/ch · 251Gi free · data/raw empty
+```
+
+The two numbers owed to S6: the repair adds back exactly six local days —
+2015-03-29, 2018-03-25, 2021-03-28, 2024-03-31, 2025-03-30, 2026-03-29 — and
+loses none; `sql/24`'s night shares move by at most **0.0010** (2026 Oct-Apr
+leisure, 0.0703 → 0.0693), every May-Sep row unchanged. Printed side by side
+by `plot_ch02.py` and asserted within 0.002.
+
+The oracle, printed and asserted every run (`sql/33`, cell 608531604905656319,
+2025-07, Class A passenger; raw MMSI sets from `public_track` against sql/31's
+state algebra):
+
+```
+                       raw positions   states   gap
+  present                       1646     1648    -2
+  appeared                       503      502    +1
+  arrived_from_ring               20       19    +1
+  vanished                       501      501    +0
+  left_to_ring                     8        8    +0      bound: |gap| <= 5
+```
+
+### Findings
+
+Full text with charts: `notes/ch02-findings.md`. The headlines:
+
+11. **The fingerprints hold at six-year scale, and two S3 hours do not**
+    (`sql/30`). Leisure is the only fleet with a day: peak 12:00 at 11.67 %
+    of the day (2.80× flat), night 4.52 %. Ferries 17:00 / 5.24 % / 21.95 %,
+    cargo 02:00 / 4.62 % / 31.82 %, fishing 05:00 / 5.08 % / 33.16 %.
+12. **"Cargo and fishing peak at night" is true and nearly empty** (`sql/30`):
+    cargo's peak is 1.11× a flat hour and its night 1.09× a flat night. An
+    argmax on a flat curve.
+13. **The leisure peak is 12:00 and does not move** — not with season, year or
+    daytype: 12:00 in all six summers and in 30 of 36 (year × season × daytype)
+    curves. S3's 11:00 was a July answer.
+14. **Sunday is the sharpest leisure day and the quietest night** (`sql/30`):
+    peak 12.66 % against Saturday 11.79 %, night 4.01 % against 5.20 %.
+15. **S3's "Sunday far above Saturday" was a 2025 artefact** (`sql/10`,
+    `sql/32`): sun/sat on distinct moved vessels 0.968 / 1.082 / 0.993 /
+    0.990 / 0.990 / 0.964 — Saturday leads in five of six summers. July 2025
+    reproduces S3 exactly (2 986 / 3 690); it does not generalise.
+16. **The return-leg guess is refuted** (`sql/32`): Sunday exceeds Saturday
+    only 09:00–13:00 (+7 332 at 11:00) and is below it the other nineteen
+    hours, hardest 15:00–19:00; over the day Sunday is 1.3 % *below*. A Sunday
+    outing is compressed into the middle of the day.
+17. **Every fleet's busiest hour of the week is on a different day** (`sql/32`):
+    leisure Sun 12:00 (summer) / Sat 13:00 (winter), ferries Fri 17:00, cargo
+    Fri 04:00, fishing Tue 05:00. Saturday is fishing's weekly minimum (9.8 %)
+    and leisure's maximum (16.0 %).
+18. **A leisure harbour inhales 10:00–12:00 and exhales an hour later**
+    (`sql/31`): appearance peaks 10–12 in all ten cells, departures 11–13.
+19. **73–89 % of the morning appearances are transponders switching on, not
+    boats sailing in** (`sql/31`): of the 08:00–12:00 appearances, only
+    11–27 % were in the cell's ring-1 neighbourhood the hour before.
+20. **The ring split is a speed test** (`sql/31`, `sql/33`): the Ærø ferry
+    (15.4 calls/day) shows 3.0 % from the ring, Helsingør–Helsingborg over half
+    — a 4 km crossing never leaves the ring. The exact Helsingør figure is
+    source-dependent (62.7 % on `h3_hourly`, 76.2 % on raw positions) and is
+    not load-bearing.
+21. **The harbour does not go dark, and how dark it goes is a property of the
+    cell** (`sql/31`): the night floor of `mean_present` is 9 % (Strib) to 71 %
+    (Vindebyøre Bro) of the day peak — visibility, not occupancy.
+22. **Fishing changes its clock with the season, cargo does not** (`sql/30`):
+    total variation summer vs winter 11.21 pp (fishing; night 33.2 % → 25.0 %,
+    below a flat night), leisure 6.11, ferries 3.40, cargo 1.85. In the
+    harbours the season is a factor of 8.7× (Helsingør) to 17.8× (Marstal) on
+    leisure appearances per day.
+
+Also: four of the ten busiest leisure cells in Denmark are adjacent cells in
+Svendborg Sund — on a `LIMIT 10` whose rank 10/11 margin is 1.4 %, stated as
+such in the note.
+
+### Design review
+
+`punchcard:punchcard` on the nine files, three independent finder passes as
+subagents (each on its own APFS clone of the store — the lock is exclusive)
+plus this session as judge: **🟠 Ship after #1–#2**, seven findings, **all
+seven accepted and fixed** before the commit (task C), each fix demonstrated
+red on the break its comment names and green on the real file:
+
+1. 🔴 *The event algebra had no check, and the oracle written to provide one
+   was a `print`.* One token in `sql/31`'s union list — `(1, 'u1', 0)` →
+   `(1, 'u1', 1)` — made every harbour number up to 15.9× wrong (Vindeby
+   29.43 → 467.14) with every assert green: the balance assert telescopes the
+   intersection away. Reproduced by the judge. Fixed: `sql/33` now emits both
+   sides per hour, raw sums, and the script asserts each of five totals within
+   5. Demonstrated on the oracle's own state block: gaps 6 / 6 / 7 / 7 fire it.
+   **The margin is 1–3 vessel-hours: do not widen the bound.**
+2. 🔴 *`sql/31` pooled the 2022/2023 storm windows into every Oct-Apr figure*
+   while the note said they were excluded — Oct-Apr 1 232 = 1 116 + 116.
+   Fixed: excluded in `base` (the file pools years by design and emits no
+   `year`), `season_days` 1 116, every winter harbour number regenerated
+   (Sønderborg 17.3× → 15.7×, Helsingør 9.2× → 8.7×).
+3. 🟡 *Four asserts documented a guard they did not provide*: the year loop
+   never passed the year; the peak floor `10 <=` admitted the 10:00 the
+   comment said a UTC slip produces (now 11); `sql/32`'s mismatch pair passed
+   vacuously on the very regression it named (now `Σ slot_days over 168 slots
+   = 24 × 846 / 24 × 1232`); the balance assert's comment claimed to catch an
+   INNER JOIN it cannot (comment rewritten to what it bounds).
+4. 🟡 *`sql/33`'s header claimed downsampling can only lower its counts* — its
+   own totals show appeared 503 > 502. Rewritten; finding 20 no longer leans on
+   a percentage the two sources disagree on. **Not done:** extending the oracle
+   to the four plotted cells — it certifies the machinery, and the Helsingør
+   gap is a source difference no oracle coverage resolves.
+5. 🟡 *Hand-carried numbers gone stale*: 2 762 → 2 748, "19 of 503" → 19 of
+   502, 1 645 → 1 646, "0 on 6 of 20" → 9 of 20 (now an ad-hoc block with
+   its query in the note, removed from headers). "11 GB" was correct — the
+   reviewer measured a clone.
+6. 🟡 *`join_use_nulls` unpinned* under the LEFT JOINs the file calls its most
+   dangerous line (`= 1` gives 502 → 501). Pinned with a query-level
+   `SETTINGS` in `sql/31` and `sql/33`, verified to override the command line.
+   **Not done as proposed:** pinning in `scripts/ch.sh` — the plan said
+   nothing under `scripts/` changes, and the query-level pin sits next to the
+   join that needs it.
+7. 🟡 *`lat`/`lon` never asserted; chart keyed on a non-unique label.* Bbox
+   assert (a swap prints the Somali basin, run green before), the Vindebyøre
+   cell pinned to `55.0589 / 10.6251`, `ports()` keyed on `h3`.
+
+Out-of-scope notes acted on anyway: the 1.4 % margin sentence; `vessels_seen`
+bounds `A_h`, not `A_{h−1}`, so the header no longer calls `vanished`
+"checkable" by it (minimum k is 12, nothing violates); dead `days` dict and a
+stale docstring removed.
+
+### Deviations from `docs/PLAN.md` § S7
+
+- **`sql/33_port_oracle.sql` and `notes/plot_ch02.py` were not in the plan.**
+  The set-difference inference is new spatial machinery; the last unchecked
+  one cost a 35-hour reload. The oracle earned its place the same day (#1).
+- **The plan's fallback "split fishing further by `Ship type`" is not
+  available**: `h3_hourly` has no `ship_type`, `vessel_day` has no hour. The
+  fleets are already split by `mobile`. Not needed: leisure is distinct from
+  all three working fleets by eye; the three working fleets are near-flat and
+  indistinguishable from each other, which is finding 12.
+- The coverage rule diverges from `sql/11`/`12`/`24` on purpose
+  (`docs/DECISIONS.md` 2026-09-09).
+- `sql/31` excludes 2022/2023 in SQL where its siblings emit `year` (#2).
+
+### Open questions for S8
+
+Carried: `sql/13_coverage_daily.sql` keys on `toDate(ts_min)` (unfixed); the
+Sep-2015 duplication mask for S10; the winter night-share step (S10);
+`h3_land` not materialised (S7 ran no land query either). New from S7:
+
+- **The arrival machinery is ready for S8's ferry work** — `sql/31`'s state
+  algebra gives arrivals per cell-hour for any fleet, and for Class A
+  `public_track` gives the exact version (`sql/33`). Port stays and crossings
+  can be built from either; the oracle says they agree within 3 vessel-hours a
+  month on a ferry cell.
+- **`arrived_from_ring` is a speed test at ring 1.** A 4 km crossing never
+  leaves the ring; S8's crossings should be matched by `geom` endpoints (S5),
+  not by ring membership.
+- **The oracle's bound of 5 has a margin of 1–3.** If S8 changes `sql/33`'s
+  window, re-measure before touching the bound.
+- **Query timings are 15–38 s, CPU-bound.** Under budget, but sql/31 at
+  ~35 s is the slowest file in the project; if S8 reuses its state algebra over
+  many cells, measure first. The one-cell oracle form (sql/33) is 1.6 s.
+
+**Next session: S8 — chapter 03 analysis: lifelines.** Read `docs/PLAN.md` § S8.
 
 ---
 
