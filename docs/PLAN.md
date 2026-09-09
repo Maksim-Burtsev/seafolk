@@ -553,27 +553,62 @@ split is by `mobile`, which the queries already emit.
 
 ---
 
-## S8 — Chapter 03 analysis: lifelines
+## S8 — Chapter 03 analysis: lifelines *(done 2026-09-10)*
 
-**Goal:** Trips per ferry line, punctuality, cancellations, seasonality, for the
+**Goal:** Trips per ferry line, regularity, cancellations, seasonality, for the
 small-island lines (Ærø, Samsø, Læsø, Anholt, Tunø, Bornholm, Fanø, Fur…) and
 the big ones as contrast.
 
-**Files:**
-- Create: `sql/40_ferry_trips.sql` — from `public_track`: sessionise a vessel's
-  positions into port stays (SOG < 0.5 kn inside a harbour cell for ≥ 5 min) and
-  crossings; assign crossings to `ferry_route` by endpoints (the OSM `from`/`to`
-  tags are empty on 1 049 of the 1 324 rows and 363 rows have no name, so the
-  endpoints must come from `geom`, not from the tags).
-- Create: `sql/41_ferry_daily.sql` — trips per route per day; expected trips
-  from a timetable table (`data/context/timetables.csv`, committed, hand-made
-  for the small islands); cancellations = expected − observed on storm days.
-- Create: `sql/42_ferry_speed.sql` — median crossing speed per route per year
-  (electric-ferry transitions).
-- Create: `notes/ch03-findings.md`.
+**Files:** *(corrected to what exists)*
+- Create: `sql/40_ferry_trips.sql` — **builds** `ferry_stay`, `ferry_crossing`,
+  `ferry_day` and `ferry_line` in the store from `public_track` (the first file
+  in the project that writes a derived table; built into `__build` tables and
+  swapped in by RENAME at the end, so a crash leaves the previous complete
+  tables or none). A berth call is any maximal run of positions at SOG < 0.5 kn;
+  a crossing is the move between two consecutive calls of one vessel inside a
+  gap-free session, > 100 m apart, matched to an OSM route whose two termini
+  are each the nearest endpoint of one berth. The plan's "≥ 5 min" and "1 km"
+  thresholds were measured and rejected (`docs/DECISIONS.md` 2026-09-10).
+  Route → line → kind is resolved here, once, from `data/context/ferry_lines.csv`.
+- Create: `sql/41_ferry_daily.sql` — crossings per (line, local day), zero-filled
+  over the loaded days; `baseline` = median of comparable signal days (same line,
+  year, season, daytype) — **not** a timetable; `missed`; the storm flag on
+  calendar dates; coverage columns from `ferry_day` (own-majority fleet:
+  positions, sog-known, moving) so a zero-crossing day can be read as silent /
+  cannot tell / lay still / moved but unmatched. Second block: the unmatched
+  share, split at 1 km.
+- Create: `sql/42_ferry_speed.sql` — per (line, local year): speed made good,
+  duration quantiles, distance, `max_kn`, the modal vessel and its share.
+- Create: `sql/43_ferry_oracle.sql` — **not in the original plan.** The
+  Svendborg–Ærøskøbing crossings of July 2025 recounted from raw positions and
+  two hard-coded H3 cells, next to `ferry_crossing`'s count per day.
+- Create: `sql/44_hidden_fleet.sql` — **not in the original plan.** Per (line,
+  year) the fleet's vessel-days that `public_track` does not hold because the
+  vessel's resolved ship type was not `Passenger` that day (14–18 % a year).
+- Create: `data/context/ferry_lines.csv` (committed) — OSM object → line label,
+  kind (island / domestic / international / foreign), island. Labelling only.
+- Create: `data/context/ferry_timetable.csv` (committed) — the anchor: current
+  summer-weekday departures per direction for 11 lines, with source URL. Used
+  by the Validate check only; the plan's `timetables.csv` of expected trips
+  was dropped as invented data.
+- Create: `notes/plot_ch03.py` — three PNGs in `notes/img/ch03-*.png` and every
+  number the note quotes, printed; asserts with independent literals.
+- Create: `notes/ch03-findings.md` — findings 23–34, continuing chapter 02.
 
-**Validate:** for one known route (Svendborg–Ærøskøbing) observed daily trips
-≈ timetable on a calm summer weekday.
+**Do:**
+- [x] Sessionisation verified on one vessel-month before the plan was written
+      (10–12 crossings/day, 73–75 min, 12.2 nm = the Ærø timetable).
+- [x] Build ≈ 2 min, 11 GB peak RSS, byte-identical across rebuilds.
+- [x] Twelve numeric findings; the timetable check exact on six lines.
+- [x] Design review (punchcard), three finder passes on store clones —
+      `docs/STATUS.md` § S8.
+
+**Validate:** `scripts/ch.sh sql/43_ferry_oracle.sql` — Svendborg–Ærøskøbing
+observed = 22 crossings/day in July 2025 on both sides; the timetable says
+11 departures per direction. Each of `sql/41`–`44` under 60 s.
+
+**You verify:** `notes/img/ch03-lifelines.png` — does the eye find the winter
+timetable, the Sunday, and the outages without the caption?
 
 **Commit:** `data(s8): chapter 03 findings`
 

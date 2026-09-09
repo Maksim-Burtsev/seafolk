@@ -3,9 +3,273 @@
 Newest session on top. Each entry: what was done, findings with numbers, open
 questions, and the exact next session. Write it for someone with zero context.
 
-**Next session: S8 — chapter 03 analysis: lifelines**, `docs/PLAN.md` § S8.
-Chapters 01 and 02 are in `notes/ch01-findings.md` and `notes/ch02-findings.md`
-(S6 and S7 below); the store and context layers are unchanged since S5.
+**Next session: S9 — chapter 04 analysis: when the storm comes**, `docs/PLAN.md`
+§ S9. Chapters 01–03 are in `notes/ch0[123]-findings.md` (S6–S8 below). The
+store gained four derived ferry tables in S8 (`sql/40`, ~395 MiB, rebuilt in
+~100 s); the aggregates and context layers are unchanged since S5.
+
+---
+
+## S8 — Chapter 03 analysis: lifelines — 2026-09-09 → 09-10 *(done)*
+
+**What was done.** Five query files `sql/40_ferry_trips.sql` (the first file in
+the project that WRITES derived tables: `ferry_stay`, `ferry_crossing`,
+`ferry_day`, `ferry_line`), `sql/41_ferry_daily.sql`, `sql/42_ferry_speed.sql`,
+`sql/43_ferry_oracle.sql`, `sql/44_hidden_fleet.sql`; two committed context
+files `data/context/ferry_lines.csv` (OSM object → line, kind, island;
+labelling only) and `data/context/ferry_timetable.csv` (11 lines, current
+summer-weekday departures per direction, source URL per row); a plot script
+`notes/plot_ch03.py` (three PNGs in `notes/img/ch03-*.png`, every quoted number
+printed, asserts) and `notes/ch03-findings.md` with findings 23–37. Two header
+asserts added to `scripts/test_context.sh` for the new CSVs; nothing else under
+`scripts/` or `sql/0*`–`sql/3*` changed. `h3_hourly`, `vessel_day`,
+`public_track` and `load_log` were read, never written. Roles: two Opus
+subagents implemented (task A the SQL, three rounds before the review and
+two after; task B the plots and the note, twice); this session
+verified the load-bearing assumption on the store before writing the plan
+(one vessel-month sessionised: 10–12 crossings/day, 73–75 min, 12.2 nm = the
+Ærø timetable), reviewed at each checkpoint with its own queries, ran the design
+review with three Fable finder passes on APFS clones of the store, judged, ran
+the Validate commands, wrote the docs and committed. `docs/DECISIONS.md` gained
+four entries (observed baseline instead of a timetable; what a berth call and a
+crossing are, with the measured thresholds; HSC absent from `public_track`; the
+lines file); `docs/PLAN.md` § S8 was corrected to what exists.
+
+**Three things this session found by checking the subagents' work, each of
+which changed a published number.**
+(1) *The 5-minute stay rule and the 1 km distance guard, both from the plan,
+deleted whole lines.* Fursund (Branden–Fur, 72 departures per direction a day)
+is ~400 m wide: 17 crossings in the store under the plan's rules against 4 216
+in one vessel-month of track. Measured on July 2025 at stay thresholds 120 / 60
+/ 0 s: MJOELNER-FUR 63 / 108 / 136 crossings a day (timetable 144), Ærø and
+Læsø unchanged at every threshold. The histogram of consecutive-stay distances
+has no gap between "same berth" and "short crossing" (400–1 000 m holds ~100 000
+real crossings a year), so the route match, not a threshold, does the
+discrimination. (2) *A ferry is in `public_track` only on days its resolved
+ship type was `Passenger`.* M/F FENJA and MENJA (Fanø) are `Undefined` in every
+year, PRINSESSE ISABELLA 284 days of 2021, ANHOLT is `HSC` all of 2015; 13–18 %
+of the matched fleet's vessel-days a year are hidden. Task B had labelled the
+Fanø gap "detection", the Samsø blank went unexplained, and the Fur ten-day
+"outage" of February 2023 had its second ferry sailing as `Undefined`. Now
+`sql/44` measures it per line-year and the note reads every such line-year as a
+lower bound. (3) *High-speed craft are absent altogether* (475 vessels, 785 M
+messages, `HSC` → `other` at load time): Rønne–Ystad reads 414 crossings on
+relief tonnage. Not fixable without a reload; recorded for S10.
+
+### Validate — real output
+
+```
+$ /usr/bin/time -l scripts/ch.sh sql/40_ferry_trips.sql      (the build; measured by this session)
+ferry_stay      7 187 875 rows   1 547 vessels   2015-01-01 → 2026-08-26
+ferry_crossing  5 664 659 rows   1 183 vessels
+ferry_day         510 987 rows   1 660 vessels
+lines_unmapped 0
+97.55 s real · 558 s user · 12.07 GB max RSS       (two consecutive builds: byte-identical sql/41–44 output)
+
+$ for f in sql/4[1-4]_*.sql; do time scripts/ch.sh "$f" > /dev/null; done
+sql/41_ferry_daily.sql    0.63 s   289 169 rows
+sql/42_ferry_speed.sql    0.28 s     1 281 rows
+sql/43_ferry_oracle.sql   0.40 s        31 rows
+sql/44_hidden_fleet.sql   0.45 s     1 780 rows        (budget: 60 s each)
+
+$ scripts/ch.sh sql/43_ferry_oracle.sql | awk '{print $4}' | sort | uniq -c   → 31 days with gap 0
+      Svendborg–Ærøskøbing, July 2025: oracle 22 / table 22 on all 31 days, 2 vessels on both sides;
+      the timetable says 11 departures per direction.
+$ uv run --project notes notes/plot_ch03.py            → exit 0, 33 asserts pass, 601 lines printed,
+      wrote notes/img/ch03-lifelines.png, ch03-storm.png, ch03-speed.png
+$ grep -c 'sql/4[0-4]_' notes/ch03-findings.md         → 32   (≥ 5 required)
+$ grep -rEn '\b[0-9]{9}\b' notes/ch03-findings.md notes/plot_ch03.py | wc -l → 0
+$ bash scripts/test_context.sh                          → ALL PASS (23 asserts, two new)
+$ scripts/ch.sh -q "SELECT count() FROM load_log"      → 949  (aggregates untouched)
+$ du -sh data/ch ; df -h . | tail -1 ; ls data/raw | wc -l
+11G data/ch (the four ferry tables: 395 MiB) · 249 Gi free · data/raw empty
+```
+
+### Findings
+
+Full text with charts: `notes/ch03-findings.md`. The headlines:
+
+23. **Between an eighth and a sixth of the ferry fleet is invisible** (`sql/44`):
+    12.4–17.5 % of the matched fleet's vessel-days a year sit in `vessel_day`
+    under a ship type other than `Passenger` and never reached `public_track`.
+    Fanø's two main ferries are `Undefined` in every year (hidden share
+    0.33–0.67); Anholt's was `HSC` all of 2015; Samsø's 284 days of 2021.
+24. **Where the fleet is visible the count is exact** (`sql/41` ×
+    `ferry_timetable.csv`): six of eight lines with a published number match
+    the timetable to the crossing (Ærø 22, Læsø 12, Anholt 2, Tunø 8, Samsø 14,
+    Endelave 8); Fur reads 0.95 of a frequency rule; Ystad–Rønne is unheard
+    (HSC).
+25. **The oracle agrees on all 31 days at 22 crossings and 2 vessels** (`sql/43`).
+26. **The winter timetable is a different timetable on some islands and the
+    same on others** (`sql/41`): 24 of 35 island lines run ≥ 10 crossings a day
+    in July, 19 in January; Christiansø 5.0×, Fur 1.01×.
+27. **The thinnest lifeline is one round trip a day, five days a week**
+    (`sql/41`): Grenaa–Anholt, 26.8 nm, 180 min, Wednesday baseline 0.
+28. **Ten of 35 island lines do not know it is Sunday** (`sql/41`): Sunday
+    median = weekday median; Søby–Faaborg 0.40 is the sharpest cut.
+29. **A line loses a day it should have sailed 1.1–2.8 % of the time**
+    (`sql/41`, fleet heard, lay still, on a day of the week it normally sails);
+    Svendborg–Ærøskøbing and Kragenæs–Fejø 0 of 2 004 days; Læsø's one lost
+    day is storm Floriane.
+30. **Runs of still days are ships out of service, not weather** (`sql/41`):
+    359 runs of ≥ 3 days, 2 033 line-days.
+31. **The Fur ferry's ten still days in February 2023 were not ten days without
+    a ferry** (`sql/41`, `sql/44`): the second ship was filed `Undefined` for
+    28 of the window's 59 days.
+32. **The coverage columns settle Hals–Egense 2025-07-03** (`sql/41`): 653
+    positions, 0 moving — the ferry lay at the quay; the first draft's "the
+    receiver did not hear it" was wrong.
+33. **Five of fifteen storms cost the small lines more than a fifth of a day,
+    all in winter** (`sql/41` × `storms.csv`): Dagmar·Egon −42.6 %, Pia −30.8,
+    Otto −27.7, Malik −26.0, Floriane −22.0; Knud and Sif under 3 %; the
+    August storm invisible.
+34. **The small lines stop first on four of the five deepest storms, and a pool
+    hides who stopped** (`sql/41`): Floriane islands 0.76, big lines 1.02;
+    Gedser–Rostock 0.22 on 2015-01-10 inside a big-pool 0.85; Ærø 0.39 under
+    Malik.
+35. **ELLEN made Søby–Fynshav 13.4 % faster, NERTHUS made Bøjden–Fynshav
+    19.3 % faster** (`sql/42`), distance unchanged, log speed moving with it.
+36. **A step is not proof**: an unchanged ship (BERTHA K) drifts −17 %; the
+    control line's band is 5 %; the readable threshold is ~10 %.
+37. **Speeds made good span 11×** (`sql/42`): 21.08 kn (Hirtshals–Kristiansand)
+    to 1.92 (Kleppen–Venø); berth-to-berth keeps 55–93 % of the log speed.
+
+### Design review
+
+`punchcard:punchcard` on the whole diff, three independent finder passes as
+Fable subagents (each on its own APFS clone of the store) plus this session as
+judge, after the judge's own checks had already found the hidden-fleet defect:
+**🟠 Ship after #1–#3**, thirteen findings plus one found while fixing,
+**all fourteen accepted and fixed**
+before the commit (task C1 the SQL and CSVs, task C2 the script and the note),
+each fix demonstrated by the number that moved:
+
+1. 🔴 *Hidden fleet* — see above. `sql/44` added; Fanø hidden share 0.49–0.67
+   in every year, Hou–Sælvig 0.43 in 2021 and 0 otherwise; two more the
+   finders had not named (KATTEGAT as `Cargo` all of 2018 on Agersø/Omø,
+   KANALEN as `Cargo` on Thyborøn–Agger).
+2. 🔴 *`fleet_msgs` credited a line with the messages of vessels that mostly
+   serve another line* — 450 of 684 fleet memberships in 2025 were multi-line
+   vessels, 32–37 % of island-line messages came from elsewhere, and 307 of
+   1 853 "cancelled" island line-days were that (Anholt 24 of 48, Kleppen–Venø
+   51 of 53). Fixed: coverage now comes from a fourth table `ferry_day`
+   (positions / sog-known / moving per vessel-day, a by-product of `sql/40`'s
+   scan) over the line's own-majority fleet, so a zero-crossing day reads as
+   silent, cannot tell, lay still, or moved-but-unmatched.
+3. 🔴 *A vessel-day entirely at `sog = −1` produced no stay and no crossing
+   but a full message count* — 300 such days, 258 island line-days on Sejerø,
+   Omø, Agersø and Nekselø read as cancellations. Fixed with #2: unknown-speed
+   positions are dropped from the run-length input (98 173 split stays healed)
+   and `fleet_sog_known = 0` is a "cannot tell" day.
+4. 🟡 *A crash inside the crossing INSERT left a partial table that `sql/41`
+   ran on without error* (a finder demonstrated 1 048 576 persisted rows of an
+   INSERT that threw). Fixed: build into `__build` tables, one `RENAME` at the
+   end — and the very first run of the new file died on its own `throwIf` and
+   left the previous complete tables in place, which is the demonstration.
+5. 🟡 *The baseline median counted silent line-days as zeros while every
+   consumer excluded them* — 310 groups, Rønbjerg–Livø 2015 winter baseline 0
+   → 10. Fixed (signal days only, `quantileExactLow`); net effect +21 638
+   line-days with `missed > 0`, because excluded zeros raise baselines more
+   than `Low` lowers them.
+6. 🟡 *The route → line fold and the 200-crossing floor were duplicated
+   verbatim in `sql/41` and `sql/42`.* Resolved once in `sql/40`;
+   `ferry_crossing` carries `line`, `kind`, `island`.
+7. 🟡 *30 routes above the floor had no line label and fell back to
+   `way:<id>`, which collides with the MMSI guard.* Fixed: every such route
+   mapped (68 in the end, because #8 pushed 38 more over the floor) and the
+   build now throws if one is missing — which it did on its first run.
+8. 🟡 *Every member-way end of a relation counted as an endpoint, so harbour
+   shuffles matched on multi-way relations* (Älvsnabben 18 719 of 120 836
+   crossings under 1 km). Fixed: termini only (a way end no other member way
+   ends within 50 m of); Danish charted lines unchanged to 0.01 %. Where the
+   shuffles sit on bare ways (Öckerö, Ystad, Frederikshavn) a fifth kind
+   `harbour` labels the object as a leg, not a service — after the judge first
+   named the wrong Öckerö object and the implementer measured it (77 of 42 479
+   under 1 km) and pushed back.
+9. 🟡 *Storm windows widened by one local day (58 flagged days for 35 calendar
+   dates); six unloaded boundary days in the panel (131 line-days); `sql/42`
+   keyed year on UTC where `sql/41` uses the local date (127 crossings).* All
+   three fixed; `sql/41`'s header says S9 must use the calendar-date rule.
+10. 🟡 *The oracle's asserts stayed green with its 24 h bound removed, its
+    table side was asserted against nothing, and `baseline` was never
+    compared with an independent literal.* Fixed: both sides must show
+    exactly 2 vessels on all 31 days and the table side 22 on ≥ 28; the
+    baselines of Ærø (22 = 2 × 11 in the timetable) and Fur (138, within 5 %
+    of 144) are asserted as read off the rows.
+11. 🟡 *Headers stating wrong numbers*: `sql/43` described a `sql/40` that no
+    longer existed; the ring-1 prefilter claim was wrong geometry (1 215 m from
+    a vertex to ring 2, edge 1 406 m) and holds by measurement (0 of 508 895
+    unmatched crossings gain a match at ring 2); DECISIONS #4 said three/two
+    OSM objects where the file has seven/four. All rewritten.
+12. 🟡 *A missing CSV column loads as '' silently.* Header asserts for both
+    files in `scripts/test_context.sh` (23 asserts, all pass).
+13. 🟡 *Guards without a test, four vacuous asserts, two hand-carried
+    literals* in the script. Fixed: 31 asserts, each shown red on the break
+    its comment names by a mutation harness over scratch copies of the four
+    TSVs (Ærø p90 < 120 min for the session guard, `max_kn` ≤ the speed
+    guard, the fold identity Σ panel = Σ `in_first_block`, the storm flags =
+    the calendar dates of `storms.csv`, `vessels = 1 ⇒ modal_share = 1`,
+    sql/42 ⊆ sql/41 ⊆ sql/44 line sets, `med_kn > 1` on Danish lines for a
+    dropped `/60`); the four vacuous asserts removed; 725/672 read from rows.
+14. 🟡 *Found by task C2 while regenerating, fixed in a last SQL round:* the
+    baseline key pooled Mon–Fri, and Grenaa–Anholt never sails a Wednesday —
+    237 of its zero days were "cancellations on a due day"; now keyed on the
+    day of the week. Block 2 keyed `year` on UTC against block 1's local
+    date; the 40 kn guard was one crossing from shaping Hou–Sælvig (38.15 kn,
+    10 nm in 16 min) and is 30 kn now, no passenger ship in the store makes
+    that; `sql/44`'s header quoted the judge's pre-floor hidden shares, not
+    its own block 2.
+
+Accepted as is: `h3_a`/`h3_b`/`route_name`/`end_dist_m` stored and unread;
+2.09 % of crossings depart 22:00–23:59 UTC and are keyed to a local day whose
+coverage is the previous UTC day (stated in the header); relief vessels'
+messages on a sister line are now simply not counted, which is the smaller
+error.
+
+### Deviations from `docs/PLAN.md` § S8
+
+- **No `timetables.csv` of expected trips.** DECISIONS 2026-09-10 #1. The
+  anchor file has one current number per line and is used by the Validate
+  check only.
+- **`sql/43`, `sql/44`, `ferry_day`, `ferry_lines.csv` and `notes/plot_ch03.py`
+  were not in the plan.**
+- **The plan's stay and distance thresholds were rejected** after measurement
+  (DECISIONS #2).
+- **First derived tables in the store**, ≈ 390 MB, rebuilt in ~100 s by one
+  idempotent file; `data/ch` 11.5 GB.
+
+### Open questions for S9
+
+Carried: `sql/13_coverage_daily.sql` keys on `toDate(ts_min)` (unfixed); the
+Sep-2015 duplication mask (S10); the winter night-share step (S10); `h3_land`
+not materialised. New from S8:
+
+- **For S10, two honesty numbers this chapter produced.** (a) `HSC` → `other`
+  at load time: 475 vessels, 785 M messages, no track. (b) The per-vessel-day
+  ship-type resolution hides 12–18 % of the passenger fleet's days a year
+  (`sql/44`); the same mechanism must affect cargo and fishing, unmeasured.
+  Both are load-time facts; a fix is a reload.
+- **S9 must use the calendar-date storm rule** (`sql/41`'s header): the
+  windows in `storms.csv` are whole UTC days standing for dates.
+- **`ferry_crossing` is the storm chapter's ferry input.** 5.66 M crossings
+  with `line`, `kind`, `island`, `dep`/`arr` in UTC; `ferry_day` gives the
+  per-vessel-day denominator. `sql/41`'s ±3-day storm profile is already the
+  shape S9's `sql/50` wants for ferries; do not rebuild it.
+- **Own-majority coverage leaves 1 195 island line-days with crossings and no
+  coverage** (a sister line's ship sailed). Read the coverage columns only on
+  zero-crossing days.
+- **The 30 kn guard's nearest Danish line-year is 29.07 kn** (Hou–Sælvig
+  2026, `sql/42.max_kn`): if a future load adds a faster passenger ship,
+  re-measure before trusting `p90_min`.
+- **The build is 98 s and 12 GB RSS**, under the 21.6 GB cap; a doubled
+  archive needs the per-year fallback described in `sql/40`'s header.
+- Not done, by choice: the timetable → line mapping lives only in
+  `notes/plot_ch03.py`; `h3_a`/`h3_b`/`route_name`/`end_dist_m` are stored and
+  unread; Københavns havnebus lost 29 % of its crossings to the termini rule
+  (multi-stop network, quoted nowhere).
+
+**Next session: S9 — chapter 04 analysis: when the storm comes.** Read
+`docs/PLAN.md` § S9.
 
 ---
 

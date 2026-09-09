@@ -345,3 +345,60 @@ what it rules out.
   computation over `public_track` for one cell-month (sql/33). Rules out
   `first_ts`/`last_ts` from `vessel_day` as a departure signal — they are
   first and last message, which for a moored boat is midnight.
+- 2026-09-10 (S8) — **A ferry's expected trips are the data's own median, not a
+  timetable.** `baseline` in `sql/41` is the median of observed crossings over
+  the same (line, calendar year, May–Sep / Oct–Apr, day of the week), on days
+  the line's own fleet was heard; `missed = baseline − crossings`, floored at
+  zero. Day of the week, not weekday / Sat / Sun: Grenaa–Anholt never sails a
+  Wednesday and Hirsholmene runs three days a week, and a Mon–Fri pool read
+  every such day as a cancellation (237 on Anholt alone). Operator timetables are not
+  archived per year and the store spans 2015 → 2026, so a hand-made
+  expected-departures table for every line × year × season would be invented
+  data. A committed anchor, `data/context/ferry_timetable.csv` (one number per
+  line: summer-weekday departures per direction in the current published
+  timetable, with its URL), exists only to check the machinery — Svendborg–
+  Ærøskøbing 11 per direction against 22 crossings a day observed, Branden–Fur
+  72 against 134–142. Rules out the plan's `timetables.csv` of expected trips;
+  `missed` is read as "fewer than a comparable day", never "cancelled sailings",
+  and always next to the coverage columns from `ferry_day` (positions, positions
+  with a known speed, moving positions of the line's own-majority fleet that
+  day), so a zero-crossing day reads as silent, cannot tell, lay still, or
+  moved-but-unmatched — never as a cancellation by default.
+- 2026-09-10 (S8) — **A berth call is any maximal run of positions at SOG < 0.5
+  kn — one position is enough — and a crossing is the move between two
+  consecutive calls of one vessel inside one gap-free session, when they are
+  more than 100 m apart and match two different ends of one OSM ferry route.**
+  Three thresholds were measured on July 2025 before this was fixed: a 5-minute
+  stay rule deleted Fursund and Hals–Egense outright (a third of Fur's berth
+  calls are under two minutes; 17 crossings in the store against 4 216 in the
+  track for one month) and a 1 km distance rule deleted every crossing shorter
+  than a kilometre (the 400–1 000 m bin holds ~100 000 real crossings a year
+  and no clean gap separates it from harbour shuffles). Neither threshold moved
+  Ærø, Læsø or any line longer than a few minutes by more than 4 %. The route
+  match does the discrimination the thresholds could not: each berth's nearest
+  endpoint of the route must differ. Cost, measured: 8.3 % of crossings match
+  no route (185 116 of them under 1 km, harbour shuffles by construction) and a
+  line whose intermediate call OSM does not draw as an endpoint loses the legs
+  through it (Svendborg–Skarø–Drejø via Hjortø, −74 %). `ferry_stay.minutes`
+  is kept so any threshold can be re-imposed after the fact. Rules out a
+  distance or duration guard as the definition of a crossing.
+- 2026-09-10 (S8) — **High-speed craft are not in `public_track` and cannot be
+  added.** `sql/03_aggregate.sql` maps AIS `Ship type = 'HSC'` to `ship_group =
+  'other'`, and `public_track` keeps `passenger` only, so the 475 HSC vessels
+  (785 M messages) — Molslinjen's Express ferries Aarhus–Odden and Rønne–Ystad,
+  Bornholm's fast tonnage — left no track before the raw files were deleted.
+  Chapter 03 therefore reads Rønne–Ystad on conventional relief tonnage only
+  (414 crossings) and uses Helsingør–Helsingborg, Rødby–Puttgarden, Rønne–Køge
+  and Gedser–Rostock as its big-line contrast. Recorded, not fixed: a fix is a
+  2.3 TB reload. S10's honesty layer names it.
+- 2026-09-10 (S8) — **A ferry line is a hand-labelled set of OSM objects,
+  `data/context/ferry_lines.csv`, committed.** OSM carries one physical service
+  as several objects — Helsingør–Helsingborg is seven, Rødby–Puttgarden four,
+  Læsø two ways — and 363 of the 1 324 `route=ferry` rows have no name, the
+  busiest of them (Hönö–Lilla Varholmen, 372 371 crossings) among them. The
+  file maps every route with ≥ 200 crossings that the chapter needs to a line
+  label and a kind (island / domestic / international / foreign); `sql/40`
+  loads it as `ferry_line`, and `sql/41`/`42` group by line. It is labelling,
+  not measurement: no number in it. Rules out grouping by OSM object in any
+  published table, and rules out a data-driven merge of routes by shared
+  endpoints (union-find in SQL for a 280-row fact a human can read).
