@@ -20,6 +20,8 @@ data/*
 data/context/*
 !data/context/storms.csv
 !data/context/regattas.csv
+!data/context/ferry_lines.csv
+!data/context/ferry_timetable.csv
 
 # local tooling
 .venv/

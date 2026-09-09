@@ -104,6 +104,18 @@ assert "storms.csv header is unchanged" \
 assert "regattas.csv header is unchanged" \
   "name,year,start_date,end_date,place,lat,lon,source_url" \
   "$(q "SELECT line FROM file('data/context/regattas.csv', LineAsString) LIMIT 1")"
+# Same reason for the two S8 files. ferry_lines.csv is read by
+# sql/40_ferry_trips.sql and decides which OSM object belongs to which ferry
+# line; ferry_timetable.csv is the chapter's only external anchor. A column
+# dropped from either header is not "unknown" to any input setting — `file()`
+# simply returns '' for it — so a renamed `line` column would silently unmap
+# every route and a renamed `osm_id` would silently map none.
+assert "ferry_lines.csv header is unchanged" \
+  "line,kind,island,osm_type,osm_id,note" \
+  "$(q "SELECT line FROM file('data/context/ferry_lines.csv', LineAsString) LIMIT 1")"
+assert "ferry_timetable.csv header is unchanged" \
+  "route,operator,port_a,port_b,summer_weekday_departures_per_direction,crossing_minutes,source_url,read_on,note" \
+  "$(q "SELECT line FROM file('data/context/ferry_timetable.csv', LineAsString) LIMIT 1")"
 
 read -r u_storm u_regatta o_storm o_regatta dup early bad_year <<< "$(q "
   SELECT (SELECT countIf(NOT startsWith(source_url, 'http')) FROM storm),
