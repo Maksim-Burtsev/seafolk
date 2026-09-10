@@ -116,6 +116,47 @@ assert "ferry_lines.csv header is unchanged" \
 assert "ferry_timetable.csv header is unchanged" \
   "route,operator,port_a,port_b,summer_weekday_departures_per_direction,crossing_minutes,source_url,read_on,note" \
   "$(q "SELECT line FROM file('data/context/ferry_timetable.csv', LineAsString) LIMIT 1")"
+# And for the S9 file. anchorages.csv is read by sql/51_anchorage_fill.sql,
+# which — unlike sql/04's two hand files — CANNOT use
+# input_format_skip_unknown_fields = 0: it projects `source_url` away and the
+# reader then refuses to open the file at all. So this assert is the ONLY
+# thing standing between a renamed column and a silent ''. A renamed `note`
+# would put every excluded cell (Lindoe yard, the oil fields, Aarhus harbour)
+# back into the storm profile as an "anchorage"; a renamed `h3` would unlabel
+# every cell, which sql/51's own throwIf would then catch.
+assert "anchorages.csv header is unchanged" \
+  "h3,name,source_url,note" \
+  "$(q "SELECT line FROM file('data/context/anchorages.csv', LineAsString) LIMIT 1")"
+# ...and the rest of that file's integrity. anchorages.csv is a hand file with
+# no machine source; sql/51 joins it by `h3` and EXCLUDES by an exact `note`
+# string, so each of these is a silently wrong chart, never an error:
+#   * a duplicate h3 counts the same vessels under two anchorage names
+#     (measured: block 3 goes 38 534 -> 41 150 rows);
+#   * 'Not an anchorage' or a trailing space is not 'not an anchorage', and
+#     every excluded cell — the oil fields, the Lindoe yard, Aarhus harbour —
+#     silently comes back (measured: 38 534 -> 106 308 rows);
+#   * an h3 that is not a valid res-7 cell labels nothing at all;
+#   * the whole bar for a row is "a source, not an opinion", which is a URL.
+# sql/51's block 2 throws on the first two as well (and on an h3 the rule never
+# surfaced, which needs the archive store and so cannot be checked here).
+read -r a_dup a_note a_url a_name a_h3 <<< "$(q "
+  WITH anch AS (
+      SELECT * FROM file('data/context/anchorages.csv', CSVWithNames,
+          'h3 UInt64, name String, source_url String, note String')
+      SETTINGS input_format_skip_unknown_fields = 1,
+               input_format_defaults_for_omitted_fields = 0)
+  SELECT count() - uniqExact(h3),
+         countIf(note NOT IN ('', 'not an anchorage')),
+         countIf(NOT startsWith(source_url, 'http')),
+         countIf(name = ''),
+         countIf(NOT h3IsValid(h3) OR h3GetResolution(h3) != 7)
+  FROM anch
+  FORMAT TSV" | tr '\t' ' ')"
+assert "anchorages.csv: no duplicate h3"                    0 "$a_dup"
+assert "anchorages.csv: every note is '' or 'not an anchorage'" 0 "$a_note"
+assert "anchorages.csv: every source_url is a URL"          0 "$a_url"
+assert "anchorages.csv: every row has a name"               0 "$a_name"
+assert "anchorages.csv: every h3 is a valid res-7 cell"     0 "$a_h3"
 
 read -r u_storm u_regatta o_storm o_regatta dup early bad_year <<< "$(q "
   SELECT (SELECT countIf(NOT startsWith(source_url, 'http')) FROM storm),
