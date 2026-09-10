@@ -160,19 +160,24 @@ order shows up as two changed integers rather than as a plausible chart.
 
 ## 2. The lifelines
 
-![The lifelines, day by day](img/ch03-lifelines.png)
+![The lifelines: crossings per day, 7-day mean](img/ch03-lifelines.png)
 
 *`sql/41_ferry_daily.sql` and `sql/44_hidden_fleet.sql`. Eight island lines, one
-row per loaded year, one column per calendar day (twelve blocks of 31, so the
-months line up across years of different length). Colour is that day's
-crossings in both directions, scaled to that line's own 95th percentile — the
-Fur ferry's 138 and Anholt's 2 each fill their own scale. White is a day the
-archive does not hold; grey hatch is a day on which the line's own fleet
-reported **nothing**, drawn as absence and never as a zero. **The red hatch in
-the left margin marks a line-year in which more than 20 % of the fleet's
-reporting days were filed as something other than a passenger ship** — Fanø in
-all eight rows, Samsø in 2021, Anholt in 2015. `*` marks the two 59-day winter
-windows.*
+panel each, on a shared calendar: the six loaded years laid end to end —
+2015 | 2018 | 2021 | 2024 | 2025 | 2026 — with a wide break where the archive
+skips a year and a narrow one where it does not. The two 59-day winter windows
+are not drawn. The orange line is **crossings per day as a 7-day mean over the
+days the line's fleet was heard**; a week of silence is a gap in the line and
+never a zero. The grey band is Oct–Apr, `sql/41`'s own season split, and the
+dashed rule is that line's own May–Sep median, so the winter shortfall is
+legible without a second axis. **A year drawn dashed is a year in which more
+than 20 % of the line's fleet-days were filed as something other than a
+passenger ship** (`sql/44`) — Fanø in every year, Samsø in 2021, Anholt in 2015
+— and its curve is a lower bound, not a measurement. The dark ticks along the
+baseline are runs of **three days or more on which the line lay still on a day
+of the week it normally sails**, the longest in each panel labelled with its
+length. Under each title: the July and January weekday medians of finding 26
+and the share of due days lost of finding 29.*
 
 **Finding 26 — the winter timetable is a different timetable on some islands
 and the same one on others, and the split is not by size.** `sql/41`. Median

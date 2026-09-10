@@ -220,6 +220,11 @@ each fix demonstrated by the number that moved:
     that; `sql/44`'s header quoted the judge's pre-floor hidden shares, not
     its own block 2.
 
+After the handoff the user rejected the first lifelines chart (eight
+day-grained heatmaps, unreadable); it was replaced by per-line 7-day means on
+a shared calendar with the winter band, still-day ticks and dashed hidden-fleet
+years (`fix(s8)`), 34 asserts, the other two PNGs byte-identical.
+
 Accepted as is: `h3_a`/`h3_b`/`route_name`/`end_dist_m` stored and unread;
 2.09 % of crossings depart 22:00–23:59 UTC and are keyed to a local day whose
 coverage is the previous UTC day (stated in the header); relief vessels'

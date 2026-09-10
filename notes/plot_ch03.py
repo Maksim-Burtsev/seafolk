@@ -45,20 +45,15 @@ import sys
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap
-from matplotlib.patches import Rectangle
 
 from plot import GRID, IMG, INK, MUTED, ROOT, rows, tidy
 
 FERRY = "#eb6834"                      # the project's ferry orange, plot.GROUPS[1]
-PALE = "#f7d9cb"
 SLATE = "#5b6b73"                      # the contrast series: the big lines
 HIDDEN = "#7d2c10"                     # the hidden-fleet marker
 YEARS = [2015, 2018, 2021, 2024, 2025, 2026]
 WINDOWS = [2022, 2023]                 # storm windows, ~60 winter days each
 KINDS = {"island", "domestic", "international", "foreign", "harbour"}
-MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 HIDDEN_MARK = 0.2                      # hidden_share above which chart 1 marks a row
 
 # Chart 1. Eight small-island lifelines, one per island, chosen for range: the
@@ -630,77 +625,187 @@ def replacements(spd):
 
 
 # ------------------------------------------------------------- charts ----
-RAMP = LinearSegmentedColormap.from_list("ferry", ["#fdf6f1", PALE, FERRY, "#7d2c10"])
+def month_median(panel, line, month):
+    """Median crossings on the WEEKDAYS of one month the fleet was heard on.
 
-
-def chart_lifelines(panel, hid_line):
-    """Chart 1 -- eight island lines, every loaded day, six years and two windows.
-
-    One panel per line; one row per loaded year; columns are the calendar,
-    twelve blocks of 31 so the months line up across years of different length.
-    Colour is that day's crossings against the line's own 95th percentile, so
-    the Fur ferry's 138 and Anholt's 2 both fill their scale. A day the archive
-    does not hold is white; a day on which the line's own fleet reported
-    NOTHING is drawn grey and hatched, never as a zero.
-    A hatched bar in the left margin marks a line-year in which more than 20 %
-    of the fleet's reporting days were filed as something other than a
-    passenger ship (sql/44) — those rows are a lower bound, not a measurement.
+    The same figure the § 2 table prints, so a panel subtitle and the note
+    cannot drift apart: weekdays only, because a July that pooled Sundays in
+    would not be the number finding 26 quotes.
     """
-    order = sorted(YEARS + WINDOWS)
-    ny = len(order)
-    fig, axes = plt.subplots(4, 2, figsize=(11.5, 9.4))
+    vals = [row["crossings"] for row in panel
+            if row["line"] == line and loaded(row) and row["fleet_positions"] > 0
+            and row["day"][5:7] == month and row["daytype"] == "weekday"]
+    return statistics.median(vals) if vals else None
+
+
+def still_runs(days, minimum=3):
+    """Maximal runs of >= `minimum` consecutive dates in a sorted list."""
+    out, cur = [], []
+    for day in sorted(days):
+        if cur and days_between(cur[-1], day) == 1:
+            cur.append(day)
+        else:
+            if len(cur) >= minimum:
+                out.append(cur)
+            cur = [day]
+    if len(cur) >= minimum:
+        out.append(cur)
+    return out
+
+
+def rolling(series, window=7, need=4):
+    """Centred `window`-day mean of {date: crossings}, over signal days only.
+
+    Returns {date: mean}. A date whose window holds fewer than `need` signal
+    days has no value at all, so a week the fleet was not heard is a GAP in the
+    drawn line and never a zero — the distinction the whole chapter turns on.
+    """
+    half = window // 2
+    keys = sorted(series)
+    out = {}
+    for day in keys:
+        vals = [series[shift(day, k)] for k in range(-half, half + 1)
+                if shift(day, k) in series]
+        if len(vals) >= need:
+            out[day] = sum(vals) / len(vals)
+    return out
+
+
+def chart_lifelines(panel, hid_line, per_ly):
+    """Chart 1 -- eight island lines as one contiguous six-year time series.
+
+    One panel per line; x is calendar time with the loaded years laid end to
+    end (2015 | 2018 | 2021 | 2024 | 2025 | 2026) and a visible gap where the
+    archive skips. The two 59-day winter windows are not drawn: a 59-day stub
+    beside a full year reads as a collapse in traffic, which is the one thing
+    this chart must not say.
+    y is crossings per day as a 7-day mean over the days the fleet was heard;
+    a week of silence is a gap in the line, never a zero. The dashed grey rule
+    is the line's own May-Sep median, so the winter shortfall is legible
+    without a second axis, and the grey band is Oct-Apr — sql/41's own season
+    split.
+    The dark ticks at y = 0 are runs of three days or more on which the line
+    lay still on a day of the week it normally sails; the longest run in each
+    panel carries its length. A year drawn DASHED is a year in which more than
+    20 % of the line's fleet-days were filed as something other than a
+    passenger ship (sql/44): the line is a lower bound there, not a
+    measurement.
+    """
+    order = [y for y in YEARS]
+    # Consecutive years touch (a short gap so the blocks are countable); a jump
+    # in the archive gets a wide one, so the eye reads 2015 | 2018 as a skip and
+    # 2024 | 2025 as a turn of the year.
+    NEAR, FAR = 10, 60
+    offset, x0 = {}, 0
+    for i, year in enumerate(order):
+        offset[year] = x0
+        length = (datetime.date(year + 1, 1, 1) - datetime.date(year, 1, 1)).days
+        nxt = order[i + 1] if i + 1 < len(order) else None
+        x0 += length + (0 if nxt is None else NEAR if nxt == year + 1 else FAR)
+
+    def xof(day):
+        d = datetime.date.fromisoformat(day)
+        return offset[d.year] + (d - datetime.date(d.year, 1, 1)).days
+
+    index = collections.defaultdict(dict)
+    for row in panel:
+        if loaded(row):
+            index[row["line"]][row["day"]] = row
+
+    fig, axes = plt.subplots(4, 2, figsize=(12.0, 9.8), sharex=True)
+    top_row = set(axes[0])
     for ax, (line, island) in zip(axes.flatten(), LIFELINES):
-        vals = [row["crossings"] for row in panel
-                if row["line"] == line and loaded(row) and row["crossings"] > 0]
-        top = statistics.quantiles(vals, n=20)[-1] if len(vals) > 20 else max(vals)
-        img = [[(1.0, 1.0, 1.0)] * (12 * 31) for _ in range(ny)]
-        silent = []
-        for row in panel:
-            if row["line"] != line or row["year"] not in order:
+        rows_by_day = index[line]
+        drawn_years = 0
+        top = 0
+        for year in order:
+            days = {d: r["crossings"] for d, r in rows_by_day.items()
+                    if r["year"] == year and r["fleet_positions"] > 0}
+            if not days:
                 continue
-            r = order.index(row["year"])
-            month, day = int(row["day"][5:7]), int(row["day"][8:10])
-            c = (month - 1) * 31 + day - 1
-            if row["fleet_positions"] == 0 and row["crossings"] == 0:
-                silent.append((c, r))
-                img[r][c] = (0.85, 0.85, 0.84)
-            else:
-                img[r][c] = RAMP(min(row["crossings"] / top, 1.0))[:3]
-        ax.imshow(img, aspect="auto", interpolation="nearest",
-                  extent=(0, 12 * 31, ny - 0.5, -0.5))
-        for c, r in silent:                       # hatch, so grey is not a level
-            ax.add_patch(Rectangle((c, r - 0.5), 1, 1, facecolor="none",
-                                   edgecolor="#6f6d68", hatch="////",
-                                   linewidth=0.0))
-        for r, year in enumerate(order):          # the hidden-fleet margin
-            share = hidden_share(hid_line, line, year)
-            if share > HIDDEN_MARK:
-                ax.add_patch(Rectangle((-13, r - 0.36), 10, 0.72,
-                                       facecolor="white", edgecolor=HIDDEN,
-                                       hatch="////", linewidth=0.6,
-                                       clip_on=False))
-        for m in range(1, 12):
-            ax.axvline(m * 31, color="white", linewidth=0.8)
-        ax.set_xlim(-14, 12 * 31)
-        ax.set_yticks(range(ny))
-        ax.set_yticklabels([f"{y}*" if y in WINDOWS else str(y) for y in order],
-                           fontsize=7.5)
-        ax.set_xticks([m * 31 + 15.5 for m in range(12)])
-        ax.set_xticklabels(MONTHS, fontsize=7)
-        median = statistics.median(vals) if vals else 0
-        ax.set_title(f"{island} · {line} — median {median:.0f} crossings/day, "
-                     f"scale to {top:.0f}", color=INK, fontsize=9, loc="left")
+            smooth = rolling(days)
+            if not smooth:
+                continue
+            drawn_years += 1
+            hidden = hidden_share(hid_line, line, year) > HIDDEN_MARK
+            # one segment per unbroken stretch, so a silent week is a hole in
+            # the line and not a dive to zero
+            style = (0, (4, 2)) if hidden else "solid"
+            seg_x, seg_y, prev = [], [], None
+            for day in sorted(smooth):
+                if prev is not None and days_between(prev, day) > 1:
+                    ax.plot(seg_x, seg_y, color=FERRY, linewidth=1.3,
+                            linestyle=style)
+                    seg_x, seg_y = [], []
+                seg_x.append(xof(day))
+                seg_y.append(smooth[day])
+                prev = day
+            ax.plot(seg_x, seg_y, color=FERRY, linewidth=1.3, linestyle=style)
+            top = max(top, max(smooth.values()))
+            # Oct-Apr, sql/41's own season split, shaded under the curve
+            for a, b in (("01-01", "04-30"), ("10-01", "12-31")):
+                ax.axvspan(xof(f"{year}-{a}"), xof(f"{year}-{b}"),
+                           color=GRID, alpha=0.35, linewidth=0, zorder=0)
+        # (new) every panel must carry nearly the whole archive; a line that
+        # lost a year to a filter would otherwise be read as a line that ran.
+        assert drawn_years >= 5, \
+            f"{line}: only {drawn_years} of {len(order)} loaded years drawn"
+
+        top = top * 1.22 or 1
+        ax.set_ylim(-0.03 * top, top)
+        tick_y = 0.012 * top
+        median = month_median(panel, line, "07")
+        summer = [r["crossings"] for r in rows_by_day.values()
+                  if r["season"] == "may-sep" and r["fleet_positions"] > 0]
+        if summer:
+            ax.axhline(statistics.median(summer), color=MUTED, linewidth=0.8,
+                       linestyle=(0, (4, 3)), zorder=1)
+        # the still-day ticks
+        due = [d for d, r in rows_by_day.items() if zero_kind(r) == "lay still"
+               and r["baseline"] > 0]
+        runs = still_runs(due)
+        for run in runs:
+            ax.plot([xof(run[0]), xof(run[-1]) + 1], [tick_y, tick_y],
+                    color=INK, linewidth=3.4, solid_capstyle="butt", zorder=4)
+        if runs:
+            longest = max(runs, key=len)
+            ax.annotate(f"{len(longest)} d",
+                        (xof(longest[0]) + len(longest) / 2, tick_y),
+                        xytext=(0, 6), textcoords="offset points", color=INK,
+                        fontsize=7, ha="center", zorder=5)
+        if any(hidden_share(hid_line, line, y) > HIDDEN_MARK for y in order):
+            ax.annotate("part of the fleet outside the archive", (0.995, 0.94),
+                        xycoords="axes fraction", color=MUTED, fontsize=7,
+                        ha="right", va="top")
+        cell = collections.Counter()
+        for year in order:
+            if (line, year) in per_ly:
+                cell.update(per_ly[(line, year)])
+        lost = 100 * cell["lay still, scheduled"] / cell["days"]
+        ax.set_title(f"{island} · {line}\nJuly {fmt(median)} · January "
+                     f"{fmt(month_median(panel, line, '01'))} · lost "
+                     f"{lost:.1f} % of due days",
+                     color=INK, fontsize=8.5, loc="left",
+                     pad=16 if ax in top_row else 6)
         tidy(ax)
-        ax.grid(False)
-        ax.tick_params(colors=MUTED, length=0)
-    fig.suptitle("The lifelines, day by day · colour = that day's crossings, "
-                 "both directions, scaled to the line's own 95th percentile\n"
-                 "white = no such day in the archive · grey hatch = the line's "
-                 "own fleet reported nothing\nred hatch in the margin = over "
-                 "20 % of that fleet-year was filed as something other than a "
-                 "passenger ship (sql/44) · * = a ~60-day window",
-                 color=INK, fontsize=9.5, x=0.008, ha="left")
-    fig.tight_layout(rect=(0, 0, 1, 0.925))
+        ax.grid(axis="y", color=GRID, linewidth=0.6)
+        ax.set_xlim(-NEAR, x0 + NEAR)
+    for ax in axes[:, 0]:
+        ax.set_ylabel("crossings/day, 7-day mean", color=MUTED, fontsize=8)
+    for ax in axes[-1]:
+        ax.set_xticks([offset[y] + 182 for y in order])
+        ax.set_xticklabels([str(y) for y in order], fontsize=8)
+    for ax in axes[0]:                     # the year label at each block's top
+        for year in order:
+            ax.annotate(str(year), (offset[year] + 182, 1.005),
+                        xycoords=("data", "axes fraction"), color=MUTED,
+                        fontsize=7.5, ha="center", va="bottom",
+                        annotation_clip=False)
+    fig.suptitle("The lifelines: crossings per day, 7-day mean · grey = "
+                 "Oct–Apr · dashed = part of the fleet outside the archive · "
+                 "ticks = ≥ 3 still days with the fleet heard",
+                 color=INK, fontsize=10, x=0.008, ha="left")
+    fig.tight_layout(rect=(0, 0, 1, 0.965))
     fig.savefig(IMG / "ch03-lifelines.png", dpi=160, facecolor="white")
 
 
@@ -1347,7 +1452,7 @@ if __name__ == "__main__":
              f"— positions {hals[day]['fleet_positions']}, moving "
              f"{hals[day]['fleet_moving']}")
 
-    chart_lifelines(panel, hid_line)
+    chart_lifelines(panel, hid_line, per_ly)
     dropped = chart_storm(panel, runs, island_lines)
     picks = list(dict.fromkeys(r["line"] for r in replacements(spd)
                                if r["kind"] in ("island", "domestic")))[:4]
