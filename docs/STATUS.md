@@ -3,9 +3,220 @@
 Newest session on top. Each entry: what was done, findings with numbers, open
 questions, and the exact next session. Write it for someone with zero context.
 
-**Next session: S10 — the honesty layer: coverage and adoption**, `docs/PLAN.md`
-§ S10. Chapters 01–04 are in `notes/ch0[1234]-findings.md` (S6–S9 below). The
-store is unchanged since S8's four ferry tables; S9 wrote nothing to it.
+**Next session: S11 — the open dataset**, `docs/PLAN.md` § S11. Chapters 01–04
+are in `notes/ch0[1234]-findings.md` (S6–S9), the honesty layer in
+`notes/honesty.md` (S10). The store is unchanged since S8's four ferry tables;
+S9 and S10 wrote nothing to it. **Read the S10 caveats before exporting
+anything:** message counts are contaminated twice (Sep-2015, and a permanent
+tail step from 2023), Class B is never published per region, and the k ≥ 5
+floor is already exercised by `sql/62`.
+
+---
+
+## S10 — The honesty layer: coverage and adoption — 2026-09-10 → 09-11 *(done)*
+
+**What was done.** Three read-only query files: `sql/60_coverage_index.sql`
+(Class A per day per res-4 region as the instrument, the store-wide daily
+reference with `load_log` joined by day range, the Sep-2015 factor, a step
+table, the night shares with two controls, and block 6 — messages per Class A
+vessel-day against the 43 200-a-day physical ceiling), `sql/61_adoption.sql`
+(Class B distinct per year on the common window Mar 1 – Aug 26, first-loaded-
+year cohorts, retention, message-count proxies, flag-prefix shares; `vessel_day`
+read through aggregates only, no MMSI emitted) and `sql/62_emodnet_compare.sql`
+(our July-2021 leisure vessel-hours per cell against EMODnet Human Activities'
+density, by rank, k ≥ 5 on every emitted cell, plus a zone split of the hours
+EMODnet sees where we see nothing). `notes/emodnet.py` downloads the two
+EMODnet zips (385 + 338 MB) to a scratch directory, extracts July 2021, writes
+`data/context/emodnet_2021-07_leisure.tsv` (169 178 pixels, 5.7 MB, committed,
+un-ignored by name, CC-BY 4.0) and deletes the zips. `notes/plot_honesty.py`
+(three PNGs, 66 asserts, strict no-9-digit guard on its stdout) and
+`notes/honesty.md` (the essay's opening paragraph, findings 53–63, the
+caveats). `sql/13_coverage_daily.sql` was removed (wrong `load_log` keying, no
+consumer; DECISIONS). `rasterio` went in as the `emodnet` dependency group of
+`notes/`. Roles: Opus 5 subagents implemented (task A the SQL, task B the
+EMODnet path, task C the plots and the note, one fix pass); this session
+planned, probed the EMODnet WCS (broken time axis), measured its own reference
+numbers on the main store before reading any report, checked every claim it
+relied on, ran the design review, judged, ran Validate, wrote the docs and
+committed. `docs/DECISIONS.md` gained six entries; `docs/PLAN.md` § S10 and
+`docs/DATA.md`'s EMODnet bullet were corrected to what exists.
+
+**Two things the session corrected in its subagents' reports, both by
+measurement.** (1) Task A read a "~1.5x rise in Class A messages per
+vessel-day in 2023" as better reception. The distribution says otherwise: the
+median barely moves (July 1 869 → 2 160), p90 and p99 double, and the maximum
+goes from ≈ the physical ceiling to 8x it — the same message stored more than
+once. The chapter says "duplication", never "reporting rate". (2) Task B's
+regional split of the EMODnet hours we miss ("3.0 % Danish core, 13.3 %
+German Baltic") was a literal no query produced; the design review caught it,
+`sql/62` block 5 now computes it, and the numbers are 1.1 % / 7.1 % / 33 % /
+61 %.
+
+### Validate — real output
+
+```
+$ for f in sql/6[0-2]_*.sql; do /usr/bin/time -p scripts/ch.sh "$f" > /dev/null; done   (measured by this session, data/ch)
+sql/60_coverage_index.sql  28.19 s   291 508 rows over nine blocks (284 399 / 2 122 / 2 / 2 572 / 2 277 / 42 / 16 / 70 / 8)
+sql/61_adoption.sql         2.46 s   14 + 21 + 5 + 6 rows
+sql/62_emodnet_compare.sql  1.71 s   200 + 200 + 2 + 40 + 4 rows        (budget: 60 s each)
+$ uv run --project notes notes/plot_honesty.py     → exit 0, 34.1 s, 66 asserts, 267 lines printed,
+      "no 9-digit integer in 22064 characters of output (the MMSI guard, strict: no exempt columns)"
+      wrote notes/img/honesty-coverage.png, honesty-adoption.png, honesty-emodnet.png
+$ grep -rEn '\b[0-9]{9}\b' notes/honesty.md notes/plot_honesty.py sql/6*.sql notes/emodnet.py data/context/emodnet_2021-07_leisure.tsv | wc -l → 0
+$ grep -c 'sql/6[0-2]' notes/honesty.md                → 49
+$ uv run --project notes python -c 'import rasterio'   → ModuleNotFoundError;  --group emodnet → 1.5.1
+$ git check-ignore -q data/context/emodnet_2021-07_leisure.tsv ; echo $?  → 1 (not ignored)
+$ bash scripts/test_context.sh                          → ALL PASS
+$ scripts/ch.sh -q "SELECT count() FROM load_log"      → 949  (store untouched)
+$ du -sh data/ch ; df -h . | tail -1 ; ls data/raw | wc -l
+11G data/ch · 248 Gi free · data/raw empty · clones data/ch_a, data/ch_b removed
+```
+
+Mutation tests run by this session against `notes/plot_honesty.py` (both
+red, files restored): `sql/62`'s k floor `>= 5 → >= 1` fails "a cell id
+reached the output with fewer than 5 distinct leisure vessels"; `sql/60`'s cap
+`43200 → 50000` fails "a month from 2023-12 on dropped under 0.17 % of
+vessel-days over the cap".
+
+### Findings
+
+Full text with charts: `notes/honesty.md`. The headlines:
+
+53. **The adoption curve, on the common window Mar 1 – Aug 26** (`sql/61`):
+    Class B 7 467 / 12 479 / 16 959 / 21 610 / 24 159 / 26 223 for
+    2015 / 18 / 21 / 24 / 25 / 26; leisure 6 137 → 22 773, **×3.71**. Yearly
+    distinct Class A is a broken denominator: 25 421 (2015) → 17 870 (2021) is
+    one-day MMSIs (8 428 / 9 527 vs ~3 000 later; 7 617 of 2015's sent ≤ 3
+    messages all year), not a shrinking fleet. Class A heard ≥ 5 days is
+    flat: 10 082 → 10 784 on the window.
+54. **The rise survives division by the instrument to within 6.5 %**: leisure
+    per Class A ≥ 5-day vessel 0.609 → 2.112, **×3.47**.
+55. **Cohorts**: of 2026's 26 223, 20.7 % first heard in 2026, 12.2 % carried
+    from 2015 ("first seen" = first *loaded* year; 2016-17, 2019-20 are gaps).
+56. **Retention** 0.650 / 0.602 / 0.648 over the three-year gaps, 0.763 / 0.758
+    over one year; ~10 % skip a reference year and come back.
+57. **German-flagged Class B outnumbers Danish in every year** (0.32–0.36 vs
+    0.18–0.26); the box is not Denmark.
+58. **Sep-2015 duplication: ×2.199 on the Class A vessel-day median, ×2.552 on
+    the daily mean** (`sql/60` block 3); `vessels` and `dist_nm` immune;
+    flagged (`dup_window`), never rewritten.
+59. **A second, permanent contamination: the Class A message tail doubles
+    between 2022-03 and 2023-11** — p90 8 749–9 428 → 16 261–19 607, p99
+    14 156–16 980 → 31 633–44 041, median flat; vessel-days above the 43 200
+    ceiling 0–0.06 % → 0.18–1.09 %; worst day 359 899 messages (8.3× the
+    ceiling, 2024-11). Sporadic over-ceiling days exist in 13 of 36 earlier
+    months; 2023 changed the rate by ~10×. **Any message count across 2023
+    compares two instruments.** Class B: p90 979–1 306 → 1 500–1 527.
+60. **Reach: no step except one.** Of 139 regions, exactly one ≥ 80-vessel
+    region steps on the head count — Skagerrak 57.9965 N 10.7602 E, 75 → 113
+    (×1.507) between 2018-12 and 2021-01; the other eleven charted regions
+    drift within ×0.82 (west of Bornholm) .. ×1.16 (Fehmarn Belt) over eleven
+    years. Message-rate flags cluster on 2015-09/10 and 2023-02/12.
+61. **The loader drops 4.0–11.3 % of rows as non-vessel, 0–6.3 % as
+    out-of-bbox, 0.04–0.98 % as the lat=91 sentinel**, now per day for all
+    2 122 days (1 213 from monthly files carry the file's share).
+62. **Winter leisure night share +43 % vs 2015 / +90 % vs 2018 (2025, the last
+    full Oct–Apr) against cargo +3.4 %**; cargo's night ÷ day *vessel-hours*
+    are flat at 0.409–0.423 in all eight years, so no night-reach change is
+    measurable; the ~8 % message residual moves exactly across finding 59's
+    step and cannot be separated from duplication.
+63. **EMODnet agrees on where the fleet is**: Spearman 0.8475 where both see
+    the cell (0.6427 over the union), 4 of the top 10 shared at res 7, 5 at
+    res 5. The Læsø marina cell is our rank 9 and EMODnet's 16 984 (moored
+    boats draw no track line). 10.26 % of EMODnet's leisure hours fall where we
+    have nothing: **1.1 % inside the Danish core, 7.1 % south of 54.5 N, 33 %
+    east of lon 13.5, 61 % west of lon 7** — the bbox reaches water the Danish
+    receivers do not.
+
+### Design review
+
+`punchcard:punchcard` on the staged diff — **one** finder pass (passes 1 and 2
+on an APFS clone) plus this session's own pass 3 (the two mutation tests
+above) — lighter than S9's three finders, on purpose: the diff is read-only
+SQL and one script, and the judge had already re-measured every headline
+number on the main store. Twenty-two candidates; **thirteen accepted and
+fixed** (one Opus fix pass, each re-measured):
+
+1. 🟡 *The TSV header count (18) was hard-coded four times in `sql/62` and
+   silent if the header shrank* — measured: one pixel lost, no error. Fixed:
+   the header's `built:` date line removed (reruns are now byte-identical),
+   a `throwIf` on the counted `#` lines; growth → exit 72, shrink → exit 395.
+2. 🟡 *The step-flag rule lived twice* — unrounded in SQL, rounded in Python
+   (38 rows at exactly 4/3 disagree). Fixed: `flag_vessels` / `flag_msgs`
+   columns from the SQL expression; Python stops re-deriving; 1 349 / 2 216.
+3. 🟠 *The regional split of missed EMODnet hours was a literal no query
+   produced*, and two of its four numbers were wrong (3.0 % / 13.3 %). Fixed:
+   `sql/62` block 5; the note quotes 1.1 / 7.1 / 33 / 61 %.
+4. 🟡 *`dup_month` documented as flagging 2015-10; it cannot.* Comment fixed.
+5. 🟡 *Stale "keeps all 138"* → 139.
+6. 🟡 *"Reporting rate" survived the relabel in six places* (block titles,
+   finding 60's title, the docstring). All say message count / duplication;
+   the two survivors are the physical AIS interval in `sql/50`/`sql/52`.
+7. 🟡 *`rasterio` (69 MB) was paid by every plot script.* Moved to the
+   `emodnet` dependency group; `import rasterio` fails without `--group`.
+8. 🟡 *`sql/62` block 1 is "the 200 densest among floored cells", not
+   EMODnet's top 200* — 18 (res 7) / 23 (res 5) are floored out. Header,
+   legend and caption reworded; `top200_floored_out` emitted in block 3.
+9. 🟡 *`emodnet.py`'s idempotence note was false* (it deletes the zips it
+   says it reuses) and `/tmp` was not "the OS temp dir". Reworded;
+   `tempfile.gettempdir()`.
+10. 🟡 *`sql/13` left in place, wrong and unreferenced.* Removed; references
+    reworded (DECISIONS).
+11. 🟡 *"Ghost MMSIs are garbled AIS frames" stated as fact* (judge's own).
+    Now the measurement, with the reading labelled a reading.
+12. 🟡 *"Reach is stable" ignored the ±18 % drifts* the panels show (judge's
+    own). Finding 60 quotes ×0.82 .. ×1.16 over the eleven unflagged regions.
+13. 🟡 *Adoption chart label collided with the 2018 cohort numbers* (judge's
+    own). Moved.
+
+Accepted as is, with the reason: the CTE chain copied four times in `sql/62`
+and the `d`/`keep` CTEs three times in `sql/60` (no cross-statement scope in
+`clickhouse local`; S9 accepted the same, headers say diff them); the caps,
+window dates, main-year list and k floor spelled in both SQL and Python (the
+Python copies are the asserts' independent literals — that is what pins them);
+block-width parsing (widths verified unique per file, set-equality asserted);
+the committed TSV being machine output in a directory whose comment says hand
+files (the `.gitignore` comment now states the exception and why); no
+`test_*.sh` harness for `sql/60–62` (the 35 s script with 66 asserts is the
+check, and two mutations redden it — recorded above). One finder candidate
+was a false positive caused by this session: the finder ran while the judge's
+mutation test had `>= 1` on disk; the tree was clean before the finder
+finished, and the finding is noted here so nobody hunts for it.
+
+### Deviations from `docs/PLAN.md` § S10
+
+- **"One summer month" is July 2021**; the comparison is on rank, in
+  vessel-hours, k ≥ 5 per emitted cell; `notes/emodnet.py`, the committed
+  TSV and `sql/62` were not in the plan. EMODnet's WCS cannot serve a time
+  slice (DATA.md).
+- **"Receivers added → step changes" is a negative result**: one step in
+  eleven years. What did change, twice, is how many copies of a message the
+  archive keeps (findings 58–59), which no head count sees.
+- **`sql/13_coverage_daily.sql` removed** rather than fixed in place.
+- **The S4-tails "first sight" peak-day figures (2 055 / 3 598 / …) were
+  pre-redo**; the current store's `sql/10` gives 1 936 / 3 464 / 4 950 /
+  6 771 / 7 255 / 7 527.
+
+### Open questions for S11
+
+Carried: the winter night-share step is now answered (finding 62); `h3_land`
+not materialised; HSC absent; the hidden passenger fleet (12–18 %). New from
+S10:
+
+- **The 2023 duplication onset** is bracketed to 2022-03 → 2023-02 (begins)
+  and 2023-03 → 2023-11 (complete); loading 2022-03..2023-01 would date it.
+  Not proposed — the chapter needs the flag, not the date.
+- **2024-09 is an outlier inside the stepped era** (1.09 % of vessel-days
+  over the ceiling, three times its neighbours); not investigated.
+- **The data card must carry findings 58–59 verbatim**: `msgs` and
+  `moving_msgs` are not comparable across 2015-09 or across 2023; `vessels`,
+  `dist_nm` and every head count are.
+- **Class B per region is never published** (DECISIONS); `leisure_daily` at
+  res 5 must still pass k ≥ 5 per cell-day — `sql/62`'s floor is the pattern.
+- **The bbox is not Denmark** (finding 57, 63): the data card and the essay
+  say "the leisure fleet in this box".
+
+**Next session: S11 — the open dataset.** Read `docs/PLAN.md` § S11.
 
 ---
 
