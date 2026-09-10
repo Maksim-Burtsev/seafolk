@@ -1,6 +1,10 @@
 # Data is never committed — with one exception: the two hand-collected context
 # CSVs have no machine source, so they ARE the source and they live in git.
-# (Five of them now: S8 added two and S9 added anchorages.csv.)
+# (Six of them now: S8 added two, S9 added anchorages.csv, and S10 added
+# emodnet_2021-07_leisure.tsv. That last one IS machine output — but of
+# notes/emodnet.py over 723 MB of third-party zips that are deleted again on
+# the same run, and it is a published aggregate of somebody else's, 5.7 MB, so
+# committing it is what makes sql/62 reproducible without the download.)
 # They are named one by one, not matched by `*.csv`: anything else that lands in
 # data/context/ is machine output, and a stray `INTO OUTFILE 'data/context/x.csv'`
 # off vessel_day would otherwise be one `git add` away from publishing MMSIs.
@@ -24,6 +28,7 @@ data/context/*
 !data/context/ferry_lines.csv
 !data/context/ferry_timetable.csv
 !data/context/anchorages.csv
+!data/context/emodnet_2021-07_leisure.tsv
 
 # local tooling
 .venv/

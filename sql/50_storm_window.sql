@@ -86,8 +86,9 @@
 --   "loaded" is `SELECT DISTINCT day FROM vessel_day`, not load_log's
 --   ts_min/ts_max ranges. vessel_day answers the question actually being
 --   asked — is there data for this calendar day — while a load_log range is
---   a property of an archive FILE (a monthly zip covers 28-31 days, and
---   sql/13's header records that its own toDate(ts_min) keying is unfixed).
+--   a property of an archive FILE (a monthly zip covers 28-31 days, which is
+--   what the former sql/13_coverage_daily.sql keyed on and got wrong; S10
+--   removed that file and sql/60 block 2 expands the range instead).
 --   The distinct-day scan is 0.3 s: `day` is the first ORDER BY key.
 --
 -- MEASURED, which rule fired for each of the 15 storms whose window touches a

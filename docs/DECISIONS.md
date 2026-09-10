@@ -443,3 +443,65 @@ what it rules out.
   for 6 of 14 storms; Floriane's least-bad own-date hour is a ratio of 1.05 —
   no dip — and is reported as such rather than borrowing the dip three days
   later. Rules out a whole-window minimum as "the storm".
+- 2026-09-11 (S10) — **`rasterio` is a dependency, for the EMODnet cross-check
+  and nothing else.** EMODnet publishes monthly vessel density as GeoTIFF on a
+  1 km EPSG:3035 grid; there is no GDAL on this machine, EMODnet's WCS cannot
+  serve a time slice (docs/DATA.md), and the monthly zips are the only route.
+  `rasterio` bundles PROJ, so one library reads the raster and reprojects the
+  pixel centres to WGS84 in `notes/emodnet.py`; nothing under `sql/`,
+  `scripts/` or `site/` imports it, and it lives in the `emodnet` dependency
+  group of `notes/pyproject.toml` (`uv run --project notes --group emodnet`),
+  so the plot scripts do not pull a 69 MB GDAL/PROJ wheel to draw a PNG. The
+  zips (723 MB) go to a scratch directory
+  outside `data/` and are deleted in the same run; the 5.7 MB TSV they distil
+  to is committed and un-ignored by name because re-deriving it costs the
+  download and it is a third party's published aggregate under CC-BY 4.0.
+  Rules out installing GDAL and rules out fetching the source at query time.
+- 2026-09-11 (S10) — **Message-count contamination is flagged, never
+  rewritten.** Two events inflate message counts: the archive's own feed
+  duplication 2015-08-28 → 09-30 (Class A 2.2x on the vessel-day median,
+  2.6x on the daily mean, `sql/60` block 3) and a permanent tail step that
+  begins between 2022-03 and 2023-02 and is complete by 2023-12 (the median
+  Class A vessel-day is flat, p90 and p99 double, and 0.18–1.09 % of
+  vessel-days exceed the 43 200 position reports a Class A transponder can
+  physically send, against 0–0.06 % before — the same message stored more
+  than once, `sql/60` block 6; sporadic over-ceiling days exist in 13 of the
+  36 clean earlier months, so 2023 changed the rate, not the kind). `sql/60` emits a `dup_window` flag and
+  the measured factors; the store is not touched, because `vessels`
+  (uniqExact) and `dist_nm` (the ≥ 1 s step guard in `sql/03`) are immune and
+  a rewrite would have to invent a per-message rule for data that no longer
+  exists. Rules out any chart that compares raw message counts across
+  2015-09 or across 2023 without saying so; head counts are the cross-year
+  quantity.
+- 2026-09-11 (S10) — **Class B is never counted per region.** `sql/60`'s
+  spatial blocks filter `mobile = 'Class A'` in their innermost scan; Class B
+  appears store-wide per day, period or year only. A res-4 region-day can hold
+  fewer than five leisure vessels and the notes are committed, so the k ≥ 5
+  rule of CLAUDE.md would otherwise have to be applied to an internal
+  analysis file. Rules out a leisure coverage map at any grain finer than the
+  bbox before S11's export logic exists.
+- 2026-09-11 (S10) — **Vessel-hours per cell is the unit compared with
+  EMODnet, and only the rank is compared.** EMODnet's hours are track time
+  (a line between consecutive positions cut by a 1 km grid); ours are
+  presence (sum over cell-hours of the exact distinct-vessel count). A moored
+  boat is 744 vessel-hours to us and ~0 to EMODnet — Læsø's marina cell is our
+  9th densest and EMODnet's 16 984th — so levels are not comparable and no
+  ratio is quoted. Spearman where both sources see water: 0.85 at res 7,
+  0.80 at res 5; `sql/62`. Rules out calibrating our counts against EMODnet.
+- 2026-09-11 (S10) — **The adoption series is the common window, Mar 1 –
+  Aug 26.** It is the only stretch loaded in all six main years (2024 starts
+  Mar 1, 2026 ends Aug 26) and it ends two days before the Sep-2015
+  duplication starts. The denominator for "leisure per commercial vessel" is
+  Class A heard ≥ 5 days: yearly distinct Class A carries 8–9 k one-day ghost
+  MMSIs in 2015/2018 (7 617 of 2015's sent ≤ 3 messages all year) against
+  ~3 k later, and would read as a fleet that shrank by a third. Rules out
+  quoting yearly distinct Class A as a fleet size anywhere.
+- 2026-09-11 (S10) — **`sql/13_coverage_daily.sql` is removed; `sql/60` block 2
+  is the daily coverage reference.** S4's query keyed `load_log` on
+  `toDate(ts_min)`, which files a whole monthly zip under the 1st and leaves
+  the other 27–30 days NULL through a LEFT JOIN — 1 213 of the 2 122 loaded
+  days. It had no consumer (no note, plot or site file read it) and the design
+  review found the correction living only in a header comment next to the
+  wrong file. `sql/60` expands each `load_log` row into the days its
+  `ts_min..ts_max` range covers and emits a `grain` column. Rules out two
+  files answering one question with one of them documented-wrong.

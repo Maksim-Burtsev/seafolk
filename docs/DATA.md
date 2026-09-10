@@ -89,8 +89,20 @@ Last verified: 2026-09-02. Anything marked *(unverified)* still needs a check.
   Excludes fishing vessels < 15 m and leisure craft < 45 m. Registration required.
   Useful for ferries/storm chapters only.
 - **Digitraffic (Finland)** — realtime only, CC BY 4.0, Class B removed.
-- **EMODnet Human Activities** — monthly vessel density 1 km grid by ship type,
-  2017 →, commercial use allowed. Cross-check for coverage drift.
+- **EMODnet Human Activities** — monthly vessel density on a 1 km EPSG:3035
+  grid by AIS ship-type code, 2017-01 → 2024-12, CC-BY 4.0. Unit: hours per km²
+  per month, built by intersecting the line between consecutive positions of
+  one ship with the grid — *track* time, so a moored boat contributes almost
+  nothing. One zip per ship-type code:
+  `https://ows.emodnet-humanactivities.eu/geonetwork/srv/api/records/0f2f3ff1-30ef-49e1-96e7-8ca78d58a07c/attachments/EMODnet_HA_Vessel_Density_<NN>.zip`
+  (04 = Sailing 385 MB, 05 = Pleasure Craft 338 MB), 96 GeoTIFFs each, named
+  `vesseldensity_<NN>_<YYYYMM>01.tif`. **Do not try the WCS endpoint** —
+  its time axis is broken server-side (any `subset=time` in WCS 2.0.1 answers
+  "startTime is null"; 1.0.0 / 1.1.1 are refused) and the server ignores Range
+  requests, so one month costs the whole zip. S10 cross-checked July 2021
+  (`notes/emodnet.py`, `sql/62_emodnet_compare.sql`); the July-2021 leisure
+  pixels inside the project bbox are committed as
+  `data/context/emodnet_2021-07_leisure.tsv`.
 - **HELCOM** — annual density maps 2006–2024. Cross-check.
 - **DMI** — Danish weather; named storms since 2013. Collected in S5 into
   `data/context/storms.csv` (24 rows, committed, one source URL per row).

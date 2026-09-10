@@ -662,22 +662,45 @@ stops first and which never stops, without the caption?
 
 ---
 
-## S10 — The honesty layer: coverage and adoption
+## S10 — The honesty layer: coverage and adoption *(done 2026-09-11)*
 
 **Goal:** Separate "more boats" from "more transponders" and "more receivers".
 
-**Files:**
-- Create: `sql/60_coverage_index.sql` — Class A distinct vessels and messages
-  per day per H3 macro-region (res 4) — receivers added → step changes here.
-- Create: `sql/61_adoption.sql` — Class B distinct MMSI per year, first-seen
-  year per MMSI, retention; leisure vessels per Class A vessel ratio.
-- Create: `notes/honesty.md` — the paragraph the essay opens with: what we can
-  and cannot claim, with numbers. Cross-check one summer month against EMODnet
-  density (download the GeoTIFF for that month; compare rank order of the ten
-  densest cells).
+**Files:** *(corrected to what exists)*
+- Create: `sql/60_coverage_index.sql` — Class A ("the instrument") per day per
+  H3 res-4 region: exact distinct vessels, messages, messages per vessel; the
+  store-wide daily reference with `load_log` shares joined by **day range**
+  (S4's `sql/13_coverage_daily.sql` keyed `load_log` on `toDate(ts_min)`,
+  wrong for monthly files; it had no consumer and is removed); the measured
+  Sep-2015 duplication factor; a step
+  table per (region, month) against the previous *loaded* month; the winter
+  night-share question with two Class A controls; and the message-rate
+  distribution per year against the physical ceiling of a Class A transponder
+  (43 200 position reports a day). Class B appears store-wide only — never
+  per region.
+- Create: `sql/61_adoption.sql` — from `vessel_day`, MMSI never emitted: Class B
+  distinct per year (full year and the **common window Mar 1 – Aug 26**, the
+  only stretch loaded in all six main years), first-*loaded*-year cohorts,
+  retention to the next loaded year with the gap length, leisure per Class A
+  vessel heard ≥ 5 days (yearly distinct Class A is a broken denominator —
+  one-day ghost MMSIs), report-rate proxies, flag-prefix shares.
+- Create: `notes/emodnet.py` + `data/context/emodnet_2021-07_leisure.tsv`
+  (committed, 5.7 MB) + `sql/62_emodnet_compare.sql` — the plan's "one summer
+  month" is **July 2021**; the comparison is on *rank* (vessel-hours per cell
+  vs EMODnet hours), k ≥ 5 on every emitted cell. `rasterio` added to
+  `notes/` as the `emodnet` dependency group (DECISIONS).
+- Create: `notes/plot_honesty.py` (three PNGs) and `notes/honesty.md` — the
+  paragraph the essay opens with, findings 53 →.
 
-**Validate:** the coverage index is flat or has explainable steps; adoption
-curve is written down.
+**Validate:** `sql/60`–`62` timings; the coverage index is flat or has
+explainable steps (there is exactly one large-region head-count step,
+Skagerrak 2018-12 → 2021-01; every other flag is a message-rate flag on the two
+duplication events); the adoption curve is written down with the cohort and
+retention tables.
+
+**You verify:** `notes/img/honesty-coverage.png` — does the eye see that head
+counts stay level where message counts step? `notes/img/honesty-adoption.png` —
+is "more boats vs more transponders" a visible distinction?
 
 **Commit:** `data(s10): coverage and adoption analysis`
 
