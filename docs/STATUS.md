@@ -3,10 +3,229 @@
 Newest session on top. Each entry: what was done, findings with numbers, open
 questions, and the exact next session. Write it for someone with zero context.
 
-**Next session: S9 — chapter 04 analysis: when the storm comes**, `docs/PLAN.md`
-§ S9. Chapters 01–03 are in `notes/ch0[123]-findings.md` (S6–S8 below). The
-store gained four derived ferry tables in S8 (`sql/40`, ~395 MiB, rebuilt in
-~100 s); the aggregates and context layers are unchanged since S5.
+**Next session: S10 — the honesty layer: coverage and adoption**, `docs/PLAN.md`
+§ S10. Chapters 01–04 are in `notes/ch0[1234]-findings.md` (S6–S9 below). The
+store is unchanged since S8's four ferry tables; S9 wrote nothing to it.
+
+---
+
+## S9 — Chapter 04 analysis: when the storm comes — 2026-09-10 *(done)*
+
+**What was done.** Four query files `sql/50_storm_window.sql` (per storm, fleet
+and hour: vessels heard, moving messages against the same hour a fortnight
+away, Danish-end ferry departures), `sql/51_anchorage_fill.sql` (anchorage
+cells by rule + hand label, a four-way guard, vessels present per hour around
+each storm), `sql/52_who_stays.sql` (exact daily count of vessels that moved
+≥ 1 nm; the derived peak hour with `is_dip`; the hidden ferry fleet per storm),
+`sql/53_storm_oracle.sql` (Pia's fishing week from `vessel_day` next to
+`h3_hourly`; the Ærø line recounted from raw `public_track` positions by
+`sql/43`'s method next to `ferry_crossing`); one committed context file
+`data/context/anchorages.csv` (143 rule cells, 74 labelled anchorages with a
+source URL, 69 named and excluded; five header/integrity asserts in
+`scripts/test_context.sh`); `notes/plot_ch04.py` (three PNGs, 45 asserts,
+every quoted number printed) and `notes/ch04-findings.md` with findings 38–52.
+Nothing under `sql/0*`–`sql/4*` or `scripts/load.sh` changed; the store was
+read, never written. Roles: Opus 5 subagents implemented (task A the SQL and
+the CSV, two rounds; task B the plots and the note; C1 and C2 the review
+fixes); this session verified two load-bearing assumptions on the store before
+writing the plan (Pia is visible and the story is *who* stops: fishing −87 %,
+passenger −34 %, cargo no dip; Skagen Red is findable by a still-share rule),
+reviewed at each checkpoint with its own queries, ran the design review with
+three finder passes on APFS clones, judged, ran Validate, wrote the docs and
+committed. `docs/DECISIONS.md` gained four entries; `docs/PLAN.md` § S9 was
+corrected to what exists.
+
+**Three things settled at planning time, all measured.** (1) The plan's
+"hourly moving vessels by group" is not recoverable from `h3_hourly` (`vessels`
+is a uniqExact state over everything present); the chapter uses an exact head
+count, a within-fleet message ratio and exact daily moved-vessel counts, and
+names which is which everywhere. (2) The plan's marina exclusion in the
+anchorage rule deleted Skagen Red itself (the marina shares the roadstead's
+res-7 cell; 1 021 / 1 158 / 273 vessels in 2015 / 2018 / 2025) and 44 of the
+143 labelled cells — removed, with the measurement in `sql/51`'s header.
+(3) The fortnight-earlier reference is unloaded for Dagmar·Egon (the archive
+starts 2015-01-01): −14 d for thirteen storms, +14 d there, both for Otto.
+
+### Validate — real output
+
+```
+$ for f in sql/5[0-3]_*.sql; do /usr/bin/time -p scripts/ch.sh "$f" > /dev/null; done   (measured by this session)
+sql/50_storm_window.sql     2.01 s   26 160 rows (15 cols)
+sql/51_anchorage_fill.sql  29.60 s   758 + 1 + 38 534 rows (9 / 1 / 8 cols; 2.7 GB RSS)
+sql/52_who_stays.sql        2.98 s   1 090 + 140 + 146 rows (12 / 11 / 6 cols)
+sql/53_storm_oracle.sql     0.24 s   8 + 8 rows                          (budget: 60 s each)
+
+$ scripts/ch.sh sql/53_storm_oracle.sql
+  Pia week, Class A fishing: h3_hourly moving_msgs = vessel_day moving_msgs on all 8 days (gap 0);
+  vessels heard 327 → 298, moved (moving_msgs > 0) 123 → 41, moved ≥ 1 nm 95 → 11;
+  Svendborg–Ærøskøbing 12-18..25: public_track recount 20 20 20 16 18 18 14 16 = ferry_crossing, gap 0, 2 vessels.
+$ uv run --project notes notes/plot_ch04.py            → exit 0, 45 asserts, 539 lines printed,
+      wrote notes/img/ch04-window.png, ch04-anchorage.png, ch04-who-stays.png
+$ grep -c 'sql/5[0-3]_' notes/ch04-findings.md         → 23   (≥ 5 required)
+$ grep -rEn '\b[0-9]{9}\b' notes/ch04-findings.md notes/plot_ch04.py sql/5*.sql | wc -l → 0
+      (data/context/anchorages.csv holds 23 nine-digit OSM way ids inside source_url — public objects)
+$ bash scripts/test_context.sh                          → ALL PASS (35 asserts, six new)
+$ scripts/ch.sh -q "SELECT count() FROM load_log"      → 949  (store untouched)
+$ du -sh data/ch ; df -h . | tail -1 ; ls data/raw | wc -l
+11G data/ch · 248 Gi free · data/raw empty
+```
+
+### Findings
+
+Full text with charts: `notes/ch04-findings.md`. The headlines:
+
+38. **Cargo does not stop, not once in fifteen storms** (`sql/52`): share of
+    vessels that moved ≥ 1 nm, storm dates vs a fortnight away, −0.072 at
+    worst (Dagmar·Egon), median −0.015; under Pia the fleet sent *more* moving
+    messages on the storm's second date (4 683 637 vs 4 544 874).
+39. **Fishing stops hardest** (`sql/50`, `sql/52`): share moved −0.446 under
+    Pia (0.057 vs 0.503), −0.443 Dagmar·Egon; pooled message ratios 0.10–0.14
+    on the four deepest; on Pia's second date 58 921 moving messages against
+    461 314 two days earlier while 298 boats were still heard.
+40. **The order is fishing (+0 h), leisure (+6), other (+9), ferries (+17),
+    cargo never** — the hour each fleet's 5-hour mean first halves against
+    its own pre-window median; fishing halves on 14 of 14, cargo on 2.
+41. **Ferries thin the timetable and keep sailing** (`sql/50`): Danish-end
+    departures 0.705 (Malik) and 0.718 (Pia) of the reference; the passenger
+    fleet's share moved barely moves (Pia −0.078) — the same ships, fewer
+    times.
+42. **`other` behaves like a fishing fleet with a contract** — halves on 9 of
+    14, median share-moved delta −0.090.
+43. **Leisure stops completely, and only three storms can say so** (`sql/52`):
+    Johanne, Knud, Amy — share moved −0.522 / −0.348 / −0.550 over 1 110 /
+    1 336 / 760 vessel-days; on Amy's peak hour 857 leisure vessels heard and
+    9.2 % of their messages moving, against 73.6 % a fortnight earlier.
+44. **Winter leisure is 10–20 boats a day** (p25 9.8, median 14, p75 22, max
+    61 over 68 Dec–Feb days) against 234–328 transponders heard; the chart's
+    floor is on the day count, not the head count.
+45. **"A storm that shows nothing" depends on the fleet**: Knud, Sif and
+    Johanne, invisible on chapter 03's ferries, cut fishing by 0.28 / 0.26 /
+    0.11; the one quiet storm on every instrument is Nora (departures 0.989).
+46. **Floriane has no dip on its own date** (`sql/52`): least-bad own-date
+    hour 1.05; the whole-window minimum 0.76 is the window's last hour.
+47. **The derived peak lands anywhere in the day** — 00:00 to 23:00 across
+    the 14 storms; DMI's date is a date.
+48. **Nobody piles into the anchorages** (`sql/51`): over 70 storm × anchorage
+    cells the median ratio of storm hours to the 72 hours before is 1.02;
+    Copenhagen roads *empties* under Otto (6.0 → 2.6).
+49. **What the anchorages show is a week, not a storm**: Skagen Red ~20
+    vessels an hour through Pia's whole eight-day window against 14.3 a
+    fortnight earlier; storm ÷ fortnight median 1.06.
+50. **Alfrida is a run-up only** (2019 unloaded): fishing 0.18 → 0.08 over
+    29–31 December, confounded by New Year.
+51. **The two aggregate tables agree to the message**; "moved" is 72 → 24 →
+    11 on ≥ 1 nm against 99 → 63 → 41 on any moving message.
+52. **The Ærø line counted by two routes gives the same eight numbers.**
+
+### Design review
+
+`punchcard:punchcard` on the whole diff, three independent finder passes
+(each on its own APFS clone of the store) plus this session as judge, after
+the judge's own checks: **🟠 Ship after #1–#4**, fourteen findings, **all
+fourteen accepted and fixed** (C1 the SQL and the CSV, C2 the script and the
+note), each demonstrated by the number that moved:
+
+1. 🔴 *The hand file had three silent failure paths* — a duplicate h3 counted
+   the same vessels under two anchorages, a stray h3 was joined into block 3
+   as an anchorage, and `Not an anchorage` (capital N) passed the guard and
+   grew block 3 from 38 534 to 106 308 rows. Fixed: five asserts in
+   `test_context.sh`, a four-way `throwIf` guard in `sql/51`, and block 3 can
+   only profile cells the guard has vetted; all three mutations throw.
+2. 🔴 *Wrong numbers in the note and headers* — "up on five storms" (four);
+   "20–40 leisure boats move a mile in winter" (median 14); Dagmar·Egon's
+   peak "on the second date" (third); "6 of 15" (of 14); "1 090 + 148 rows"
+   (140); "Skagen Red is six cells" (seven); the smoothing "3-hour" in the
+   printout against `k=5`; `labelled` counting the empty name (38 vs 37);
+   Floriane's 0.76 being the window's last hour. All rewritten; every quoted
+   number is now printed by `numbers()`.
+3. 🟡 *The ferry column pooled foreign lines (36.5 %) and harbour legs and the
+   note called it "the country's ferry service".* Restricted to island /
+   domestic / international; Pia's departures 1 540 + 1 254 → 1 076 + 880,
+   ratio 0.718.
+4. 🟡 *The hidden ferry fleet reaches `passenger` and `other`* — on Pia 19.4 %
+   of the vessels that are ever ferries were filed outside `passenger`, 21.6 %
+   on the reference date. Measured per storm in `sql/52` block 3, stated in
+   the note's caveats and against finding 42.
+5. 🟡 *The leisure floor was on the wrong instrument* (judge's own finding):
+   `heard ≥ 100` let through winter storms where 250–370 transponders are
+   heard per hour and 10–20 boats move a day, and the chart's winter leisure
+   lines were noise that dominated every panel. Floor moved to reference-day
+   `moved ≥ 250` from `sql/52`; solid leisure only on Johanne, Knud, Amy.
+6. 🟡 *Two overlaps unstated*: Gorm's +48..+95 h are Helga's −72..−25 h (48
+   rows emitted twice), and Nora's reference hours lie in Malik's +72..+119 h.
+   In `sql/50`'s header and finding 40.
+7. 🟡 *`sql/53` block 1 was the same expression on the same table as `sql/52`*
+   and its Ærø side counted `ferry_crossing` on both sides. Block 1 now says
+   it is a consistency check (only `msgs_gap` is independent; there is no
+   fishing track to recount); the Ærø oracle recounts raw `public_track`
+   positions by `sql/43`'s method — same 20/20/20/16/18/18/14/16.
+8. 🟡 *Floriane's peak drawn like a real peak.* `is_dip` column; hollow ▲ and
+   hollow points; exactly one storm has `is_dip = 0`.
+9. 🟡 *Chart 2's Helsingør panel was empty* (6 of 192 pooled hours) and an
+   empty series crashed the label call. Panel dropped with the reason in the
+   caption; guard added; every Danish anchorage name asserted present.
+10. 🟡 *`ratio_moving` NULL sentence named the wrong case* (2 314 rows, all
+    "heard but nothing moves") and the "consumer must zero-fill" paragraph
+    contradicted the script, which asserts a dense window. Both rewritten.
+11. 🟡 *sql/51 ran over budget after the guard rewrite* (57 s, four scans of
+    `h3_hourly`). Guard folded into one scan; block 3 prefilters on the
+    vetted cells (first ORDER BY key): 25.7 s on the fix run, 29.6 s here,
+    output byte-identical.
+12. 🟡 *A guard-sign bug found while fixing*: the new guard returns 1 when
+    sound and the script asserted 0 — the script had never run green against
+    the new SQL. Fixed with the reasoning in the comment.
+13. 🟡 *Asserts without a mutation that reddens them* (finder harness, 25
+    mutations, 12 green): vacuous `still_share ≥ 0.8` / `moved ≤ heard`
+    removed; window length per storm, peak within own dates, halving table,
+    anchorage medians, block-3 names ⊆ labelled, `ratio_moving` round trip,
+    the full eight-day oracle lists on both sides, `ndays` per storm, and the
+    reference as a datetime offset (±14 d at the same hour) added; M2 and M4
+    now red.
+14. 🟡 *`.gitignore` had to un-ignore the CSV by name* (like the other four
+    hand files) — done by task A, verified by `git check-ignore`.
+
+Accepted as is, with the reason: the window/reference CTEs are copied
+verbatim into `sql/51` and `sql/52` (no SQL templating in `clickhouse local`;
+the header says diff them before believing a change; the finder diffed them —
+identical). Class B daily counts under 5 vessels (Dagmar·Egon leisure moved =
+2) appear in `sql/52`'s output and the printout: they are whole-bbox counts
+with no cell and no MMSI, not published cells; **S11 must apply the k ≥ 5
+floor to any exported row**. The S8 finding that `dist_nm` drops steps across
+reception gaps > 1 h was tested on Pia's fishing days: the moving-but-under-
+1 nm vessels are densely received near-stationary boats, not gapped tracks.
+
+### Deviations from `docs/PLAN.md` § S9
+
+- **"Hourly moving vessels" and "vessels stationary in anchorage cells" are not
+  recoverable** from `h3_hourly`; replaced as described above (DECISIONS #1).
+- **The marina exclusion was measured and removed** (DECISIONS #3).
+- **`sql/53`, `anchorages.csv`, `sql/52` blocks 2–3 and `notes/plot_ch04.py`
+  were not in the plan.** The ferry column counts Danish-end lines only.
+- **The anchorage hypothesis is a negative result** (findings 48–49); the
+  plan's Validate expectation of a "visible dip in ferries" for Pia and Malik
+  holds on departures (0.72 / 0.71), not on vessels.
+
+### Open questions for S10
+
+Carried: `sql/13_coverage_daily.sql` keys on `toDate(ts_min)` (unfixed); the
+Sep-2015 duplication mask; the winter night-share step; `h3_land` not
+materialised; HSC absent; the hidden passenger fleet (12–18 % a year, and now
+measured per storm date in `sql/52` block 3: 13–27 % of ever-ferries filed
+outside `passenger`). New from S9:
+
+- **Alfrida** (2019-01-01) has only its run-up in the store; **Rolf**
+  (2024-02-23) nothing at all. A 2019-01 load and a 2024-02 load would add two
+  storms; not proposed — the chapter has fifteen.
+- **The Drogden channel cell** (3 758 vessels a year, 80 % of messages under
+  0.5 kn) is excluded for want of an anchorage source; if a charted anchorage
+  there is found, add the row and block 3 picks it up.
+- **The anchorage elevation under Pia is a week, not a storm** — whether it is
+  the Christmas cargo lull is an S12 question for the essay's wording, not a
+  query.
+- **k ≥ 5 for whole-bbox daily counts** — decide at S11 whether the export
+  rule applies to a count with no cell.
+
+**Next session: S10 — the honesty layer.** Read `docs/PLAN.md` § S10.
 
 ---
 

@@ -402,3 +402,44 @@ what it rules out.
   not measurement: no number in it. Rules out grouping by OSM object in any
   published table, and rules out a data-driven merge of routes by shared
   endpoints (union-find in SQL for a 280-row fact a human can read).
+- 2026-09-10 (S9) — **"Moving vessels per hour" does not exist in the store;
+  chapter 04 uses three instruments instead and says which one each number
+  is.** `h3_hourly.vessels` is a uniqExact state over every vessel present in
+  a cell-hour, moving or not, and no state of the moving subset was stored, so
+  the plan's "hourly moving vessels by group" is unrecoverable (the constraint
+  sql/11, 12, 24 and 30 already state). `sql/50` therefore emits, per hour,
+  an exact head count (`heard`, the merged state over all cells) and a
+  message-based movement signal (`moving_msgs` against the same hour a
+  fortnight away — a ratio within one fleet, never a level across fleets);
+  `sql/52` gives the exact count of vessels that moved ≥ 1 nm from
+  `vessel_day`, at day grain; ferries are counted in departures from
+  `ferry_crossing`. Rules out quoting any hourly number as "vessels moving".
+- 2026-09-10 (S9) — **The reference for a storm hour is the same UTC hour
+  14 days earlier, else 14 days later, else NULL — one fortnight, not a
+  seasonal baseline.** A fortnight keeps the weekday, the hour and the season.
+  Measured: −14 d for thirteen storms, +14 d for Dagmar·Egon (the archive
+  starts 2015-01-01), both for Otto (2023 holds February and December only);
+  no storm lost its reference. The windows are calendar dates with no
+  timezone conversion (`sql/41`'s rule) and Dagmar and Egon are one event.
+  Rules out a seasonal median as the baseline: the 2022/2023 storm windows are
+  59 days each and have no season to take a median over.
+- 2026-09-10 (S9) — **An anchorage is a rule plus a hand label, and the rule
+  has no marina test.** A cell-year is a candidate when Class A cargo + other
+  vessels leave four messages in five at under 0.5 kn there, at sea (the
+  `land` dictionary), with ≥ 50 distinct vessels in the year; the ≥ 100 cells
+  are hand-labelled in `data/context/anchorages.csv` with a source URL
+  (an OSM `seamark:type=anchorage` object within 8 km, or a published
+  roadstead), and the build throws on an unlabelled one. The plan's "not a
+  marina cell" filter was measured and removed: a res-7 cell is ~5 km² and
+  Skagen's marina shares its cell with the Skagen roadstead — the filter
+  deleted the country's biggest anchorage (1 021 / 1 158 / 273 vessels in
+  2015 / 2018 / 2025) and 44 of the 143 labelled cells. Rules out any
+  data-driven "is an anchorage" decision: the label is the decision, the rule
+  only proposes.
+- 2026-09-10 (S9) — **A storm's peak hour is derived from the data, inside the
+  storm's own dates.** DMI publishes dates, not hours, so the peak is the hour
+  of the storm's calendar dates at which the pooled Class A moving-message
+  ratio is lowest. Restricting to the storm's own dates changes the answer
+  for 6 of 14 storms; Floriane's least-bad own-date hour is a ratio of 1.05 —
+  no dip — and is reported as such rather than borrowing the dip three days
+  later. Rules out a whole-window minimum as "the storm".

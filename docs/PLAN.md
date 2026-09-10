@@ -614,19 +614,49 @@ timetable, the Sunday, and the outages without the caption?
 
 ---
 
-## S9 — Chapter 04 analysis: when the storm comes
+## S9 — Chapter 04 analysis: when the storm comes *(done 2026-09-10)*
 
-**Files:**
-- Create: `sql/50_storm_window.sql` — for each row in `storm`: hourly moving
-  vessels by group from −72 h to +72 h, normalised to the same weekday a fortnight
-  earlier.
-- Create: `sql/51_anchorage_fill.sql` — vessels stationary (SOG < 0.5) in known
-  anchorage cells (Ålbæk Bugt, Skagen Red, Aarhus Bugt …) by hour in the window.
-- Create: `sql/52_who_stays.sql` — share of each group still moving at peak.
-- Create: `notes/ch04-findings.md`.
+**Goal:** What each fleet does in the hours and days around the 15 named DMI
+storms that fall inside the loaded days, against the same hour a fortnight
+away; where the ships that stop wait; who is still moving at the peak.
 
-**Validate:** Pia (2023-12-21/22) and Malik (2022-01-29/30) both show a visible
-dip in ferries; if a storm shows nothing, note it — that is a finding too.
+**Files:** *(corrected to what exists)*
+- Create: `sql/50_storm_window.sql` — per (storm, mobile, ship_group, hour)
+  from −72 h before the storm's first date to +72 h after its last: `heard`
+  (exact, the merged uniqExact state over all cells), `moving_msgs` and its
+  ratio to the reference hour, and Danish-end ferry departures from
+  `ferry_crossing`. The plan's "hourly moving vessels" is **not recoverable**
+  from `h3_hourly` (DECISIONS 2026-09-10 (S9) #1). Reference = same UTC hour
+  14 days earlier, else 14 days later, else NULL (#2). Calendar-date rule
+  from `sql/41`; Dagmar and Egon are one event.
+- Create: `sql/51_anchorage_fill.sql` — anchorage cells by rule (Class A
+  cargo + other, at sea, still share ≥ 0.8, ≥ 50 vessels a year) joined to
+  the hand labels; a guard that throws on an unlabelled ≥ 100-vessel cell, a
+  duplicate, a bad note or a stray cell; vessels present per hour per named
+  anchorage around each storm. The plan's marina exclusion was measured and
+  removed (#3). The plan's "vessels stationary" is not recoverable either:
+  `present` is every vessel in the cell-hour.
+- Create: `data/context/anchorages.csv` (committed) — 143 rule cells, 74 of
+  them labelled as anchorages with a source URL, 69 named for what they are
+  and excluded. Labelling only. Five asserts in `scripts/test_context.sh`.
+- Create: `sql/52_who_stays.sql` — per (storm, fleet, day −3..+3) the exact
+  count of vessels heard and vessels that moved ≥ 1 nm from `vessel_day`;
+  the derived peak hour inside the storm's own dates (#4) with `is_dip`; the
+  hidden ferry fleet per storm and reference day.
+- Create: `sql/53_storm_oracle.sql` — **not in the original plan.** Pia's
+  fishing week from `vessel_day` next to `h3_hourly`, and the
+  Svendborg–Ærøskøbing crossings recounted from raw `public_track` positions
+  by `sql/43`'s method next to `ferry_crossing`.
+- Create: `notes/plot_ch04.py` — three PNGs in `notes/img/ch04-*.png`, every
+  quoted number printed, asserts with independent literals.
+- Create: `notes/ch04-findings.md` — findings 38–52, continuing chapter 03.
+
+**Validate:** each of `sql/50`–`53` under 60 s; `sql/53` — both sides agree
+on all eight days; Pia and Malik show a ferry dip (departures 0.72 / 0.71 of
+the reference); the storms that show nothing are named as findings.
+
+**You verify:** `notes/img/ch04-window.png` — can the eye see which fleet
+stops first and which never stops, without the caption?
 
 **Commit:** `data(s9): chapter 04 findings`
 
