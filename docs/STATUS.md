@@ -215,6 +215,13 @@ S10:
   res 5 must still pass k ≥ 5 per cell-day — `sql/62`'s floor is the pattern.
 - **The bbox is not Denmark** (finding 57, 63): the data card and the essay
   say "the leisure fleet in this box".
+- **For S12, from the user's review of this session:** the "opening
+  paragraph" in `notes/honesty.md` is *raw material*, not prose — a wall of
+  numbers with nothing human in it. The essay must not open with it. The
+  findings are strong enough (a fleet that tripled, an archive that quietly
+  started storing every message twice, a marina an official density map cannot
+  see); the job in S12 is to tell them in plain language and keep the numbers
+  as evidence, not as the sentence.
 
 **Next session: S11 — the open dataset.** Read `docs/PLAN.md` § S11.
 
