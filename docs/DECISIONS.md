@@ -505,3 +505,60 @@ what it rules out.
   wrong file. `sql/60` expands each `load_log` row into the days its
   `ts_min..ts_max` range covers and emits a `grain` column. Rules out two
   files answering one question with one of them documented-wrong.
+- 2026-09-12 (S11) — **`pyarrow` is a `notes/` dependency, and it is the only
+  thing that reads the exported Parquet in `scripts/test_export.py`.** The
+  privacy test has to open the published files the way a downstream user will:
+  reading them back through `clickhouse local` would test the writer with
+  itself, so a k-floor bug in the SELECT and a k-floor bug in the check would
+  cancel out and the test would pass. `pyarrow` is the smallest independent
+  Parquet reader available (DuckDB and Polars would both also work; pyarrow is
+  already the file format's reference implementation and pulls no query
+  engine). Rules out verifying the export with the engine that wrote it.
+- 2026-09-12 (S11) — **`huggingface_hub` is invoked with `uv run --with`, never
+  added to a project.** It is used once per release, by a human, from
+  `scripts/publish.sh hf`, and it is not imported by anything under `sql/`,
+  `scripts/` or `notes/`. A pinned dependency would be carried by every `uv
+  run` in the repo for one interactive upload a quarter. The CLI binary was
+  renamed `huggingface-cli` → `hf` in huggingface_hub 0.34 (verified 1.31.0 on
+  this machine, `hf upload --repo-type dataset`), which is a second reason to
+  call it as a tool and not to import it. Rules out a `publish` dependency
+  group.
+- 2026-09-12 (S11) — **Zenodo is rehearsed on the sandbox and no script ever
+  mints a DOI.** `scripts/publish.sh zenodo` creates the deposition, uploads
+  the files through the bucket URL, sets the metadata and prints the
+  prereserved DOI — and stops. It never POSTs `…/actions/publish`, because a
+  Zenodo DOI is one-way: it cannot be withdrawn, only superseded, and the first
+  published version is the concept DOI that goes into the paper, the card and
+  `CITATION.cff` forever. `ZENODO_LIVE=1` is the only way off
+  `sandbox.zenodo.org`, and the GitHub release is created `--draft` for the
+  same reason. Rules out a one-command publish and rules out automating the
+  release in CI.
+- 2026-09-12 (S11) — **`docs/dataset-card.md` is the single source for every
+  copy of the data card.** `scripts/export.sh` copies it to
+  `dist/dataset/README.md` (the Hugging Face card, hence the YAML front matter
+  at the top). That front matter is NOT universally ignored: GitHub release
+  notes render it as text, so `scripts/publish.sh release` writes a
+  front-matter-stripped copy to a temp file and passes THAT as `--notes-file`,
+  and `publish.sh zenodo` takes the first paragraph of the same stripped copy
+  as the description, with its Markdown link spelled out as plain text because
+  Zenodo does not render Markdown. The card lives in `docs/` because it is
+  reviewed with the rest of the docs and `dist/` is gitignored — a card written
+  into `dist/` would not be under review and would not survive `rm -rf dist`.
+  Rules out maintaining the privacy rule and the bias list in three files.
+- 2026-09-12 (S11) — **The private fleet is every Class B transponder UNION
+  every vessel with `ship_group = 'leisure'`, whatever its transponder class.**
+  "Class B" was a proxy for "private boat" and it leaks: 337–467 vessels a year
+  carry a Class A transponder and a pleasure/sailing ship type, and 81–92 % of
+  their cell-hours hold a single vessel — an unfloored res-7 hourly row for one
+  named-in-effect private boat, which is exactly what the k >= 5 floor exists
+  to prevent. The transponder is also not stable per vessel: 28–958 vessels a
+  year report both classes across the year (1–50 of them grouped as leisure),
+  so a rule keyed on the class alone would publish the same boat floored on
+  Monday and unfloored on Tuesday. `sql/70_export.sql` therefore writes
+  `class_a_hourly_*` WHERE `mobile = 'Class A' AND ship_group != 'leisure'`
+  (cargo, passenger, fishing, other) and `leisure_daily` WHERE `mobile =
+  'Class B' OR ship_group = 'leisure'`, at res 5 / day, HAVING vessels >= 5.
+  Cost, measured on the store: 341 092 of 1 445 495 private cell-days survive
+  the floor — 23.60 % of cell-days, 82.03 % of the moving messages. Rules out
+  any unfloored row with `ship_group = 'leisure'` anywhere in the export, and
+  `scripts/test_export.py` asserts that no class_a file contains one.

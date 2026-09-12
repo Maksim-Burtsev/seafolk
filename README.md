@@ -17,9 +17,9 @@ every AIS pipeline. This project keeps exactly that part and tells its story.
    season drift. Russian and English.
 2. **Explorer** — a static map (MapLibre + deck.gl over pre-computed tiles) with a
    year/month slider, vessel-class toggle, and a page per island.
-3. **Open dataset** — hourly aggregates on an H3 grid, 2014 → today, as Parquet on
-   GitHub Releases and Hugging Face, plus the loader and notebooks that reproduce
-   every chart.
+3. **Open dataset** — H3 aggregates for 2015, 2018, 2021, two storm months each
+   of 2022 and 2023, and 2024-03 → today, as Parquet on GitHub Releases and
+   Hugging Face, plus the loader and notebooks that reproduce every chart.
 4. **Posters and a short animation** — season rings, daily fingerprints, "the sea
    empties before a storm".
 
@@ -29,11 +29,30 @@ hour and weekday) · *03 Lifelines* (island ferries) · *04 When the storm comes
 
 ## Privacy rule
 
-Class B transponders belong to private boats and the people on them. The project
-publishes **aggregates only**: no MMSI, name, or track of a private vessel appears
-anywhere — not in the essay, not in the explorer, not in the dataset. The minimum
-published cell is H3 resolution 7 (~5 km²) × hour with at least five distinct
-vessels. Ferries and commercial ships are public and are named.
+Private boats belong to the people on them. The **private fleet is every Class B
+transponder and every vessel grouped as leisure whatever its transponder class**
+— a pleasure craft with a Class A radio is a private boat with a better radio,
+not a ship. The project publishes **aggregates only**: no MMSI, name, or track of
+a private vessel appears anywhere — not in the essay, not in the explorer, not in
+the dataset. Every published private-fleet cell holds at least five distinct
+vessels; resolution 7 × hour does not survive that floor (7.1 % of cell-hours,
+20.8 % of the moving messages), so the published private grain is H3 resolution 5
+(~250 km²) × day and the hourly resolution-7 layer is commercial Class A only.
+Ferries and commercial ships are public and are named.
+
+## Dataset
+
+The published aggregates are described by [`docs/dataset-card.md`](docs/dataset-card.md),
+which is also the README of the release and the Hugging Face card. Three files:
+`class_a_hourly_<year>.parquet` (commercial traffic only — cargo, passenger,
+fishing, other — H3 resolution 7 × hour), `leisure_daily.parquet` (the private
+fleet, Class B or leisure, H3 resolution 5 × day, **only cells with at least
+five distinct vessels** — the privacy rule above, enforced by
+`scripts/test_export.py`, which the export refuses to skip), and
+`ferry_daily.parquet` (crossings per named ferry line per day, with the coverage
+columns that say whether a zero means "cancelled" or "not heard"). Build them
+with `scripts/export.sh`, publish with `scripts/publish.sh`. Licence CC BY 4.0.
+**DOI: pending.**
 
 ## Layout
 

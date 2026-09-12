@@ -1,16 +1,64 @@
 # Data sources — verified facts
 
-Last verified: 2026-09-02. Anything marked *(unverified)* still needs a check.
+Last verified: 2026-09-12 (the DMA terms; the rest 2026-09-02). Anything marked *(unverified)* still needs a check.
 
 ## Danish Maritime Authority — historical AIS
 
 - Index: <http://aisdata.ais.dk/> (static page listing an S3 bucket
   `aisdata.ais.dk.s3.eu-central-1.amazonaws.com`). Free under the Danish PSI act.
-- **Terms of use: not yet read verbatim.** The PSI act is the general basis, but
-  the archive's own terms have not been opened. S11 reads them before the export
-  and records here the exact attribution string DMA requires, any disclaimer
-  (AIS providers often require "not for navigation"), and whether redistribution
-  of derivatives under CC BY 4.0 is actually allowed.
+- **Terms of use — read verbatim 2026-09-12.** The only terms DMA publishes are
+  on the *AIS data management policy* page
+  (<https://www.dma.dk/safety-at-sea/navigational-information/ais-data/ais-data-management-policy->).
+  The archive index <http://aisdata.ais.dk/> is a bare S3 bucket listing
+  rendered by JavaScript — no text, no terms, no licence file. The policy page
+  is written for *user access to the shore-based system* (paid web access and
+  proxy feeds); the open archive is the "data older than 24 months … made
+  available as open data for a limited period of time" bullet on that same
+  page. Its basis and its conditions, quoted exactly:
+  - > The Danish Maritime Authority grants access to AIS data on the basis of
+    > act no. 596 of 24 June 2005 on the further use of public sector
+    > information (the PSI act).
+  - > AIS data are stored in the real-time AIS system for up to 24 months.
+    > Data older than 24 months are packed and stored on an external disk and
+    > made available as open data for a limited period of time.
+  - > In order to be granted a user access for receiving AIS data from the
+    > shore-based AIS system of the Danish Maritime Authority, you must observe
+    > the following conditions:
+  - > The data recipient is responsible for handing the data received
+    > appropriately and in accordance with the law.
+  - > Data must not be combined with other data in a manner that will create
+    > data from which persons are identifiable, without a permit to do so from
+    > the Danish Data Protection Agency. In this connection, the data recipient
+    > should be considered the data responsible person in the sense of the act
+    > on personal data.
+  - > In case the conditions above are violated, the Danish Maritime Authority
+    > is entitled to disrupt the receipt of AIS data immediately and without
+    > notice. Disrupted data access can be temporary or permanent.
+  - > The Danish Maritime Authority can, at any time and without notice, change
+    > the nature of the data flow received, for example by changing the updating
+    > frequency, the area of coverage, safety updates, force majeure situations,
+    > etc.
+  - Limit of liability, in full:
+    > The Danish Maritime Authority does not guarantee the correctness of the
+    > AIS data transmitted and is not liable for any damages that may arise as
+    > a consequence of the use of AIS data, irrespective of how they have been
+    > caused. The Danish Maritime Authority is not liable in case of delay,
+    > interruption or loss of data due to failure of the transmission and
+    > communication facilities used or for other reasons beyond the control of
+    > the Danish Maritime Authority.
+
+  **What is NOT there, stated plainly:** no licence name (no CC, no ODbL, no
+  NLOD), **no required attribution string**, and **no "not for navigation"
+  clause** — neither on the policy page nor on the archive index. The PSI act is
+  the whole of the permission. So: the CC BY 4.0 we put on our *aggregates* is
+  our own choice, permitted because the PSI act allows re-use and nothing on the
+  page restricts derivatives or imposes share-alike; the attribution line in
+  `docs/dataset-card.md` ("Data: Danish Maritime Authority (aisdata.ais.dk),
+  aggregated by the Seafolk project") is ours, not a quoted requirement, and the
+  card says so; the "not for navigation" sentence in the card is ours too.
+  **The one binding sentence is the "persons are identifiable" condition, and
+  the k >= 5 floor of the export is our answer to it** (CLAUDE.md,
+  `scripts/test_export.py`).
 - Listing (checked by enumerating the bucket, 1 128 keys):
   - `YYYY/aisdk-YYYY-MM.zip` — monthly, 2006-03 → 2024-02 (a few months missing
     in 2016–2017; 2017 also has `all_sources_2017-MM.zip` variants).

@@ -3,7 +3,7 @@ name = "seafolk-notes"
 version = "0"
 description = "Validation plots for the Seafolk sessions. Not a package."
 requires-python = ">=3.12"
-dependencies = ["matplotlib>=3.9"]
+dependencies = ["matplotlib>=3.9", "pyarrow>=17"]
 
 # rasterio is a 69 MB wheel and ONE file imports it (notes/emodnet.py, which
 # reads the EMODnet GeoTIFFs). Keeping it out of `dependencies` means every
