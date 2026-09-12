@@ -3,13 +3,201 @@
 Newest session on top. Each entry: what was done, findings with numbers, open
 questions, and the exact next session. Write it for someone with zero context.
 
-**Next session: S11 — the open dataset**, `docs/PLAN.md` § S11. Chapters 01–04
-are in `notes/ch0[1234]-findings.md` (S6–S9), the honesty layer in
-`notes/honesty.md` (S10). The store is unchanged since S8's four ferry tables;
-S9 and S10 wrote nothing to it. **Read the S10 caveats before exporting
-anything:** message counts are contaminated twice (Sep-2015, and a permanent
-tail step from 2023), Class B is never published per region, and the k ≥ 5
-floor is already exercised by `sql/62`.
+**Next session: S12 — the essay**, `docs/PLAN.md` § S12. The dataset is built
+and verified in `dist/dataset/` (gitignored, 2.6 GB) but **not published**:
+publishing is the owner's step (`scripts/publish.sh`, order in its header) and
+the DOI is still `pending` in the card, `CITATION.cff` and `README.md`. The
+store is unchanged since S8. Chapters 01–04 are in `notes/ch0[1234]-findings.md`,
+the honesty layer in `notes/honesty.md`; S10's user note stands: the essay
+opens with prose, not with the number wall.
+
+---
+
+## S11 — Open dataset — 2026-09-12 *(done — built and verified, not published)*
+
+**What was done.** `sql/70_export.sql` writes three Parquet products into
+`dist/dataset/`, every statement a GROUP BY with `sum()` / `uniqExactMerge()`
+over `h3_hourly` (an AggregatingMergeTree may hold a key in two parts):
+`class_a_hourly_<year>.parquet` ×8 (Class A, res 7 × UTC hour × ship_group,
+**leisure excluded**), `leisure_daily.parquet` (the private fleet, res 5 × UTC
+day × ship_group, `HAVING vessels >= 5`) and `ferry_daily.parquet` (block 1 of
+`sql/41`, 289 159 rows, 18 columns, named lines). `scripts/export.sh` rebuilds
+the directory, copies `docs/dataset-card.md` to `dist/dataset/README.md`
+(fails if the card is missing), runs `scripts/test_export.py` (pyarrow reads
+the *written* files; 147 checks: exact per-product (column, type) allow-list,
+the k floor, H3 resolution 5 / 7 from the index bits, no `leisure` in Class A
+files, `hour` inside the file's year, key uniqueness, row counts and
+`sum(msgs)` / `sum(moving_msgs)` / `sum(vessels)` against a live store
+recount AND a literal measured this session, the store's loaded years equal
+the exported years, a 9-digit-integer guard on its own stdout and on the
+card) and writes `.tests-passed` only on PASS. `scripts/publish.sh` has
+`dry-run` / `release` (draft) / `hf` (`--private`, explicit file list) /
+`zenodo` (sandbox by default, never POSTs `actions/publish`, prints the
+concept DOI from `conceptrecid`); every sub-command refuses without the
+marker or if any file is newer than it. `docs/dataset-card.md` is the single
+source for the dataset README, the Hugging Face card (front matter with one
+`configs:` entry per product) and the release notes (front matter stripped).
+`CITATION.cff` (DOI added by hand once minted). `docs/DATA.md` now quotes the
+DMA terms verbatim; `docs/DECISIONS.md` gained five entries; `docs/PLAN.md`
+§ S11 corrected to what exists; `README.md` gained a Dataset section and two
+stale claims were fixed (2014 → today; res 7 × hour as the minimum cell).
+Roles: Opus 5 subagents implemented (task A the SQL, script and test; task B
+the card, citation, publish script and terms; one fix pass after the
+review); this session planned, read the DMA terms, measured every reference
+number on the main store before any subagent report existed, reviewed the
+diffs, ran the mutation tests, ran the design review (three finders on APFS
+clones), judged, asked the owner the one irreversible question, re-measured,
+ran Validate, wrote the docs and committed.
+
+**The DMA terms, read 2026-09-12** (`docs/DATA.md`): the archive index is a
+bare S3 listing; the only terms are on the *AIS data management policy* page.
+No licence name, no attribution string, no "not for navigation". One binding
+sentence — data must not be combined so that persons become identifiable
+without a permit from the Danish Data Protection Agency — and the k ≥ 5 floor
+is the answer to it. CC BY 4.0 on the aggregates is our choice; nothing
+restricts derivatives. The plan's stop condition did not fire.
+
+**The decision the review forced (owner's call, 2026-09-12).** The plan's
+"Class A is public, no floor" would have shipped Class A *leisure* yachts —
+337–467 a year — at res 7 × hour with no floor; measured on the main store,
+81–92 % of their cell-hours hold a single vessel (2015 0.919 … 2023 0.808 …
+2025 0.863): an hourly trail of an unnamed yacht in a 5 km² cell. 11–102 of
+them a year also report Class B leisure days. CLAUDE.md says "Class B /
+leisure", so the rule is now **the private fleet = every Class B transponder
+∪ every `ship_group = 'leisure'` whatever its class**; Class A files carry
+cargo / passenger / fishing / other only, and Class A leisure goes into
+`leisure_daily` under the floor (DECISIONS).
+
+### Validate — real output
+
+```
+$ /usr/bin/time -p scripts/export.sh                      (measured by this session, data/ch)
+sql/70_export.sql      real 52.74 s   (user 364 s — the eight Class A years dominate)
+dist/dataset           2.6G   class_a_hourly 2015 450M · 2018 458M · 2021 434M · 2022 59M · 2023 63M
+                              · 2024 382M · 2025 446M · 2026 289M · leisure_daily 4.8M · ferry_daily 1.3M · README.md 15K
+PASS — 147 checks, 257.2 M rows in 10 files                whole run real 117.35 s, exit 0, .tests-passed written
+$ scripts/publish.sh dry-run   → 11 files, 2.6G; release/hf/zenodo command lines; HF_TOKEN UNSET, ZENODO_TOKEN UNSET
+$ scripts/ch.sh -q "SELECT count() FROM file('dist/dataset/leisure_daily.parquet') WHERE vessels < 5"          → 0
+$ scripts/ch.sh -q "SELECT countIf(ship_group='leisure') FROM file('dist/dataset/class_a_hourly_2025.parquet')" → 0
+$ grep -rEn '\b[0-9]{9}\b' sql/70_export.sql scripts/test_export.py scripts/publish.sh scripts/export.sh \
+      docs/dataset-card.md README.md docs/DECISIONS.md CITATION.cff docs/DATA.md | wc -l                       → 0
+$ du -sh data/ch dist/dataset ; df -h . | tail -1
+11G data/ch · 2.6G dist/dataset · 242 Gi free · clones data/ch_a, ch_b, ch_rev1-3, ch_fix removed
+```
+
+Mutation tests, both red (files restored, final export green):
+`HAVING vessels >= 5 → >= 1` in `sql/70` — run by this session on the first
+version (3 FAIL: floor `min 1`, rows `1 396 819 vs 329 051`, literal) and by
+the fix pass on the final version on a clone (6 FAIL: floor, rows
+`1 445 495 vs 341 092`, literal, and the three sums); deleting
+`class_a_hourly_2023.parquet` and running the test alone — this session, 3
+FAIL, no marker. A back-dated marker makes `publish.sh dry-run` refuse with
+"newer than dist/dataset/.tests-passed, so untested" (fix pass).
+
+### Findings
+
+64. **Reference counts, main store, 2026-09-12.** Class A non-leisure grouped
+    rows per year: 45 268 396 / 46 676 185 / 44 527 813 / 5 983 224 /
+    6 156 200 / 36 833 820 / 43 112 480 / 28 001 968 (2015 / 18 / 21 / 22 /
+    23 / 24 / 25 / 26); 257.2 M rows over ten files.
+65. **The floor's cost on the private fleet at res 5 / day:** 341 092 of
+    1 445 495 cell-days survive — 23.6 % of cells, 82.0 % of moving messages.
+    Class B alone: 329 051 of 1 396 819 (23.56 % / 82.38 %). At res 7 / hour
+    the private fleet would keep 7.2 % of cell-hours and 20.0 % of movement
+    (Class B alone 7.1 % / 20.8 %) — the plan's "7.3 % / 47.7 %" was one day
+    (2025-07-16), not the store; DECISIONS 2026-08-30's conclusion stands,
+    its number was single-day.
+66. **Class A leisure is a private boat with a better transponder** (finding
+    above): 337–467 vessels a year, 81–92 % single-vessel cell-hours.
+67. **The all-9-digit heuristic does not catch this store's MMSI column**:
+    13 426 of `vessel_day`'s MMSIs are below 100 000 000 and 134 above
+    999 999 999, so `min >= 1e8 AND max <= 999 999 999` is false on the real
+    thing. Replaced by the exact schema allow-list; the stdout / card guard
+    (which looks at printed values, not column ranges) stays.
+68. **`ferry_daily` has 18 547 line-days with `fleet_moving = 0` and
+    `crossings > 0`** — a relief vessel's crossings count for the line while
+    its positions belong to its own-majority line (sql/41's rule). The card's
+    "how to read a zero" now defines `fleet` and says the cases are read in
+    order.
+
+### Design review
+
+`punchcard:punchcard` on the working-tree diff — three finder passes on APFS
+clones (`data/ch_rev1-3`), this session judged, one Opus fix pass. Forty-one
+candidates; **twenty-six accepted and fixed**, the load-bearing ones:
+
+1. 🔴 *Class A leisure exported unfloored* (pass 1) — the owner's decision above.
+2. 🟡 *Identity check by deny-list + a 9-digit heuristic a real MMSI column
+   passes* (passes 2, 3; finding 67) — exact (column, type) allow-list per
+   product.
+3. 🟡 *All store comparisons were row counts* — sums of `msgs`,
+   `moving_msgs`, `vessels` (and `crossings`, `vessels`, `missed` for ferry)
+   against the recount; the k-floor mutation now fails six checks, not three.
+4. 🟡 *Key uniqueness never asserted; the leisure recount shared sql/70's
+   alias-shadowing idiom* — `count() == GROUP BY` key count per file; recount
+   spells `GROUP BY h3ToParent(h3, 5), toDate(hour), ship_group`.
+5. 🟡 *`.tests-passed` was a bare existence marker; sql/70's header advertised
+   a bare re-run as safe* — `publish.sh` refuses any file newer than the
+   marker; the header now says the SQL alone leaves untested files.
+6. 🟡 *A newly loaded year would be silently missing from the export* — the
+   store's Class A years must equal the exported set.
+7. 🟡 *sql/41 block 1 sliced by hard-coded line numbers* — located by markers.
+8. 🟡 *`${doi%.*}` printed as the concept DOI is not a DOI* — `conceptrecid`.
+9. 🟡 *`hf upload` of the whole directory would ship `.tests-passed` and create
+   a public repo on a mistyped id* — explicit `--include`, `--private`.
+10. 🟡 *GitHub release notes do not strip YAML front matter* — stripped copy;
+    DECISIONS sentence corrected.
+11. 🟡 *The card's coverage table summed to 2 488, not 2 122* (the daily row
+    said 1 275 days; it is 909) — this session's own writing, accepted from
+    task B unchecked; fixed.
+12. 🟡 *"7.3 % / 47.7 %" quoted as a store fact next to store facts* — finding 65.
+13. 🟡 *The card's "fleet lay still = cancellation" row contradicted 18 547
+    rows* — finding 68.
+14. 🟡 *README omitted 2022 / 2023; card lacked HF `configs:`; a missing card
+    was a warning and then a silent partial publish; res 7 not asserted on
+    Class A files; `hour` range, ship_group vocabulary unasserted; Zenodo
+    description sent as Markdown; off-by-one prose on the sql/41 range* — all
+    fixed.
+
+Accepted as is, with the reason: the literal counts go red on every future
+load and are then refreshed from the store (passes 1, 3) — that is their
+job: a store change must be looked at by a person, and the recount on the
+same line is what certifies the export; the sql/41 block copied into sql/70
+(no cross-statement scope in `clickhouse local`, S9/S10 house pattern, the
+header carries the diff command and the test recounts against sql/41's own
+text); `mean_sog < 100` with 0.1 kn of headroom (the loader's `sog < 100`
+filter; a loosened filter *should* trip it); the 9-digit guard's false
+positive on a ≥ 100 M-row count (largest today 47 M; sums are printed with
+separators); the ship_group `leisure` label in the card being a sentence
+rather than a test (the vocabulary is asserted now).
+
+### Deviations from `docs/PLAN.md` § S11
+
+- **The private fleet is Class B ∪ leisure, not Class B** — see above.
+- **Nothing published.** GitHub Release, Hugging Face and Zenodo are the
+  owner's step; the DOI is `pending` in three files.
+- The plan's column list (`mobile`, `moving_share`) and its "any k for public
+  groups" sentence were stale; `moving_msgs` is exported instead of a share
+  (two counts re-aggregate, a ratio does not; findings 58–59 stay visible).
+- `docs/dataset-card.md` is committed and copied into `dist/`, not written
+  there.
+- `sql/41`'s header says block 1 is 281 491 rows; the store gives 289 159.
+
+### Open questions for S12
+
+Carried: `h3_land` not materialised; HSC absent; the hidden passenger fleet;
+the 2023 duplication onset; 2024-09 outlier. New:
+
+- **Publish, then the DOI.** After the owner's `publish.sh` run the concept
+  DOI goes into `docs/dataset-card.md`, `CITATION.cff`, `README.md` (one
+  small commit). Until then "cite as" says `pending`.
+- **The literals in `scripts/test_export.py` go red on the next load** by
+  design; whoever loads new days re-measures them on the store and says so in
+  STATUS.
+- **S12 reads the card's Known biases as the essay's honesty paragraph in
+  prose form** — same facts, told, not listed.
+
+**Next session: S12 — the essay.** Read `docs/PLAN.md` § S12.
 
 ---
 

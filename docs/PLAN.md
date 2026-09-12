@@ -706,62 +706,79 @@ is "more boats vs more transponders" a visible distinction?
 
 ---
 
-## S11 — Open dataset
+## S11 — Open dataset *(done 2026-09-12 — built and verified; publishing is the owner's step)*
 
 **Goal:** Publish aggregates that cannot leak a private vessel.
 
-**Files:**
-- Create: `sql/70_export.sql` — `h3_hourly` → Parquet per year, only rows where
-  `uniqExactMerge(vessels) >= 5` for `mobile = 'Class B'` (any k for public
-  groups); columns: `h3`, `hour`, `mobile`, `ship_group`, `msgs`, `vessels`,
-  `moving_share`, `mean_sog`. Plus `leisure_daily.parquet` (per day, per res-5
-  cell) and `ferry_daily.parquet`.
-  **Measured in S2 (2025-07-16): the res-7 hourly Class B layer does not
-  survive k >= 5 — it keeps 7.3 % of cells and 47.7 % of the movement. Res 5 /
-  daily keeps 38.1 % and 91.8 %. So the hourly Class B layer is not published
-  at any k; `leisure_daily.parquet` is the leisure product, and the hourly
-  res-7 export is Class A only.**
+**Files:** *(corrected to what exists)*
+- Create: `sql/70_export.sql` — three products into `dist/dataset/` (gitignored),
+  every statement a GROUP BY with `sum()` / `uniqExactMerge()` (the store is an
+  AggregatingMergeTree; a plain SELECT could emit a key twice):
+  - `class_a_hourly_<year>.parquet`, one per loaded year: `h3_hourly` where
+    `mobile = 'Class A' AND ship_group != 'leisure'`, res 7 × UTC hour ×
+    ship_group; columns `h3, hour, ship_group, msgs, vessels, moving_msgs,
+    mean_sog`. No floor: cargo, passenger, fishing, other are public.
+  - `leisure_daily.parquet` — **the private fleet = every Class B transponder
+    ∪ every vessel with `ship_group = 'leisure'` whatever its transponder**
+    (decided in S11 after the review measured that Class A leisure yachts —
+    340–470 a year — sit alone in 86–92 % of their res-7 cell-hours). Res 5 ×
+    UTC day × ship_group, `HAVING vessels >= 5`. Measured on the store:
+    341 092 of 1 445 495 cell-days survive (23.6 % of cells, 82.0 % of moving
+    messages). The res-7 hourly Class B layer is never exported at any k
+    (whole store: it would keep 7.1 % of cell-hours, 20.8 % of movement).
+  - `ferry_daily.parquet` — block 1 of `sql/41` (289 159 rows, 18 columns),
+    named lines are public.
   **`vessels` is exported as `uniqExactMerge(vessels)`, a number. The
-  `AggregateFunction` column itself is a membership oracle over MMSI and must
-  never be written to a file** — see `docs/DECISIONS.md`.
-- Create: `scripts/export.sh` — runs the export into `dist/dataset/`, then
-  `scripts/test_export.py` (uv): asserts no row with Class B and vessels < 5,
-  asserts no MMSI-like column, asserts row counts vs ClickHouse. Fails loudly.
-- Create: `dist/dataset/README.md` — data card: source, licence (CC BY 4.0 +
-  DMA attribution), grain, privacy rule, known biases (from S10), schema,
-  citation.
-- Create: `scripts/publish_hf.sh` — `huggingface-cli upload` to
-  `datasets/<user>/seafolk-danish-ais` (dependency line in DECISIONS).
-- Create: `CITATION.cff` (repo root) — GitHub renders a "Cite this repository"
-  button from it natively, no dependency. Filled in with the Zenodo concept-DOI
-  once it is minted.
+  `AggregateFunction` column is a membership oracle over MMSI and never
+  reaches a file** — `docs/DECISIONS.md`.
+- Create: `scripts/export.sh` — rebuilds `dist/dataset/` from scratch, runs
+  `sql/70`, copies `docs/dataset-card.md` to `dist/dataset/README.md` (fails
+  if the card is missing), runs `scripts/test_export.py` (uv, `pyarrow`),
+  writes `dist/dataset/.tests-passed` only on PASS.
+- Create: `scripts/test_export.py` — reads the written Parquet with pyarrow,
+  never the query that wrote it: exact per-product (column, type) allow-list;
+  `min(vessels) >= 5` and every cell at res 5 in `leisure_daily`; res 7 and no
+  `leisure` in the Class A files; `hour` inside the file's year; row counts,
+  `sum(msgs)`, `sum(moving_msgs)`, `sum(vessels)` equal a store recount AND a
+  hard-coded literal measured 2026-09-12 (the literal catches a store that
+  changed; it goes red on the next load on purpose); key uniqueness; the
+  store's loaded years equal the exported years; a 9-digit-integer guard on
+  its own stdout and on the card.
+- Create: `docs/dataset-card.md` — the single source for `dist/dataset/README.md`,
+  the Hugging Face card (YAML front matter with `configs:` per product) and the
+  release notes: source + the DMA conditions verbatim, licence (CC BY 4.0 is our
+  choice — DMA publishes no licence name, no attribution string, no "not for
+  navigation"; recorded in `docs/DATA.md`), coverage table, privacy rule,
+  schema per file, S10 findings 57–63 as known biases, cite-as with `DOI:
+  pending`.
+- Create: `scripts/publish.sh` — `dry-run` / `release <tag>` (`gh release
+  create --draft`) / `hf <repo_id>` (`uv run --with huggingface_hub hf upload
+  --private`, explicit file list) / `zenodo` (REST, sandbox by default,
+  `ZENODO_LIVE=1` for the real one, never POSTs `actions/publish`). Every
+  sub-command refuses without `.tests-passed` or if any file is newer than it.
+- Create: `CITATION.cff` (DOI added by hand once minted).
 
 **Do:**
-- [ ] **Read the DMA terms of use verbatim before exporting anything.** The
-      published licence line in `README.md` (CC BY 4.0 on the aggregates) is
-      currently an assumption, not a checked fact. Copy the exact required
-      attribution string and any disclaimer — AIS providers commonly require a
-      "not for navigation" notice — into `docs/DATA.md`, and use that exact
-      wording in the data card. If the terms forbid redistribution of
-      derivatives or impose share-alike, stop: the licence claim in `README.md`
-      is wrong and has to change before anything is published.
-- [ ] Export, then publish to three places: GitHub Release, Hugging Face, and a
-      Zenodo record under CC BY 4.0. Take the Zenodo **concept** DOI — it always
-      resolves to the newest version — and write it into `dist/dataset/README.md`,
-      `CITATION.cff`, the root `README.md` and the Hugging Face card. One
-      canonical address, two mirrors pointing back at it. Releases and Hugging
-      Face are where people download; only the DOI is something a paper can cite,
-      and the researchers in the S15 outreach list need exactly that.
+- [x] Read the DMA terms verbatim (`docs/DATA.md`, 2026-09-12). The one binding
+      sentence is "data must not be combined … persons are identifiable"; the
+      k ≥ 5 floor is the answer. Nothing forbids derivatives or imposes
+      share-alike, so the CC BY 4.0 claim in `README.md` stands as our choice.
+- [ ] **Owner's step, not a session's:** `scripts/publish.sh dry-run` →
+      `ZENODO_TOKEN=… scripts/publish.sh zenodo` (sandbox) → `release v0.1.0`
+      (draft) → `HF_TOKEN=… hf <user>/seafolk-danish-ais` → `ZENODO_LIVE=1 …
+      zenodo`, press Publish in the web UI, then write the concept DOI into
+      `docs/dataset-card.md`, `CITATION.cff`, `README.md` and commit.
 
 **Validate:**
 ```bash
-scripts/export.sh          # PASS from test_export, sizes printed
+scripts/export.sh          # PASS from test_export, sizes printed, .tests-passed written
+scripts/publish.sh dry-run
 ```
 
-**You verify:** open one Parquet in DuckDB/Polars, try to find any Class B cell
-with < 5 vessels. There must be none. The DOI resolves to the dataset, and the
-data card carries a ready-to-paste "cite as" block and the DMA attribution string
-copied word for word.
+**You verify:** open `dist/dataset/leisure_daily.parquet` in DuckDB/Polars and
+look for a row with `vessels < 5` — there must be none; open a Class A file
+and look for `ship_group = 'leisure'` — none. Read the data card as a stranger.
+The DOI is filled in only after the owner's publish step.
 
 **Commit:** `feat(s11): privacy-checked dataset export and data card`
 
