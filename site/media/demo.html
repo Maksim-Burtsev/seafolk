@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The sea empties — storm player test page</title>
+<!-- Fallback tokens first, so site/css/site.css wins wherever it exists.
+     This page is a test harness, not part of the site. -->
+<style>
+  :root {
+    --ground:#e9eeef; --surface:#f7f9f9; --hairline:#cfdadc; --ink:#0f1a1d;
+    --label:#55676c; --accent:#eb6834; --accent-tx:#b8441a;
+    --working:#7d8f94; --ref:#a8b8bc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#0b1416; --surface:#122023; --hairline:#23383c; --ink:#e8eeef;
+      --label:#9db0b4; --accent:#f07a45; --accent-tx:#f79367;
+      --working:#7b8f94; --ref:#47605f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0b1416; --surface:#122023; --hairline:#23383c; --ink:#e8eeef;
+    --label:#9db0b4; --accent:#f07a45; --accent-tx:#f79367;
+    --working:#7b8f94; --ref:#47605f;
+  }
+  body { margin:0; padding:2rem 1rem 4rem; background:var(--ground);
+         color:var(--ink); font:16px/1.6 system-ui, sans-serif; }
+  main { max-width:64rem; margin:0 auto; }
+  h1 { font-size:1.5rem; margin:0 0 .3em; }
+  h2 { font-size:1.1rem; margin:0 0 .4em; font-weight:600; }
+  p.lede { color:var(--label); margin:0 0 2.5rem; }
+  section { background:var(--surface); border:1px solid var(--hairline);
+            border-radius:6px; padding:1.2rem; margin:0 0 2rem; }
+</style>
+<link rel="stylesheet" href="../css/site.css">
+</head>
+<body>
+<main>
+  <h1>The sea empties</h1>
+  <p class="lede">Test page for <code>site/js/storm-player.js</code>. Open
+     <code>?t=96</code> to land on a given hour of every clip, and
+     <code>?theme=dark</code> to force the dark tokens.</p>
+
+  <section><h2>Storm Pia, 21–22 December 2023</h2><div id="pia"></div></section>
+  <section><h2>Storm Malik, 29–30 January 2022</h2><div id="malik"></div></section>
+  <section><h2>Storm Amy, 4 October 2025</h2><div id="amy"></div></section>
+</main>
+
+<script src="land.js"></script>
+<script src="storm-pia.js"></script>
+<script src="storm-malik.js"></script>
+<script src="storm-amy.js"></script>
+<script src="../js/storm-player.js"></script>
+<script>
+  var q = new URLSearchParams(location.search);
+  if (q.get("theme")) document.documentElement.dataset.theme = q.get("theme");
+  var hour = parseInt(q.get("t"), 10) || 0;
+  ["pia", "malik", "amy"].forEach(function (k) {
+    SeafolkStorm.mount(document.getElementById(k), k, { hour: hour });
+  });
+</script>
+</body>
+</html>
