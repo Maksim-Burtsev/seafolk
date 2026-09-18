@@ -28,7 +28,7 @@ export, with a test.
 - Disk: 70 GB working budget, 100 GB hard cap. Raw files deleted after load.
 - H3 resolution 7, 1-hour bins, timestamps normalised to UTC once S1 settles the
   archive's timezone.
-- Repo language English. Essay in RU and EN.
+- Repo language English. Essay in English only (DECISIONS 2026-09-18).
 - No new dependency without a `docs/DECISIONS.md` line.
 - Every chart in a published artefact is reproducible by a file in `sql/` or
   `notes/`.
@@ -41,7 +41,7 @@ export, with a test.
 | 1 · Fill the lake | S4–S5 | 2024 → today daily + reference years + storm months aggregated **with a correct H3 grid** (S4-redo, done locally 2026-09-08); context layers loaded — marinas, ferry routes, land, storms, regattas (S5, done 2026-09-08) |
 | 2 · Analyse | S6–S10 | One notebook of findings per chapter + the honesty layer |
 | 3 · Publish data | S11 | Parquet on GitHub Releases + Hugging Face + Zenodo (DOI), data card, privacy test |
-| 4 · Tell it | S12–S14 | Essay (RU/EN), explorer, posters |
+| 4 · Tell it | S12–S14 | Essay site (EN), map, animation, posters — brief in `docs/SITE.md` |
 | 5 · Launch | S15 | HN / Reddit / Habr / outreach mails / ClickHouse example-dataset PR |
 
 ---
@@ -784,96 +784,72 @@ The DOI is filled in only after the owner's publish step.
 
 ---
 
-## S12 — The essay
+## S12 — The essay site *(re-planned 2026-09-18 — brief: `docs/SITE.md`)*
 
-**Goal:** "A year under sail", RU + EN, static, scrollytelling, six charts.
+**Goal:** the story page, four chapter pages and the method page, in English,
+first person, with newspaper-readable D3 charts. Opens from `file://`; no
+GitHub Pages until the owner says so. The RU version, the Danish summary and
+the Lighthouse gate of the earlier plan are dropped (DECISIONS 2026-09-18).
 
-**Files:**
-- Create: `site/` — `index.html` (EN), `ru/index.html`, `css/`, `js/charts/*.js`
-  (one D3 module per chart, each reading a small JSON produced by
-  `scripts/build_site_data.sh` from the SQL in S6–S10), `js/scroll.js`
-  (Scrollama). Fonts from Google Fonts; D3 and Scrollama pinned from cdnjs.
-- Charts: season rings (Canvas), season curves by year, weekend bars, regatta
-  spikes, daily fingerprint radial, night share; each with a caption, a source
-  line, and a "reproduce" link to the SQL file.
-- **The visual system is already prototyped in `site/day-clocks.html`** (built
-  in S3 as a phase-0 taste): Bodoni Moda / Karla / IBM Plex Mono, a cool marine
-  neutral, and one accent reserved for the leisure fleet while every working
-  fleet shares a muted ink. The "daily fingerprint radial" in the list above is
-  that page. Reuse its tokens rather than inventing a second system, and keep
-  the pattern of embedding each page's numbers in an inline JSON block that
-  `scripts/build_site_data.sh` rewrites — one file that works from `file://`,
-  from Pages, and as a published artifact.
-- Create: `scripts/build_site_data.sh` — SQL → `site/data/*.json`.
-- Create: `.github/workflows/pages.yml` — deploy `site/` to GitHub Pages.
-- Create: `site/method.html` (EN) and `site/ru/method.html` — the privacy method
-  note: what a Class B transponder is, why every other pipeline throws it away,
-  k ≥ 5, H3 res 7, what is never published and why that is enough. Compiled from
-  `docs/DECISIONS.md` and the data card — not new work. Linked from the essay,
-  the data card and the root `README.md`. "Are you tracking private boats?" is
-  the first question the project will be asked in public; the answer has to
-  already exist at a URL, not be improvised in a comment thread.
-- Create: a Danish summary of the essay, ~300 words — `site/da/index.html` or a
-  `lang="da"` section. Not a full translation. Waves 2 and 3 in S15 are addressed
-  to Danish clubs, island municipalities and local papers; they will read an
-  English page but they forward a Danish one.
-- Add: a `<script type="application/ld+json">` block, `@type: Dataset` — `name`,
-  `description`, `license`, `identifier` (the S11 DOI), `creator`,
-  `temporalCoverage`, `spatialCoverage`, `distribution` — on whichever page ends
-  up being the dataset's landing page. This is what Google Dataset Search
-  indexes; without it the dataset does not exist for it. Independent of where the
-  site is hosted.
+**Order:**
+- [ ] **S12a — foundation + `site/index.html`.** `site/css/site.css`,
+      `site/js/kit.js` (shared chart helpers), `scripts/build_site_data.py` +
+      `scripts/site_data/index.py`, `scripts/test_site.py`, `scripts/shot.sh`,
+      the story page with charts I1–I5, I7, I8 (I6 is a placeholder until S14).
+      Reviewed hard — it sets the bar for every other page.
+- [ ] **S12b — chapters, in parallel, one implementer per page**, each owning
+      only `site/<page>.html`, `site/js/<page>.js`, `scripts/site_data/<page>.py`
+      and reading its own store clone: `season`, `pulse`, `ferries`, `storms`,
+      `how`.
+- [ ] Blind read of every chart (SITE.md § Acceptance), prose edit by the
+      reviewing session, punchcard on the diff.
 
-**Validate:** Lighthouse ≥ 90 perf/accessibility locally; every chart has a
-table fallback; page renders without JS errors in Safari and Chrome; dark mode
-checked; `validator.schema.org` reports no errors on the dataset landing page.
+**Validate:**
+```bash
+scripts/build_site_data.sh          # ledger of every number, guards green
+uv run scripts/test_site.py         # PASS
+scripts/shot.sh site/index.html     # screenshots to the scratch dir
+grep -rEn '\b[0-9]{9}\b' site/ | wc -l   # 0
+```
 
-**You verify:** read it end to end in both languages as a stranger. Three
-sailors read the draft, and one Danish reader checks the Danish summary and the
-island and storm names in it.
+**You verify:** open `site/index.html` by double-click and read it as a
+stranger. Does each chart say its sentence without the caption? Is the text
+yours — what would you never say?
 
 **Commit:** `feat(s12): essay site`
 
 ---
 
-## S13 — The explorer
+## S13 — The map *(re-planned 2026-09-18)*
 
-**Files:**
-- Create: `scripts/build_tiles.sh` — `h3_hourly` → monthly res-7 aggregates →
-  GeoJSON → PMTiles (tippecanoe; dependency line), one layer per `ship_group`.
-- Create: `site/explore/` — MapLibre + deck.gl H3HexagonLayer, year/month slider,
-  group toggles, island pages (`site/explore/islands/<slug>.html`) fed by
-  `ferry_daily.parquet`. Each island page opens with a Danish paragraph — these
-  pages are what wave 3 in S15 mails to Ærø, Samsø, Læsø, Anholt and Bornholm.
+`site/explore/` per `docs/SITE.md`: deck.gl hexagons over Natural Earth land,
+month slider, fleet toggles, fed **only** by `dist/dataset/*.parquet`
+(`scripts/build_explore_data.py`, pyarrow via `uv run --with`, as
+`test_export.py` does). Island pages and Danish paragraphs are dropped with S15.
 
-**Validate:** tiles ≤ 300 MB total; first paint < 2 s on a laptop; no per-vessel
-data reachable from the browser (grep the built assets for `mmsi`).
+**Validate:** `du -sh site/explore/data` ≤ 40 MB; `grep -ri mmsi site/` empty;
+the small-boat layer's minimum count ≥ 5 (asserted in the build); the page
+plays through every month from `file://` without a console error.
 
-**Commit:** `feat(s13): explorer`
+**Commit:** `feat(s13): map explorer`
 
 ---
 
-## S14 — Posters and animation
+## S14 — Animation and posters *(re-planned 2026-09-18)*
 
-**Files:**
-- Create: `site/posters/` — Canvas renders at print resolution (season rings,
-  four fingerprints, "the sea empties" frame sequence); `scripts/render_posters.js`
-  (node + canvas; dependency line).
-- Animation: 20–30 s, frames → `ffmpeg` (already on the machine).
-- **An animated version of the day clocks** — the four wind roses of
-  `site/day-clocks.html` with a hand sweeping the 24 hours, or the same dial
-  morphing January → July. Short loop, GIF/MP4, made to be posted on its own
-  without the essay around it. Requested after seeing the static page; it is
-  the one chart in the project whose finding is a *cycle*, so it is the one
-  that actually earns motion.
+`scripts/render_storm.py` (matplotlib → ffmpeg, both already here) →
+`site/media/storm-*.mp4` + GIF, the same frames' data embedded for the
+in-page player (I6 / T4); `site/media/day-clocks.mp4`; `site/posters/` A3
+PDF/SVG (season hills, four clocks). No node-canvas.
 
-**You verify:** print one poster at A3 and look at it from two metres.
+**You verify:** watch the storm clip with the sound of your own attention off:
+is it obvious when the storm arrives?
 
-**Commit:** `feat(s14): posters and storm animation`
+**Commit:** `feat(s14): storm animation and posters`
 
 ---
 
-## S15 — Launch and outreach
+## S15 — Launch and outreach *(postponed by the owner 2026-09-18; dataset publishing and the DOI stay the owner's step)*
 
 **Files:**
 - Create: `docs/LAUNCH.md` — the checklist below with dates and links filled in.

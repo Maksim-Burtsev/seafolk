@@ -7,7 +7,7 @@ asked to run in `docs/PLAN.md`. Do not start coding before those three are read.
 
 A data-storytelling project on the open Danish AIS archive (2006 → today) about the
 *human* side of the sea: leisure boats (Class B), island ferries, and behaviour
-around named storms. Output: a data essay (RU + EN), a static explorer, an open
+around named storms. Output: a data essay (EN), a static explorer, an open
 aggregated dataset, posters. See `README.md` for the four chapters.
 
 The audience is developers/data people and the general public. Reputation, not
@@ -26,7 +26,8 @@ revenue. Every chart must be reproducible from the repo.
   right after they are aggregated. Never keep raw CSV on disk. Check `df -h` and
   `du -sh data` before and after a bulk run.
 - **Repository language is English** — code, comments, docs, commits. The essay
-  has a Russian and an English version; both live under `site/` when it exists.
+  is English only (owner's decision 2026-09-18); it lives under `site/` and is
+  built to the brief in `docs/SITE.md`.
 - **No new dependencies without a line in `docs/DECISIONS.md`** saying why.
 - **Don't invent data.** If a number is not computed from the archive, label it as
   a mock. Charts in docs that are mocks say so in their caption.
@@ -38,7 +39,8 @@ revenue. Every chart must be reproducible from the repo.
 - Bash for fetch/orchestration, Python (uv, ≥3.12) only where SQL is awkward
   (plots for validation, notebook-style checks under `notes/`).
 - Final charts and essay: plain HTML + D3 (+ Scrollama), static. Explorer:
-  MapLibre GL + deck.gl over static PMTiles/Parquet. Hosted on GitHub Pages.
+  deck.gl over static per-month data files (no MapLibre/PMTiles — DECISIONS
+  2026-09-18). Opens from `file://`; GitHub Pages only when the owner enables it.
 - Spatial grain: H3 resolution 7 (~5 km²). Time grain: 1 hour (UTC; verify the
   archive's timezone in session S1 before trusting any hour-of-day chart).
 

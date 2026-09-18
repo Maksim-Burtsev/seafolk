@@ -562,3 +562,26 @@ what it rules out.
   the floor — 23.60 % of cell-days, 82.03 % of the moving messages. Rules out
   any unfloored row with `ship_group = 'leisure'` anywhere in the export, and
   `scripts/test_export.py` asserts that no class_a file contains one.
+- 2026-09-18 (S12 planning) — **The essay is English only, first person.** The
+  owner dropped the Russian version and the Danish summary; he will edit the
+  English text himself after reading it. Rules out `site/ru/`, `site/da/`.
+- 2026-09-18 (S12 planning) — **Reader-facing charts are redrawn, not reused.**
+  The `notes/img/*.png` validation plots were rejected by the owner as
+  unreadable for a non-specialist. `docs/SITE.md` sets the rules (one sentence
+  per chart, linear axes, direct labels) and the acceptance test (a blind
+  one-sentence read of the screenshot). Rules out log axes and panel grids on
+  the site.
+- 2026-09-18 (S12 planning) — **The site is an export and obeys the k ≥ 5
+  floor on every private-fleet number, including whole-box counts** — this
+  settles S9's open question. The map and the storm animation read only
+  `dist/dataset/*.parquet`, so the privacy test that guards the dataset guards
+  them too. Rules out any site query that reads `vessel_day` per cell.
+- 2026-09-18 (S12 planning) — **The map is deck.gl alone: no MapLibre, no
+  PMTiles, no tippecanoe.** Land comes from the Natural Earth file already in
+  `data/context/`; hexagons ship as per-month `.js` files loaded by a script
+  tag, so the page works from `file://` with no tile server and no new
+  build-time dependency. Ceiling: ~40 MB of data at res 6 monthly; PMTiles when
+  someone needs res 7 or daily.
+- 2026-09-18 (S12 planning) — **No GitHub Pages, no launch, no dataset
+  publishing in S12–S14.** Owner's call; S15 is postponed.
+
