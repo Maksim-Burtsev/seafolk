@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Where the boats are — Seafolk</title>
+<meta name="description" content="A map of Danish waters, month by month: where each fleet was working, from the open Danish AIS archive.">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500&family=Karla:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../css/site.css">
+<style>
+/* Everything here is the map's own. Layout, type and buttons come from
+   site/css/site.css — .controls there is a wrapping row of buttons, and
+   button[aria-pressed=true] is already the pressed look, so the fleet toggles
+   are plain buttons and not a second button style. */
+.quiet { color: var(--label); font-size: 15px; }
+.rows { display: flex; flex-direction: column; gap: 14px; }
+.dot { width: 10px; height: 10px; border-radius: 2px; background: var(--chip); display: inline-block;
+       vertical-align: -1px; margin-right: 7px; }
+.when { font: 400 clamp(24px, 4vw, 34px)/1 "Bodoni Moda", Georgia, serif; min-width: 6.4em; }
+input[type=range] {
+  flex: 1 1 220px; min-width: 160px; height: 26px; accent-color: var(--accent-tx);
+}
+input[type=range]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.map {
+  position: relative; height: clamp(340px, 64vh, 700px);
+  border: 1px solid var(--hairline); background: var(--ground);
+  overflow: hidden; touch-action: none;
+}
+.map canvas { display: block; }
+.legend {
+  position: absolute; left: 12px; bottom: 12px; z-index: 2;
+  background: var(--surface); border: 1px solid var(--hairline);
+  padding: 9px 11px; font-size: 13px; line-height: 1.3; pointer-events: none;
+}
+.legend b { display: block; font-weight: 600; margin-bottom: 6px; }
+.bar { height: 9px; width: 130px; }
+.ends { display: flex; justify-content: space-between; color: var(--label); margin-top: 3px; }
+.status {
+  position: absolute; right: 12px; top: 12px; z-index: 2;
+  font: 500 12px/1 "IBM Plex Mono", ui-monospace, monospace; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--label);
+  background: var(--surface); border: 1px solid var(--hairline); padding: 6px 10px;
+}
+.status[hidden] { display: none; }
+.maptip {
+  position: absolute; z-index: 3; pointer-events: none; max-width: 16em;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--hairline); padding: 7px 10px;
+  font-size: 14px; line-height: 1.35; box-shadow: 0 6px 20px rgba(0,0,0,.16);
+}
+.maptip small { display: block; color: var(--label); font-size: 12px; margin-top: 3px; }
+pre.debug { white-space: pre-wrap; font: 400 12px/1.5 "IBM Plex Mono", ui-monospace, monospace;
+            color: var(--label); }
+@media (max-width: 520px) {
+  .map { height: clamp(320px, 56vh, 480px); }
+  .bar { width: 104px; }
+}
+</style>
+
+<div class="wrap">
+  <div class="prose">
+    <p class="eyebrow">Seafolk · the map</p>
+    <h1>Where the boats <em>are</em></h1>
+    <p>Every ship at sea carries a radio that says, every few seconds, where it is.
+      Denmark publishes all of it, small boats included, and I have been counting what
+      it heard. This is the count on a map: pick a fleet, drag the month, or press play.</p>
+    <p>Each hexagon is about the size of a town, and the stronger its colour, the more
+      boats of that fleet were out there that month. Small boats get bigger hexagons,
+      about the size of a small island — coarse on purpose, so that no single boat can
+      be picked out of one.</p>
+    <p class="quiet">The slider only offers the months I actually loaded: the years
+      2015, 2018 and 2021, everything from spring 2024 to today, and a handful of single
+      months around big storms. The years in between are missing from this map because
+      I never loaded them, not because the sea was empty.</p>
+  </div>
+
+  <div class="rows">
+    <div class="controls" id="fleets" role="group" aria-label="Fleet"></div>
+    <div class="controls">
+      <button id="play" type="button">▶ PLAY</button>
+      <input type="range" id="month" min="0" max="0" step="1" value="0" aria-label="Month">
+      <output class="when" id="when" for="month">…</output>
+    </div>
+    <div class="controls" id="places" role="group" aria-label="Jump to a place"></div>
+  </div>
+
+  <div class="map" id="map">
+    <div class="status" id="status" hidden>loading</div>
+    <div class="legend" id="legend" hidden>
+      <b id="legendTitle">Small boats</b>
+      <div class="bar" id="legendBar"></div>
+      <div class="ends"><span>few</span><span>many</span></div>
+    </div>
+  </div>
+
+  <footer>
+    <p id="measure"></p>
+    <p>Source: the Danish Maritime Authority's AIS archive
+      (<a href="http://aisdata.ais.dk/">aisdata.ais.dk</a>), counted by
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/build_explore_data.py"><code>scripts/build_explore_data.py</code></a>
+      from the open dataset in this repository.</p>
+    <p class="chapters"><a href="../index.html">← The story</a>
+      <a href="../how.html">How it was made</a></p>
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/h3-js@4.5.0/dist/h3-js.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/deck.gl@9.4.0/dist.min.js"></script>
+<script src="data/index.js"></script>
+<script src="data/land.js"></script>
+<script>
+(function () {
+  "use strict";
+  var IDX = window.SEAFOLK_INDEX, LAND = window.SEAFOLK_LAND;
+  window.SEAFOLK_MONTH = window.SEAFOLK_MONTH || {};
+  var mapEl = document.getElementById("map");
+  var statusEl = document.getElementById("status");
+  var DEBUG = /[?&]debug=1/.test(location.search);
+
+  function fail(msg) {
+    mapEl.insertAdjacentHTML("beforeend", '<p style="padding:24px;max-width:36em">' + msg + "</p>");
+  }
+  if (!IDX || !LAND) {
+    fail("The map data did not load. Run <code>scripts/build_explore_data.py</code>.");
+    return;
+  }
+  if (!window.deck || !window.h3) {
+    fail("The map library did not load — it comes from a CDN, so this one page needs " +
+         "the internet. Everything else on the site works offline.");
+    return;
+  }
+
+  // Small boats wear the accent colour: they are what this project is about.
+  // The working fleets wear cool inks, one hue each.
+  //   base = the ink on the light theme, which gets DARKER as a cell fills up.
+  //   glow = the same hue on the dark theme, which gets BRIGHTER instead —
+  //          a colour that darkens towards a near-black sea is a colour that
+  //          disappears, and "many" stops reading.
+  var FLEETS = [
+    { id: "small_boats", base: [186, 74, 28],  glow: [255, 154, 98] },
+    { id: "cargo",       base: [23, 85, 156],  glow: [90, 169, 255] },
+    { id: "ferries",     base: [14, 124, 118], glow: [45, 214, 178] },
+    { id: "fishing",     base: [106, 79, 163], glow: [181, 141, 255] },
+    { id: "work_boats",  base: [63, 111, 134], glow: [126, 205, 240] }
+  ].filter(function (f) { return IDX.fleets[f.id]; });
+
+  // span = how many degrees of longitude the button should frame.
+  var PLACES = [
+    { name: "Copenhagen & the Sound", lon: 12.72, lat: 55.78, span: 2.6 },
+    { name: "The South Funen islands", lon: 10.37, lat: 54.95, span: 2.6 },
+    { name: "Skagen", lon: 10.65, lat: 57.65, span: 3.4 },
+    { name: "Bornholm", lon: 14.90, lat: 55.15, span: 3.4 },
+    { name: "All of it", lon: null, lat: null, span: null }
+  ];
+
+  var MONTHS = ["January", "February", "March", "April", "May", "June", "July",
+                "August", "September", "October", "November", "December"];
+  function monthName(m) { return MONTHS[+m.slice(5, 7) - 1] + " " + m.slice(0, 4); }
+  function spaced(n) { return String(n).replace(/\B(?=(\d{3})+$)/g, " "); }
+
+  // --- colours ------------------------------------------------------------
+  function token(name, fallback) {
+    var v = getComputedStyle(document.documentElement).getPropertyValue(name);
+    var s = (v && v.trim() ? v.trim() : fallback).replace("#", "");
+    return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+  }
+  // Which way round the page is. Read off --ink rather than the media query,
+  // so <html data-theme="dark|light"> is obeyed too, exactly as site.css
+  // defines it: a light ink means a dark page.
+  function darkNow() {
+    var ink = token("--ink", "#0f1a1d");
+    return (ink[0] + ink[1] + ink[2]) / 3 > 128;
+  }
+  // One hue per fleet, and the scale runs towards the opposite end from the
+  // background: on the light theme a full cell is deep ink, on the dark theme
+  // it glows. Either way "few" is a see-through wash of the same hue (~0.15
+  // alpha) and "many" is the colour at full strength.
+  function ramp(f, t) {
+    var dark = darkNow(), c = dark ? f.glow : f.base, out = [0, 0, 0, 0];
+    for (var i = 0; i < 3; i++) {
+      var lo = dark ? c[i] * 0.55 : c[i] + (255 - c[i]) * 0.25;
+      var hi = dark ? c[i] : c[i] * 0.62;
+      out[i] = Math.round(lo + (hi - lo) * t);
+    }
+    out[3] = Math.round(dark ? 38 + 217 * t : 46 + 194 * t);
+    return out;
+  }
+  function css(c) { return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + (c[3] / 255).toFixed(2) + ")"; }
+
+  // --- state --------------------------------------------------------------
+  // ?m=2025-01&f=cargo&play=1 — a deep link, so the essay can point at one month
+  // and a screenshot can be taken of any state without clicking.
+  var q = new URLSearchParams(location.search);
+  var monthIdx = IDX.months.indexOf(q.get("m") || "2025-07");
+  if (monthIdx < 0) monthIdx = IDX.months.length - 1;
+  var fleet = IDX.fleets[q.get("f")] ? q.get("f") : FLEETS[0].id;
+  var playing = false, timer = null;
+  var rowCache = {};   // "month|fleet" -> [{h, v}]
+  var pending = {};    // month -> Promise
+
+  function loadMonth(m) {
+    if (window.SEAFOLK_MONTH[m]) return Promise.resolve();
+    if (pending[m]) return pending[m];
+    pending[m] = new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = "data/" + m + ".js";
+      s.onload = resolve;
+      s.onerror = function () { reject(new Error("data/" + m + ".js")); };
+      document.head.appendChild(s);
+    });
+    return pending[m];
+  }
+
+  function rows(m, f) {
+    var key = m + "|" + f;
+    if (rowCache[key]) return rowCache[key];
+    var pack = (window.SEAFOLK_MONTH[m] || {})[f];
+    var cells = IDX.fleets[f].res === 5 ? IDX.cells5 : IDX.cells6;
+    var out = [];
+    if (pack) for (var i = 0; i < pack[0].length; i++) out.push({ h: cells[pack[0][i]], v: pack[1][i] });
+    rowCache[key] = out;
+    return out;
+  }
+
+  // --- the view -----------------------------------------------------------
+  function mercY(lat) {
+    var r = lat * Math.PI / 180;
+    return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2;
+  }
+  // deck.gl's world is 512 px wide at zoom 0, not 256. Every zoom here is
+  // derived from the span the caller wants to see, so the map frames the same
+  // water on a phone as on a laptop.
+  var TILE = 512;
+  function zoomFor(spanLon, spanMercY) {
+    var zx = Math.log2(mapEl.clientWidth * 360 / (TILE * spanLon));
+    var zy = spanMercY ? Math.log2(mapEl.clientHeight / (TILE * spanMercY)) : Infinity;
+    return Math.min(zx, zy) - 0.15;
+  }
+  function fitZoom() {
+    var b = IDX.bbox;
+    return zoomFor(b[2] - b[0], mercY(b[1]) - mercY(b[3]));
+  }
+  function home() {
+    // On a phone the whole box is a smudge, so open on Danish waters instead;
+    // the "All of it" button still shows the box.
+    return mapEl.clientWidth < 600
+      ? { longitude: 11.1, latitude: 55.7, zoom: zoomFor(5.4) }
+      : { longitude: (IDX.bbox[0] + IDX.bbox[2]) / 2,
+          latitude: (IDX.bbox[1] + IDX.bbox[3]) / 2, zoom: fitZoom() };
+  }
+  var view = Object.assign({ minZoom: 3.5, maxZoom: 11, pitch: 0, bearing: 0 }, home());
+
+  var tip = null;
+  function showTip(info) {
+    if (tip) { tip.remove(); tip = null; }
+    if (!info || !info.object) return;
+    var meta = IDX.fleets[fleet], v = info.object.v;
+    var about = v >= 1000 ? Math.round(v / 100) * 100 : v;
+    tip = document.createElement("div");
+    tip.className = "maptip";
+    tip.innerHTML = "About <strong>" + spaced(about) + " " + meta.unit + "</strong> here in " +
+      monthName(IDX.months[monthIdx]) + "." + (meta.res === 5
+        ? "<small>One small boat, out in this hexagon, on one day = one boat-day.</small>"
+        : "<small>One ship, moving through this hexagon, for one hour = one ship-hour.</small>");
+    mapEl.appendChild(tip);
+    tip.style.left = Math.max(8, Math.min(info.x + 14, mapEl.clientWidth - tip.offsetWidth - 8)) + "px";
+    tip.style.top = Math.max(8, Math.min(info.y + 14, mapEl.clientHeight - tip.offsetHeight - 8)) + "px";
+  }
+
+  // The opening zoom is worked out from the container's size, which is not
+  // always final the first time we ask: one headless render in twenty came back
+  // measured against a much taller box and opened deep inside the Skagerrak.
+  // So re-fit on the first resize that reports a different size — and never
+  // after the reader has moved the map themselves.
+  var measured = mapEl.clientWidth + "x" + mapEl.clientHeight, touched = false;
+
+  var deckgl = new deck.Deck({
+    parent: mapEl,
+    viewState: view,
+    controller: { dragRotate: false, touchRotate: false },
+    onHover: showTip,
+    onViewStateChange: function (e) { touched = true; moveTo(e.viewState); },
+    onResize: function (size) {
+      var now = size.width + "x" + size.height;
+      if (touched || now === measured) return;
+      measured = now;
+      moveTo(Object.assign({}, view, home()));
+    }
+  });
+  function moveTo(next) { view = next; deckgl.setProps({ viewState: view }); }
+
+  function layers() {
+    var meta = IDX.fleets[fleet], top = meta.top, m = IDX.months[monthIdx];
+    var f = byId(fleet);
+    return [
+      new deck.GeoJsonLayer({
+        id: "land",
+        data: LAND,
+        filled: true, stroked: true, pickable: false,
+        // Land is --hairline and the sea is --ground: the one pair of tokens
+        // that keeps them apart in BOTH themes (--surface sits a hair away from
+        // --ground in each). The coast is --label, so the shape still reads
+        // under a pale hexagon.
+        getFillColor: token("--hairline", "#cfdadc").concat(255),
+        getLineColor: token("--label", "#55676c").concat(200),
+        lineWidthUnits: "pixels", getLineWidth: 0.8, lineWidthMinPixels: 0.8
+      }),
+      new deck.H3HexagonLayer({
+        id: "hex",
+        data: rows(m, fleet),
+        getHexagon: function (d) { return d.h; },
+        getFillColor: function (d) { return ramp(f, Math.sqrt(Math.min(d.v / top, 1))); },
+        extruded: false, stroked: false, filled: true, pickable: true,
+        // The layer's fast path reuses one hexagon outline for every cell. Over
+        // six degrees of latitude — and with two cell sizes in play — that
+        // distorts visibly, so pay for the real geometry.
+        highPrecision: true,
+        // The theme is in the trigger: without it deck keeps the colours it
+        // already uploaded when the reader flips to dark.
+        updateTriggers: { getFillColor: [fleet, m, darkNow()] }
+      })
+    ];
+  }
+  function draw() { deckgl.setProps({ layers: layers() }); }
+
+  // --- controls -----------------------------------------------------------
+  function byId(id) { return FLEETS.filter(function (x) { return x.id === id; })[0]; }
+
+  var fleetsEl = document.getElementById("fleets");
+  FLEETS.forEach(function (f) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.value = f.id;
+    b.setAttribute("aria-pressed", String(f.id === fleet));
+    b.innerHTML = '<span class="dot"></span>' + IDX.fleets[f.id].label;
+    b.onclick = function () {
+      fleet = f.id;
+      [].forEach.call(fleetsEl.children, function (x) {
+        x.setAttribute("aria-pressed", String(x.value === fleet));
+      });
+      showTip(null);
+      paintLegend();
+      draw();
+    };
+    fleetsEl.appendChild(b);
+  });
+  // The swatches are painted, not hard-coded, so they stay the colour the map
+  // is actually using — including after a theme flip.
+  function paintDots() {
+    [].forEach.call(fleetsEl.children, function (b) {
+      b.firstChild.style.setProperty("--chip", css(ramp(byId(b.value), 0.9)));
+    });
+  }
+
+  var placesEl = document.getElementById("places");
+  PLACES.forEach(function (p) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.textContent = p.name;
+    b.onclick = function () {
+      touched = true;
+      var to = p.lon === null
+        ? { longitude: (IDX.bbox[0] + IDX.bbox[2]) / 2,
+            latitude: (IDX.bbox[1] + IDX.bbox[3]) / 2, zoom: fitZoom() }
+        : { longitude: p.lon, latitude: p.lat, zoom: zoomFor(p.span) };
+      if (deck.FlyToInterpolator) {
+        to.transitionDuration = 700;
+        to.transitionInterpolator = new deck.FlyToInterpolator();
+      }
+      moveTo(Object.assign({}, view, to));
+    };
+    placesEl.appendChild(b);
+  });
+
+  var slider = document.getElementById("month");
+  var whenEl = document.getElementById("when");
+  slider.max = String(IDX.months.length - 1);
+  slider.addEventListener("input", function () { go(+slider.value); });
+
+  var playBtn = document.getElementById("play");
+  playBtn.onclick = function () { playing ? stop() : start(); };
+  function start() {
+    playing = true;
+    playBtn.textContent = "❙❙ PAUSE";
+    timer = setInterval(function () { go((monthIdx + 1) % IDX.months.length); }, 750);
+  }
+  function stop() {
+    playing = false;
+    playBtn.textContent = "▶ PLAY";
+    clearInterval(timer);
+  }
+
+  function paintLegend() {
+    var f = byId(fleet), stops = [];
+    for (var i = 0; i <= 6; i++) stops.push(css(ramp(f, i / 6)));
+    document.getElementById("legendBar").style.background =
+      "linear-gradient(90deg," + stops.join(",") + ")";
+    document.getElementById("legendTitle").textContent = IDX.fleets[fleet].label;
+    document.getElementById("legend").hidden = false;
+    document.getElementById("measure").textContent = IDX.fleets[fleet].res === 5
+      ? "Small boats are counted in boat-days: one boat, out in one hexagon, on one day. "
+        + "Theirs are the big hexagons, and every one of them holds at least five different "
+        + "boats — below that the archive keeps its mouth shut and so do I."
+      : "Working ships are counted in ship-hours: one ship, moving through one hexagon, for "
+        + "one hour. I count heads rather than radio messages, because the archive started "
+        + "storing some messages twice and a head cannot be counted twice.";
+  }
+
+  function go(i) {
+    monthIdx = i;
+    slider.value = String(i);
+    var m = IDX.months[i];
+    whenEl.textContent = monthName(m);
+    slider.setAttribute("aria-valuetext", monthName(m));
+    showTip(null);
+    statusEl.hidden = !!window.SEAFOLK_MONTH[m];
+    loadMonth(m).then(function () {
+      statusEl.hidden = true;
+      if (IDX.months[monthIdx] === m) draw();
+      loadMonth(IDX.months[(i + 1) % IDX.months.length]).catch(function () {});
+    }, function (err) {
+      statusEl.hidden = false;
+      statusEl.textContent = "missing " + err.message;
+      stop();
+    });
+  }
+
+  function repaint() { paintDots(); paintLegend(); draw(); }
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", repaint);
+
+  paintDots();
+  paintLegend();
+  go(monthIdx);
+  if (q.get("play") === "1") start();
+
+  // ?debug=1 — the layer's own numbers in the DOM, for a headless browser with
+  // no WebGL, and for anyone asking "is that really Denmark?".
+  if (DEBUG) {
+    var pre = document.createElement("pre");
+    pre.className = "debug";
+    pre.id = "debug";
+    document.querySelector(".wrap").appendChild(pre);
+    var dump = function () {
+      var m = IDX.months[monthIdx], lines = [];
+      FLEETS.forEach(function (f) {
+        var r = rows(m, f.id), mx = 0, s = 0;
+        r.forEach(function (d) { s += d.v; if (d.v > mx) mx = d.v; });
+        var busiest = r.filter(function (d) { return d.v === mx; })[0];
+        var at = busiest ? h3.cellToLatLng(busiest.h) : [0, 0];
+        lines.push(f.id + "  cells=" + r.length + " total=" + s + " max=" + mx +
+          " busiest@" + at[0].toFixed(3) + "," + at[1].toFixed(3));
+      });
+      // Where known places land on screen, and how wide one hexagon is: this
+      // project once shipped a grid mirrored into the Arabian Sea.
+      var vp = deckgl.getViewports()[0];
+      ["Copenhagen 12.57,55.68", "Skagen 10.58,57.72", "Esbjerg 8.45,55.47"].forEach(function (s) {
+        var px = vp.project(s.split(" ")[1].split(",").map(Number));
+        lines.push(s + " -> " + Math.round(px[0]) + "," + Math.round(px[1]) + " px");
+      });
+      var probe = rows(m, fleet)[0];
+      if (probe) {
+        var xs = h3.cellToBoundary(probe.h).map(function (p) { return vp.project([p[1], p[0]])[0]; });
+        lines.push("one hexagon = " + (Math.max.apply(null, xs) - Math.min.apply(null, xs)).toFixed(1) + " px wide");
+      }
+      pre.textContent = "month=" + m + " fleet=" + fleet + "  map=" + mapEl.clientWidth + "x" +
+        mapEl.clientHeight + "  view=" + view.longitude.toFixed(2) + "," +
+        view.latitude.toFixed(2) + "@" + view.zoom.toFixed(2) + "\n" + lines.join("\n");
+    };
+    var plain = draw;
+    draw = function () { plain(); dump(); };
+    setTimeout(dump, 400);
+  }
+})();
+</script>
+</html>
