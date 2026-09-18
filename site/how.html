@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How it was made — Seafolk</title>
+<meta name="description" content="What is published and what never leaves the machine, the loop that read terabytes and kept gigabytes, three bugs worth telling, and what this data cannot say.">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500&family=Karla:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="css/site.css">
+<style>
+/* Two things this page needs that no other page has yet, both built out of
+   site/css/site.css's tokens — no colour literal, no second palette. The top
+   nav moves into site.css the moment a second page wants one. */
+.topnav {
+  display: flex; flex-wrap: wrap; gap: 7px 20px; align-items: baseline;
+  border-bottom: 1px solid var(--hairline); padding-bottom: 15px;
+  font: 500 12px/1.4 "IBM Plex Mono", ui-monospace, monospace;
+  letter-spacing: .1em; text-transform: uppercase;
+}
+.topnav a { color: var(--label); text-decoration: none; }
+.topnav a:hover { color: var(--accent-tx); }
+.topnav a.home { color: var(--ink); }
+.topnav a[aria-current] { color: var(--accent-tx); }
+pre {
+  margin: 0; overflow-x: auto; max-width: 100%;
+  background: var(--surface); border: 1px solid var(--hairline);
+  padding: 15px 17px; color: var(--ink);
+  font: 400 13px/1.75 "IBM Plex Mono", ui-monospace, monospace;
+}
+/* the longest line below is 47 characters, which fits a phone at 11 px and not
+   at 13 — a command may scroll sideways, a directory listing is not worth it. */
+@media (max-width: 560px) { pre { font-size: 11px; } }
+</style>
+
+<!-- Every number below is written by scripts/build_site_data.py from the store.
+     Nothing here is typed by hand: the JSON block feeds the three figures, and
+     each empty span carrying a data-n attribute is filled from that block's
+     "n" map. scripts/test_site.py fails if one of them is left empty. -->
+<script type="application/json" id="data">{"picture":{"floor":5,"rows":[[2,9,1,4],[5,12,3]]},"floor":{"cells_pct":23.6,"moving_pct":82.0},"pipe":{"files":949,"read_billion":31.9,"kept_billion":29.7,"load_hours":4.4,"rate_million":2.4,"days":2122,"cells":116289,"years":8,"store_gb":11},"n":{"floor_k":"5","pleasure_a_lo":"337","pleasure_a_hi":"467","cells_total":"1 445 495","cells_kept":"341 092","floor_cells_pct":"24","floor_moving_pct":"82","floor_hidden_words":"three quarters","floor_kept_words":"four fifths","hourly_cells_pct":"7","hourly_moving_pct":"20","archive_tb":"2.3","pulled_tb":"1.2","files":"949","rows_billion":"32","kept_billion":"30","days":"2 122","store_gb":"11","rate_million":"2.4","load_hours":"4.4","reload_hours":"35","link_share_words":"a third","ahead":"8","prefetch_speedup":"3.6","oom_million":"806","spill_gb":"6","cph_rows":"35 768","cells":"116 289","cap":"43 200","cap_seconds":"2","over_cap_before":"0.06","over_cap_now":"1.1","worst_times":"8.3","hidden_share":"16","hidden_fleet":"487","fano_ship":"M/F FENJA","fano_year":"2021","fano_days":"365","boats_2015":"6 137","boats_2026":"22 773","boats_growth":"3.7","instrument_growth":"3.5","instrument_cost":"6.5","german_2026":"35","danish_2026":"24","emodnet_agreement":"0.85","emodnet_missing":"10","emodnet_core_missing":"1","marina_rank_ours":"9","marina_rank_emo":"16 984","marina_boats":"353","marina_emo_hours":"4.1","licence":"CC BY 4.0","dataset_years":"8"}}</script>
+
+<div class="wrap">
+
+  <nav class="topnav" aria-label="Seafolk">
+    <a class="home" href="index.html">Seafolk</a>
+    <a href="season.html">A year under sail</a>
+    <a href="pulse.html">The sea by the hour</a>
+    <a href="ferries.html">Lifelines</a>
+    <a href="storms.html">When the storm comes</a>
+    <a href="explore/index.html">The map</a>
+    <a href="how.html" aria-current="page">How it was made</a>
+  </nav>
+
+  <header class="prose">
+    <p class="eyebrow">Seafolk — how it was made</p>
+    <h1>How it was made</h1>
+    <p class="deck">What is published and what never leaves this machine, the loop
+      that read terabytes and kept gigabytes, three bugs worth telling, and the
+      things this data simply cannot say.</p>
+  </header>
+
+  <!-- ==================== 1. the first question ==================== -->
+  <div class="prose">
+    <p class="act">The first question</p>
+    <h2>Are you tracking private boats?</h2>
+
+    <p>No. Here is exactly what that means.</p>
+
+    <p>A private boat's radio ID, its name and its track never leave this machine.
+      They sit in a working table on the disk under my desk because I need them to
+      tell one boat from another. Nothing built from that table carries them out —
+      not a chart, not the map, not the dataset.</p>
+
+    <p>What leaves is counts: how many different boats were in one patch of sea on
+      one day, the patch being a hexagon about the size of a small island. And only
+      when at least <span data-n="floor_k">5</span> of them were in it. Below that
+      the patch is dropped — not rounded, not blurred. Dropped.</p>
+
+    <p>"Private" is wider than the radio. It covers every small-boat radio (the cheap
+      kind, AIS Class B) and every pleasure craft carrying a big-ship radio, between
+      <span data-n="pleasure_a_lo">337</span> and
+      <span data-n="pleasure_a_hi">467</span> a year. A yacht with a better radio is
+      still a yacht, so the rule is keyed on the boat, not the set.</p>
+  </div>
+
+  <figure id="h1">
+    <h3>A hexagon is published only if at least five different boats were in it</h3>
+    <div class="chart" id="c-h1"></div>
+    <figcaption>An explanatory drawing, not archive data: each dot is a boat, each
+      hexagon a patch of sea on one day. Dashed hexagons hold fewer than five boats
+      and never reach a published file.</figcaption>
+    <p class="source">The rule is in <code>CLAUDE.md</code> and the data card;
+      it is enforced on the written files by
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/test_export.py"><code>scripts/test_export.py</code></a>,
+      which the export refuses to skip</p>
+  </figure>
+
+  <div class="prose">
+    <p>A floor like that is cheap to write and expensive to keep. Here is the bill.</p>
+  </div>
+
+  <figure id="h2">
+    <h3>The rule hides <span data-n="floor_hidden_words">three quarters</span> of the
+      map squares and keeps <span data-n="floor_kept_words">four fifths</span> of the
+      movement</h3>
+    <div class="chart" id="c-h2"></div>
+    <figcaption>Every patch-day of the private fleet, counted two ways: as map
+      squares, and as messages sent by boats that were actually moving. The two bars
+      have different denominators on purpose — that gap is the point.</figcaption>
+    <p class="source">Danish Maritime Authority AIS archive · recomputed with the
+      export's own grouping,
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/sql/70_export.sql"><code>sql/70_export.sql</code></a></p>
+    <details><summary>The numbers</summary><div class="scroll"><table id="t-h2"></table></div></details>
+  </figure>
+
+  <div class="prose">
+    <p>Of <span data-n="cells_total">1 445 495</span> patch-days,
+      <span data-n="cells_kept">341 092</span> survive:
+      <span data-n="floor_cells_pct">24</span> per cent of the squares, carrying
+      <span data-n="floor_moving_pct">82</span> per cent of the movement. The rule
+      deletes a long tail of nearly empty water and keeps the harbours and the
+      channels, which is where the sailing is.</p>
+
+    <p>A finer grid does not survive at all. The same floor, hour by hour, on patches
+      of about five square kilometres (<code>H3 resolution 7</code>) keeps
+      <span data-n="hourly_cells_pct">7</span> per cent of the squares and
+      <span data-n="hourly_moving_pct">20</span> per cent of the movement:
+      unpublishable and useless at once. So the private layer is coarse and daily,
+      and only the commercial layer, which needs no floor, is fine and hourly.</p>
+  </div>
+
+  <!-- ==================== 2. the pipeline ==================== -->
+  <div class="prose">
+    <p class="act">The pipeline</p>
+    <h2>Terabytes went in and a few gigabytes came out</h2>
+
+    <p>The archive is a web directory of zip files, one per month up to 2024 and one
+      per day after that — about <span data-n="archive_tb">2.3</span> terabytes from
+      2014 onward, of which I took a little over half. The machine that read it is a Mac Mini under a desk, so
+      keeping any of it was never an option.</p>
+
+    <p>It is a loop, and the loop is the design. Download one archive. Unzip it
+      straight into the database. Count what is in it per hexagon per hour. Write the
+      counts. Delete the archive. Take the next one.</p>
+  </div>
+
+  <figure id="h3">
+    <h3>Every raw file was deleted the moment it had been counted</h3>
+    <div class="chart" id="c-h3"></div>
+    <figcaption>The loop, once per archive file. An archive is deleted as soon as
+      its counts are written, so the download directory never grows and at the end
+      of the run it is empty.</figcaption>
+    <p class="source">Danish Maritime Authority AIS archive · counted by the loader's
+      own log,
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/load.sh"><code>scripts/load.sh</code></a>
+      and <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/sql/03_aggregate.sql"><code>sql/03_aggregate.sql</code></a></p>
+    <details><summary>The numbers</summary><div class="scroll"><table id="t-h3"></table></div></details>
+  </figure>
+
+  <div class="prose">
+    <p>It ran once, from empty, over a weekend: <span data-n="files">949</span>
+      archives and <span data-n="pulled_tb">1.2</span> terabytes down the wire in
+      <span data-n="reload_hours">35</span> hours. The database was busy for
+      <span data-n="load_hours">4.4</span> of them. The rest was waiting for bytes.</p>
+
+    <p>That ratio is the lesson worth passing on. One connection to the archive gets
+      about <span data-n="link_share_words">a third</span> of my home line however
+      you ask for it, so the runner keeps <span data-n="ahead">8</span> downloads
+      running ahead of the file it is loading while the loading stays strictly serial
+      — one writer, one lock. That alone made the queue
+      <span data-n="prefetch_speedup">3.6</span> times faster. The largest monthly
+      archive then blew the memory cap mid-count, at
+      <span data-n="oom_million">806</span> million rows; the fix was to let the
+      grouping spill to disk past <span data-n="spill_gb">6</span> gigabytes.</p>
+
+    <p>Out came <span data-n="store_gb">11</span> gigabytes of counts over
+      <span data-n="days">2 122</span> days:
+      <span data-n="rows_billion">32</span> billion lines of radio read,
+      <span data-n="kept_billion">30</span> billion kept, the rest dropped as
+      navigation buoys, shore stations, the <code>Latitude = 91</code> sentinel for
+      "no fix", and positions outside the box. A usual file goes through at
+      <span data-n="rate_million">2.4</span> million lines a second.</p>
+  </div>
+
+  <!-- ==================== 3. three bugs ==================== -->
+  <div class="prose">
+    <p class="act">Three bugs</p>
+    <h2>Only one of them was mine, and it was the expensive one</h2>
+  </div>
+
+  <div class="prose">
+    <p class="act">One — the grid was mirrored</p>
+
+    <p>The database has a function that turns a latitude and a longitude into a grid
+      square, and between two versions it swapped its two arguments. Both orders are
+      good numbers, so nothing threw. Everything downstream looked healthy: row
+      counts right, the loader's invariant exact, plausible traffic in the busiest
+      squares. The swap reflects every point on Earth across the line where latitude
+      equals longitude, so it showed up only on a map — the one that put Copenhagen
+      in the Arabian Sea.</p>
+
+    <p>The part that actually hurts is that my test had the same bug as my code. It
+      read the latitude back out of the same function with the same swapped
+      convention, so it was symmetric under the mistake and passed. An earlier session
+      had even "checked" it by feeding the correct call, watching it fail, and filing
+      that as proof the test worked.</p>
+
+    <p>The fix is boring, and the boring part is the lesson. The convention is pinned
+      on every call now, and the test no longer asks the database anything: it
+      hard-codes one square — Copenhagen — computed by another library in another
+      language, and asserts the store has rows in it. It has
+      <span data-n="cph_rows">35 768</span>, and all
+      <span data-n="cells">116 289</span> squares have their centre in Danish water.
+      Finding this late cost a reload from scratch:
+      <span data-n="reload_hours">35</span> hours, again.</p>
+  </div>
+
+  <div class="prose">
+    <p class="act">Two — a radio cannot send that many messages</p>
+
+    <p>A big ship's radio (AIS Class A) sends at most one position every
+      <span data-n="cap_seconds">2</span> seconds. That is the radio standard, not a
+      habit, so a day cannot hold more than <span data-n="cap">43 200</span> messages
+      from one ship — a ceiling you can test against knowing nothing about
+      shipping.</p>
+
+    <p>So I counted, per month, the share of ship-days above it. Before 2023 it is
+      <span data-n="over_cap_before">0.06</span> per cent, the odd garbled day. From
+      December 2023 it runs up to <span data-n="over_cap_now">1.1</span> per cent
+      every single month, and the worst ship-day holds
+      <span data-n="worst_times">8.3</span> times the ceiling. Those days did not
+      happen: the archive is keeping some messages twice. What convinced me the test
+      was right is that it also found a window nobody had told it about — late August
+      and September 2015, separately known to be duplicated.</p>
+
+    <p>Counting heads is immune to that, since the same boat recorded twice is still
+      one boat; counting messages is not. So the story here is told in head counts,
+      and no chart compares message counts across 2023 or September 2015.</p>
+  </div>
+
+  <div class="prose">
+    <p class="act">Three — the ferries that are not there</p>
+
+    <p>A ship's type is whatever the ship says it is, and the loader resolves one
+      identity per ship per day. A ferry that broadcast "Undefined" is not filed as a
+      ferry that day — and not filed as a gap either. It is simply absent, with no
+      hole where it should be, which is the worst shape a missing thing can have.</p>
+
+    <p>In 2025, <span data-n="hidden_share">16</span> per cent of the sailing days of
+      a <span data-n="hidden_fleet">487</span>-ship ferry fleet were filed as
+      something other than a passenger ship, and it is not spread evenly. The
+      Esbjerg – Nordby ferry <span data-n="fano_ship">M/F FENJA</span>, which crosses
+      to the island of Fanø several times an hour all year, called herself
+      "Undefined" on <span data-n="fano_days">365</span> days of
+      <span data-n="fano_year">2021</span>. In my data she made no crossings that
+      year, because in my data she does not exist.</p>
+
+    <p>No query can fix that: the type is baked in at load time, and re-reading the
+      archive would change nothing, because the archive faithfully records what the
+      ship broadcast. So it is measured instead, and every ferry number here is a
+      lower bound of known size.</p>
+  </div>
+
+  <!-- ==================== 4. limits ==================== -->
+  <div class="prose">
+    <p class="act">Limits</p>
+    <h2>What this data cannot say</h2>
+
+    <p><strong>A radio is not a boat.</strong> Over the same weeks of the year the
+      fleet goes from <span data-n="boats_2015">6 137</span> boats in 2015 to
+      <span data-n="boats_2026">22 773</span> in 2026,
+      <span data-n="boats_growth">3.7</span> times as many. Some of that is more
+      boats and some is people fitting a radio to a boat they already had. Divide by
+      the commercial fleet heard on the same receivers — a control that grows when
+      reception grows — and the rise is still
+      <span data-n="instrument_growth">3.5</span>, so the listening explains about
+      <span data-n="instrument_cost">6.5</span> per cent of the climb. Nobody
+      publishes how many radios were sold, so the halves cannot be separated
+      further.</p>
+
+    <p><strong>The box is not Denmark.</strong> I counted a rectangle of sea, and it
+      reaches Kiel, Flensburg, Rügen and the Dutch Wadden. German boats are
+      <span data-n="german_2026">35</span> per cent of the small-boat fleet in it,
+      Danish boats <span data-n="danish_2026">24</span> per cent, in every loaded
+      year. "The fleet" always means the fleet in that rectangle.</p>
+
+    <p><strong>There are holes in the calendar.</strong>
+      <span data-n="days">2 122</span> days are loaded, not eleven years of them.
+      2016, 2017, 2019 and 2020 were never downloaded, so a storm that fell in those
+      years did not happen as far as this project knows.</p>
+
+    <p><strong>Message counts are two instruments</strong>, for the reason in the
+      second bug above. Head counts compare across the whole archive; message counts
+      only inside a stretch of it.</p>
+
+    <p><strong>Somebody else's map agrees about where the boats are.</strong> The
+      European marine atlas builds its own leisure-traffic density for these waters,
+      by a different pipeline from the same kind of radio. Rank every patch of sea by
+      busyness and the two orders agree at
+      <span data-n="emodnet_agreement">0.85</span> out of a possible one where both
+      of us see the same water — close, for two methods that share no code.</p>
+
+    <p>They disagree in two useful ways. About
+      <span data-n="emodnet_missing">10</span> per cent of the traffic they see falls
+      in squares where I have nothing, nearly all at the edges of my rectangle — in
+      the Danish core it is <span data-n="emodnet_core_missing">1</span> per cent, so
+      that gap is my scope, not my reception. The mirror image is one patch off the
+      island of Læsø: number <span data-n="marina_rank_ours">9</span> on my list of
+      busiest water and number <span data-n="marina_rank_emo">16 984</span> on
+      theirs. It holds a marina — <span data-n="marina_boats">353</span> boats across
+      the month, mostly tied up. They measure the time a track spends in a square,
+      and a boat at a berth draws no track, so they give it
+      <span data-n="marina_emo_hours">4.1</span> hours. Neither is wrong: one cannot
+      see a full marina, the other cannot tell one from a busy channel.</p>
+  </div>
+
+  <!-- ==================== 5. reproduce ==================== -->
+  <div class="prose">
+    <p class="act">Take it</p>
+    <h2>Everything here is a repository and three commands</h2>
+
+    <p>No number here came from anywhere but the archive, and the layout follows the
+      trail from a chart back to its query:</p>
+  </div>
+
+  <pre>sql/      every query a chart is made of
+scripts/  fetch, load, export, screenshot
+site/     this site: page, data module, script
+notes/    the analyst charts behind the prose
+docs/     the plan, the log, decisions, data card</pre>
+
+  <div class="prose">
+    <p>Three commands do the work. The first fetches, counts and deletes one archive
+      at a time, and can be stopped and restarted anywhere. The second runs any query
+      in the repository. The third writes the open dataset and refuses to finish if
+      the privacy test fails.</p>
+  </div>
+
+  <pre>scripts/run_queue.sh queues/daily-2024-2026.txt
+scripts/ch.sh sql/10_season_daily.sql
+scripts/export.sh</pre>
+
+  <div class="prose">
+    <p>Out of that come three files.
+      <code>class_a_hourly_&lt;year&gt;.parquet</code> holds the commercial traffic —
+      cargo, ferries, fishing, work boats — per small hexagon per hour, one file for
+      each of the <span data-n="dataset_years">8</span> loaded years.
+      <code>leisure_daily.parquet</code> holds the private fleet per large hexagon
+      per day, every row carrying at least <span data-n="floor_k">5</span> boats.
+      <code>ferry_daily.parquet</code> holds one row per named ferry line per day,
+      with the columns that say whether a zero means "cancelled" or "nobody heard
+      anything".</p>
+
+    <p>The counts are published under <span data-n="licence">CC BY 4.0</span>; the
+      source data is the Danish Maritime Authority's, cited as such. A permanent
+      identifier is pending — until it exists, the repository is the address.</p>
+  </div>
+
+  <footer>
+    <p>Source: Danish Maritime Authority, <a href="http://aisdata.ais.dk/">aisdata.ais.dk</a>,
+      used under the Danish public-data terms. Positions of private boats are never
+      published here, at any grain, and every published number counts at least five
+      boats together.</p>
+    <p>Code and data: <a href="https://github.com/Maksim-Burtsev/seafolk">github.com/Maksim-Burtsev/seafolk</a>.
+      The numbers on this page are rewritten from the archive by
+      <code>scripts/build_site_data.sh</code>.</p>
+  </footer>
+</div>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Dataset",
+  "name": "Seafolk — Danish AIS aggregates",
+  "description": "Danish waters counted, not tracked. Hourly and daily counts of vessels, messages and speed per H3 cell, built from the Danish Maritime Authority's open AIS archive, plus a per-day crossing count for every named Danish ferry line. The commercial fleet is published hourly at H3 resolution 7; the private fleet — every Class B transponder and every pleasure craft whatever its transponder — is published daily at H3 resolution 5 and only in cells holding at least five distinct vessels. No identifier, name or track of a private vessel exists in any file.",
+  "url": "https://github.com/Maksim-Burtsev/seafolk",
+  "identifier": "pending",
+  "version": "0.1.0",
+  "license": "https://creativecommons.org/licenses/by/4.0/",
+  "isAccessibleForFree": true,
+  "creator": { "@type": "Person", "name": "Maksim Burtsev" },
+  "creditText": "Data: Danish Maritime Authority (aisdata.ais.dk), aggregated by the Seafolk project",
+  "temporalCoverage": "2015-01-01/2026-08-26",
+  "spatialCoverage": {
+    "@type": "Place",
+    "name": "Danish waters and the surrounding North Sea and western Baltic",
+    "geo": { "@type": "GeoShape", "box": "53 3 59 17" }
+  },
+  "isBasedOn": {
+    "@type": "Dataset",
+    "name": "Danish Maritime Authority historical AIS archive",
+    "url": "http://aisdata.ais.dk/",
+    "creator": { "@type": "Organization", "name": "Danish Maritime Authority" }
+  },
+  "keywords": ["AIS", "maritime", "Denmark", "leisure boating", "ferries", "H3"],
+  "distribution": [
+    {
+      "@type": "DataDownload",
+      "name": "Seafolk aggregates (Parquet)",
+      "encodingFormat": "application/vnd.apache.parquet",
+      "contentUrl": "https://github.com/Maksim-Burtsev/seafolk/releases"
+    }
+  ]
+}
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="js/kit.js"></script>
+<script src="js/how.js"></script>
+</html>

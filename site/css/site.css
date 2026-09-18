@@ -1,0 +1,191 @@
+/* Seafolk — the one stylesheet every page under site/ loads.
+ *
+ * Tokens, typography, the prose column and the figure block. Lifted from
+ * site/day-clocks.html, which is where the palette was chosen and tested; the
+ * charts in site/js/kit.js read the same variables through getComputedStyle,
+ * so a colour is defined once, here, and never repeated in JavaScript.
+ *
+ * THEME. Light by default, dark when the reader's system asks for it, and
+ * either one forced with <html data-theme="light|dark"> — which is how
+ * scripts/shot.sh takes the dark screenshots without a browser flag.
+ *
+ * WIDTH. Everything works down to 380 px with no horizontal scroll. The charts
+ * are responsive SVGs that re-render on resize; nothing here sets a pixel
+ * width on one.
+ */
+
+:root {
+  color-scheme: light;
+  --ground:   #e9eeef;   /* the page */
+  --surface:  #f7f9f9;   /* a figure, a table, a control */
+  --hairline: #cfdadc;
+  --ink:      #0f1a1d;
+  --label:    #55676c;   /* axis labels, captions, source lines */
+  --accent:   #eb6834;   /* the one thing the chart is about */
+  --accent-tx:#b8441a;   /* the same accent, safe on text */
+  --working:  #7d8f94;   /* every other series: muted ink */
+  --ref:      #a8b8bc;   /* a reference line, a grid, a ghost */
+  --pale:     #c6d2d5;   /* the oldest year in a series of years */
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground:   #0b1416;
+    --surface:  #122023;
+    --hairline: #23383c;
+    --ink:      #e8eeef;
+    --label:    #9db0b4;
+    --accent:   #f07a45;
+    --accent-tx:#f79367;
+    --working:  #7b8f94;
+    --ref:      #47605f;
+    --pale:     #35494d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground:   #0b1416;
+  --surface:  #122023;
+  --hairline: #23383c;
+  --ink:      #e8eeef;
+  --label:    #9db0b4;
+  --accent:   #f07a45;
+  --accent-tx:#f79367;
+  --working:  #7b8f94;
+  --ref:      #47605f;
+  --pale:     #35494d;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font: 400 17px/1.65 Karla, ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: clamp(28px, 6vw, 72px) clamp(16px, 4vw, 40px) 72px;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(30px, 4vw, 44px);
+}
+
+/* ---- prose ---- */
+.prose { max-width: 62ch; display: flex; flex-direction: column; gap: 18px; }
+p { margin: 0; text-wrap: pretty; }
+strong { font-weight: 600; }
+a { color: inherit; text-underline-offset: 3px; text-decoration-color: var(--ref); }
+a:hover { text-decoration-color: var(--accent); }
+
+.eyebrow {
+  font: 500 12px/1 "IBM Plex Mono", ui-monospace, monospace;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--label); margin: 0;
+}
+h1 {
+  font: 400 clamp(38px, 7vw, 68px)/1.02 "Bodoni Moda", Georgia, serif;
+  letter-spacing: -.015em; text-wrap: balance; margin: 0;
+}
+h1 em { font-style: italic; color: var(--accent-tx); }
+h2 {
+  font: 400 clamp(25px, 3.4vw, 34px)/1.16 "Bodoni Moda", Georgia, serif;
+  margin: 0; max-width: 24ch; text-wrap: balance;
+}
+.deck { font-size: clamp(18px, 2.1vw, 21px); color: var(--label); margin: 0; text-wrap: pretty; }
+.act {
+  font: 500 12px/1 "IBM Plex Mono", ui-monospace, monospace;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--accent-tx); margin: 0;
+}
+/* A number written by the build reads as part of the sentence around it:
+ * the "n" map also carries computed WORDS — a storm name, a ship name, a
+ * spelled-out count — and those in a monospace face look like a bug. Only
+ * the digit widths are pinned. */
+[data-n] { font-variant-numeric: tabular-nums; }
+code {
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .88em;
+  background: var(--surface); border: 1px solid var(--hairline); padding: 1px 5px;
+}
+
+/* ---- the figure block: claim, chart, source, table ---- */
+figure {
+  margin: 0; display: flex; flex-direction: column; gap: 14px;
+  background: var(--surface); border: 1px solid var(--hairline);
+  padding: clamp(16px, 2.6vw, 28px);
+}
+figure h3 {
+  font: 400 clamp(21px, 2.6vw, 27px)/1.2 "Bodoni Moda", Georgia, serif;
+  margin: 0; max-width: 30ch; text-wrap: balance;
+}
+figcaption { font-size: 15px; color: var(--label); max-width: 68ch; margin: 0; }
+.chart { width: 100%; }
+.chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+.source {
+  font: 400 12.5px/1.5 "IBM Plex Mono", ui-monospace, monospace;
+  color: var(--label); margin: 0; max-width: 80ch;
+}
+.source code { background: none; border: 0; padding: 0; font-size: 1em; }
+
+/* ---- controls ---- */
+.pick {
+  font: 400 13px/1 Karla, ui-sans-serif, sans-serif;
+  color: var(--label); margin: 0 0 -4px;
+}
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.controls button {
+  appearance: none; cursor: pointer;
+  background: transparent; color: var(--label);
+  border: 1px solid var(--hairline); border-radius: 2px; padding: 6px 11px;
+  font: 500 12px/1 "IBM Plex Mono", ui-monospace, monospace; letter-spacing: .06em;
+}
+.controls button:hover { color: var(--ink); border-color: var(--ref); }
+.controls button[aria-pressed="true"] {
+  background: var(--ink); color: var(--surface); border-color: var(--ink);
+}
+.controls button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---- the collapsed data table under every chart ---- */
+details { border-top: 1px solid var(--hairline); padding-top: 12px; }
+summary {
+  cursor: pointer; color: var(--label);
+  font: 500 12px/1 "IBM Plex Mono", ui-monospace, monospace;
+  letter-spacing: .09em; text-transform: uppercase;
+}
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.scroll { overflow-x: auto; margin-top: 12px; max-height: 340px; }
+table { border-collapse: collapse; font-size: 13px; }
+th, td {
+  padding: 4px 9px; text-align: right; white-space: nowrap;
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums;
+}
+th { color: var(--label); font-weight: 500; border-bottom: 1px solid var(--hairline); }
+tbody th { text-align: left; border-bottom: 0; }
+
+/* ---- the hover readout, one per page ---- */
+.tip {
+  position: fixed; pointer-events: none; opacity: 0; z-index: 9;
+  background: var(--ink); color: var(--ground);
+  padding: 5px 9px; border-radius: 2px; white-space: pre;
+  font: 500 12px/1.45 "IBM Plex Mono", ui-monospace, monospace;
+}
+.tip[data-on] { opacity: 1; }
+
+/* ---- footer ---- */
+footer {
+  border-top: 1px solid var(--hairline); padding-top: 22px;
+  font-size: 15px; color: var(--label); max-width: 68ch;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.chapters { display: flex; flex-direction: column; gap: 10px; max-width: 62ch; }
+.chapters a { display: block; color: var(--ink); text-decoration: none; }
+.chapters a span { color: var(--label); }
+.chapters a:hover { color: var(--accent-tx); }
+
+/* ---- ?only=<figure id>: one figure alone, for a screenshot ---- */
+body.only > .wrap > :not(.shot) { display: none; }
+body.only > .wrap { padding-top: clamp(16px, 3vw, 28px); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
