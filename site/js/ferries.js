@@ -263,8 +263,8 @@ function storms() {
         .padding(0.22);
       kit.axis(g, x, { side: "bottom", at: h, values: [0, 50, 100],
                        fmt: d => d + " %",
-                       title: narrow ? "% of a usual day"
-                         : "crossings that day, against what these lines run on a usual day" });
+                       title: narrow ? "% of a usual day's crossings"
+                         : "share of a usual day's crossings that sailed" });
       g.append("line").attr("x1", x(100)).attr("x2", x(100))
         .attr("y1", -10).attr("y2", h)
         .attr("stroke", ink("ref")).attr("stroke-dasharray", "4 4");
@@ -275,10 +275,16 @@ function storms() {
           g.append("rect").attr("x", 0).attr("y", yy)
             .attr("width", x(d[key])).attr("height", sub.bandwidth())
             .attr("fill", ink(colour));
+          // The FIRST value on the chart says what the number is, so a reader
+          // meeting "52 %" cold does not read it as "lost 52 %". The rest are
+          // bare percentages, under a label that now says the same thing.
           kit.halo(g.append("text").attr("x", x(d[key]) + 7)
             .attr("y", yy + sub.bandwidth() / 2).attr("dy", "0.34em")
             .attr("fill", ink(colour === "accent" ? "accent-tx" : "label"))
-            .style("font", `500 12px ${MONO}`).text(d[key] + " %"));
+            .style("font", `500 12px ${MONO}`)
+            .text(!row && key === POOLS[0][0] && !narrow
+              ? `sailed ${d[key]} % of a usual day`
+              : d[key] + " %"));
           // direct labels, on the top pair only: two bars in two colours need
           // saying once, not a legend in the corner. The first goes above its
           // bar and the second below its own, so neither sits on the other's.

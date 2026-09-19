@@ -8,19 +8,9 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500&family=Karla:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="css/site.css">
 <style>
-/* Two things this page needs that no other page has yet, both built out of
-   site/css/site.css's tokens — no colour literal, no second palette. The top
-   nav moves into site.css the moment a second page wants one. */
-.topnav {
-  display: flex; flex-wrap: wrap; gap: 7px 20px; align-items: baseline;
-  border-bottom: 1px solid var(--hairline); padding-bottom: 15px;
-  font: 500 12px/1.4 "IBM Plex Mono", ui-monospace, monospace;
-  letter-spacing: .1em; text-transform: uppercase;
-}
-.topnav a { color: var(--label); text-decoration: none; }
-.topnav a:hover { color: var(--accent-tx); }
-.topnav a.home { color: var(--ink); }
-.topnav a[aria-current] { color: var(--accent-tx); }
+/* The one thing this page needs that no other page has: a block of shell,
+   built out of site/css/site.css's tokens — no colour literal, no second
+   palette. The top nav is in site.css now. */
 pre {
   margin: 0; overflow-x: auto; max-width: 100%;
   background: var(--surface); border: 1px solid var(--hairline);
@@ -36,7 +26,7 @@ pre {
      Nothing here is typed by hand: the JSON block feeds the three figures, and
      each empty span carrying a data-n attribute is filled from that block's
      "n" map. scripts/test_site.py fails if one of them is left empty. -->
-<script type="application/json" id="data">{"picture":{"floor":5,"rows":[[2,9,1,4],[5,12,3]]},"floor":{"cells_pct":23.6,"moving_pct":82.0},"pipe":{"files":949,"read_billion":31.9,"kept_billion":29.7,"load_hours":4.4,"rate_million":2.4,"days":2122,"cells":116289,"years":8,"store_gb":11},"n":{"floor_k":"5","pleasure_a_lo":"337","pleasure_a_hi":"467","cells_total":"1 445 495","cells_kept":"341 092","floor_cells_pct":"24","floor_moving_pct":"82","floor_hidden_words":"three quarters","floor_kept_words":"four fifths","hourly_cells_pct":"7","hourly_moving_pct":"20","archive_tb":"2.3","pulled_tb":"1.2","files":"949","rows_billion":"32","kept_billion":"30","days":"2 122","store_gb":"11","rate_million":"2.4","load_hours":"4.4","reload_hours":"35","link_share_words":"a third","ahead":"8","prefetch_speedup":"3.6","oom_million":"806","spill_gb":"6","cph_rows":"35 768","cells":"116 289","cap":"43 200","cap_seconds":"2","over_cap_before":"0.06","over_cap_now":"1.1","worst_times":"8.3","hidden_share":"16","hidden_fleet":"487","fano_ship":"M/F FENJA","fano_year":"2021","fano_days":"365","boats_2015":"6 137","boats_2026":"22 773","boats_growth":"3.7","instrument_growth":"3.5","instrument_cost":"6.5","german_2026":"35","danish_2026":"24","emodnet_agreement":"0.85","emodnet_missing":"10","emodnet_core_missing":"1","marina_rank_ours":"9","marina_rank_emo":"16 984","marina_boats":"353","marina_emo_hours":"4.1","licence":"CC BY 4.0","dataset_years":"8"}}</script>
+<script type="application/json" id="data">{"picture":{"floor":5,"rows":[[2,9,1,4],[5,12,3]]},"floor":{"cells_pct":23.6,"moving_pct":82.0},"pipe":{"files":949,"read_billion":31.9,"kept_billion":29.7,"load_hours":4.4,"rate_million":2.4,"days":2122,"cells":116289,"years":8,"store_gb":11},"n":{"floor_k":"5","pleasure_a_lo":"337","pleasure_a_hi":"467","cells_total":"1 445 495","cells_kept":"341 092","floor_cells_pct":"24","floor_moving_pct":"82","floor_hidden_words":"three quarters","floor_kept_words":"four fifths","hourly_cells_pct":"7","hourly_moving_pct":"20","archive_tb":"2.3","pulled_tb":"1.2","files":"949","rows_billion":"32","kept_billion":"30","days":"2 122","store_gb":"11","rate_million":"2.4","load_hours":"4.4","reload_hours":"35","link_share_words":"a third","ahead":"8","prefetch_speedup":"3.6","oom_million":"806","spill_gb":"6","cph_rows":"35 768","cells":"116 289","cap":"43 200","cap_seconds":"2","over_cap_before":"0.06","over_cap_now":"1.1","worst_times":"8.3","hidden_share":"16","hidden_fleet":"487","fano_ship":"M/F FENJA","fano_year":"2021","fano_days":"365","boats_2015":"6 137","boats_2026":"22 773","boats_growth":"3.7","instrument_growth":"3.5","instrument_cost":"6.5","german_2026":"35","danish_2026":"24","emodnet_agreement":"0.85","emodnet_missing":"10","emodnet_core_missing":"1","marina_rank_ours":"9","marina_rank_emo":"16 984","marina_boats":"353","marina_emo_hours":"4.1","licence":"CC BY 4.0","dataset_years":"8"}}</script>
 
 <div class="wrap">
 
@@ -106,15 +96,17 @@ pre {
     <figcaption>Every patch-day of the private fleet, counted two ways: as map
       squares, and as messages sent by boats that were actually moving. The two bars
       have different denominators on purpose — that gap is the point.</figcaption>
-    <p class="source">Danish Maritime Authority AIS archive · recomputed with the
-      export's own grouping,
-      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/sql/70_export.sql"><code>sql/70_export.sql</code></a></p>
+    <p class="source">Danish Maritime Authority AIS archive · counted by
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/site_data/how.py"><code>scripts/site_data/how.py</code></a>,
+      which repeats the <code>GROUP BY</code> of
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/sql/70_export.sql"><code>sql/70_export.sql</code></a>
+      over the store, so this is the cost of the export that was actually published</p>
     <details><summary>The numbers</summary><div class="scroll"><table id="t-h2"></table></div></details>
   </figure>
 
   <div class="prose">
-    <p>Of <span data-n="cells_total">1 445 495</span> patch-days,
-      <span data-n="cells_kept">341 092</span> survive:
+    <p>Of <span data-n="cells_total">1 445 495</span> patch-days,
+      <span data-n="cells_kept">341 092</span> survive:
       <span data-n="floor_cells_pct">24</span> per cent of the squares, carrying
       <span data-n="floor_moving_pct">82</span> per cent of the movement. The rule
       deletes a long tail of nearly empty water and keeps the harbours and the
@@ -149,8 +141,10 @@ pre {
     <figcaption>The loop, once per archive file. An archive is deleted as soon as
       its counts are written, so the download directory never grows and at the end
       of the run it is empty.</figcaption>
-    <p class="source">Danish Maritime Authority AIS archive · counted by the loader's
-      own log,
+    <p class="source">Danish Maritime Authority AIS archive · read out of the
+      loader's own log by
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/site_data/how.py"><code>scripts/site_data/how.py</code></a>
+      · the loop itself is
       <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/load.sh"><code>scripts/load.sh</code></a>
       and <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/sql/03_aggregate.sql"><code>sql/03_aggregate.sql</code></a></p>
     <details><summary>The numbers</summary><div class="scroll"><table id="t-h3"></table></div></details>
@@ -173,7 +167,7 @@ pre {
       grouping spill to disk past <span data-n="spill_gb">6</span> gigabytes.</p>
 
     <p>Out came <span data-n="store_gb">11</span> gigabytes of counts over
-      <span data-n="days">2 122</span> days:
+      <span data-n="days">2 122</span> days:
       <span data-n="rows_billion">32</span> billion lines of radio read,
       <span data-n="kept_billion">30</span> billion kept, the rest dropped as
       navigation buoys, shore stations, the <code>Latitude = 91</code> sentinel for
@@ -208,8 +202,8 @@ pre {
       on every call now, and the test no longer asks the database anything: it
       hard-codes one square — Copenhagen — computed by another library in another
       language, and asserts the store has rows in it. It has
-      <span data-n="cph_rows">35 768</span>, and all
-      <span data-n="cells">116 289</span> squares have their centre in Danish water.
+      <span data-n="cph_rows">35 768</span>, and all
+      <span data-n="cells">116 289</span> squares have their centre in Danish water.
       Finding this late cost a reload from scratch:
       <span data-n="reload_hours">35</span> hours, again.</p>
   </div>
@@ -219,7 +213,7 @@ pre {
 
     <p>A big ship's radio (AIS Class A) sends at most one position every
       <span data-n="cap_seconds">2</span> seconds. That is the radio standard, not a
-      habit, so a day cannot hold more than <span data-n="cap">43 200</span> messages
+      habit, so a day cannot hold more than <span data-n="cap">43 200</span> messages
       from one ship — a ceiling you can test against knowing nothing about
       shipping.</p>
 
@@ -266,8 +260,8 @@ pre {
     <h2>What this data cannot say</h2>
 
     <p><strong>A radio is not a boat.</strong> Over the same weeks of the year the
-      fleet goes from <span data-n="boats_2015">6 137</span> boats in 2015 to
-      <span data-n="boats_2026">22 773</span> in 2026,
+      fleet goes from <span data-n="boats_2015">6 137</span> boats in 2015 to
+      <span data-n="boats_2026">22 773</span> in 2026,
       <span data-n="boats_growth">3.7</span> times as many. Some of that is more
       boats and some is people fitting a radio to a boat they already had. Divide by
       the commercial fleet heard on the same receivers — a control that grows when
@@ -284,7 +278,7 @@ pre {
       year. "The fleet" always means the fleet in that rectangle.</p>
 
     <p><strong>There are holes in the calendar.</strong>
-      <span data-n="days">2 122</span> days are loaded, not eleven years of them.
+      <span data-n="days">2 122</span> days are loaded, not eleven years of them.
       2016, 2017, 2019 and 2020 were never downloaded, so a storm that fell in those
       years did not happen as far as this project knows.</p>
 
@@ -305,7 +299,7 @@ pre {
       the Danish core it is <span data-n="emodnet_core_missing">1</span> per cent, so
       that gap is my scope, not my reception. The mirror image is one patch off the
       island of Læsø: number <span data-n="marina_rank_ours">9</span> on my list of
-      busiest water and number <span data-n="marina_rank_emo">16 984</span> on
+      busiest water and number <span data-n="marina_rank_emo">16 984</span> on
       theirs. It holds a marina — <span data-n="marina_boats">353</span> boats across
       the month, mostly tied up. They measure the time a track spends in a square,
       and a boat at a berth draws no track, so they give it

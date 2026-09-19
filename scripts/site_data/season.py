@@ -37,11 +37,7 @@ No radio ID, name, position or track of a private boat is read or written here.
 import datetime
 import statistics
 
-from . import typed
-
-# The six years the store holds whole or nearly so; 2022 and 2023 are 59 winter
-# days each and are not years (notes/ch01-findings.md § Caveats).
-YEARS = [2015, 2018, 2021, 2024, 2025, 2026]
+from . import YEARS, private_count, sp, typed
 # The last year the store holds whole, which is the year the three single-year
 # charts draw. 2026 stops on 26 August, in the middle of its own season.
 NOW = 2025
@@ -65,11 +61,6 @@ S24 = "year season fleet local_days moving_msgs night_msgs night_share".split()
 
 MONTHS = ("January February March April May June July August September "
           "October November December").split()
-
-
-def sp(x):
-    """2339.9 -> '2 340', the thin space the chapters print."""
-    return f"{round(x):,}".replace(",", " ")
 
 
 def doy(day):
@@ -132,7 +123,8 @@ def season(ch):
             "end": doy(r["end_25"]), "end_label": spell(r["end_25"]),
             "len": r["len_25"], "core": r["len_50"],
             "peak": doy(r["peak_day"]), "peak_label": spell(r["peak_day"]),
-            "small_boats_peak": round(r["peak_7d"]),
+            "small_boats_peak": private_count(
+                round(r["peak_7d"]), f"sql/20 {r['year']}: its busiest week"),
             # a bound that sits on the first or last loaded day is where the
             # ARCHIVE stopped, not where the season did
             "cut_start": r["start_25"] == r["first_day"],
@@ -166,8 +158,12 @@ def week(ch, ratio21):
     ratios = {}
     for y, rs in by_year.items():
         assert len(rs) == 7, f"{y}: {len(rs)} days of the week"
-        assert min(r["min_moved"] for r in rs) >= 5, \
-            f"{y}: a day of the week rests on fewer than five boats"
+        # the bars are means over 21-22 occurrences of a weekday; the floor
+        # goes on the SMALLEST single day behind any of them, because that is
+        # the day a mean could be hiding.
+        for r in rs:
+            private_count(r["min_moved"],
+                          f"sql/81 {y} {r['day_name']}: its quietest day")
         ratios[y] = mean([r for r in rs if r["dow"] >= 6]) / mean(rs[:5])
 
     days, weekday = by_year[NOW], mean(by_year[NOW][:5])
@@ -182,7 +178,10 @@ def week(ch, ratio21):
             # the headline: both are this one number
             "more": round(100 * (ratios[NOW] - 1)),
             "days": [{"name": r["day_name"], "short": r["day_name"][:3],
-                      "small_boats": r["mean_moved"], "ratio": r["ratio_to_weekday"],
+                      "small_boats": private_count(
+                          round(r["mean_moved"]),
+                          f"sql/81 {NOW} {r['day_name']}: boats out"),
+                      "ratio": r["ratio_to_weekday"],
                       "days": r["days"]} for r in days]}, ratios, full
 
 
@@ -242,14 +241,18 @@ def race(ch):
     for r in silver:
         assert len(events[("Silverrudder", r["year"])]) == 1, "Silverrudder is one day"
         assert r["base_days"] == 4, f"Silverrudder {r['year']}: {r['base_days']} usual days"
-        assert min(r["base_min"], r["race_vessels"]) >= 5, \
-            f"Silverrudder {r['year']}: a published day holds fewer than five boats"
+        where = f"Silverrudder {r['year']}"
         out.append({"year": r["year"], "date": spell(r["race_day"]),
                     "weekday": ["Monday", "Tuesday", "Wednesday", "Thursday",
                                 "Friday", "Saturday", "Sunday"][int(r["dow"]) - 1],
-                    "small_boats_race": r["race_vessels"],
-                    "small_boats_usual": r["base_mean"],
-                    "usual_low": r["base_min"], "usual_high": r["base_max"],
+                    "small_boats_race": private_count(r["race_vessels"],
+                                                      f"{where}: race day"),
+                    "small_boats_usual": private_count(round(r["base_mean"]),
+                                                       f"{where}: a usual day"),
+                    "usual_low": private_count(r["base_min"],
+                                               f"{where}: its quietest usual day"),
+                    "usual_high": private_count(r["base_max"],
+                                                f"{where}: its busiest usual day"),
                     "times": round(r["ratio"], 1)})
 
     # the other Danish events, as ratios: the last day of a multi-day race is

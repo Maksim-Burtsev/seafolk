@@ -42,14 +42,24 @@ name="${SHOT_NAME:-$(basename "$page" .html)}"
 url="file://$PWD/$page"
 q="${SHOT_QUERY:+&$SHOT_QUERY}"
 
-# the figures, in the order the page lists them, unless the caller named some
+# the figures, in the order the page lists them, unless the caller named some.
+# A named id that is not on the page is an error here: site/js/kit.js leaves the
+# page alone rather than blanking it, but a caller who mistyped an id would
+# otherwise get a full-page screenshot under a figure's file name.
 figures=("$@")
+# comments are stripped first: a figure parked in an HTML comment is not on the
+# page and would screenshot as an empty frame.
+available=$(perl -0777 -pe 's/<!--.*?-->//gs' "$page" |
+              grep -o '<figure id="[^"]*"' | cut -d'"' -f2)
+for id in "${figures[@]}"; do
+  grep -qxF "$id" <<<"$available" || {
+    echo "no <figure id=\"$id\"> on $page; it has:" >&2
+    sed 's/^/  /' <<<"$available" >&2
+    exit 1
+  }
+done
 if [ ${#figures[@]} -eq 0 ]; then
-  # comments are stripped first: a figure parked in an HTML comment (I6 waits
-  # for S14) is not on the page and would screenshot as an empty frame.
-  while read -r id; do figures+=("$id"); done < <(
-    perl -0777 -pe 's/<!--.*?-->//gs' "$page" |
-      grep -o '<figure id="[^"]*"' | cut -d'"' -f2)
+  while read -r id; do figures+=("$id"); done <<<"$available"
 fi
 
 shoot() {  # <file stem> <width> <height> <query>

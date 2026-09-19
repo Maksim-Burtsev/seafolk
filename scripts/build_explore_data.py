@@ -55,6 +55,7 @@ every month, so the res-6 and res-5 ids are written once into index.js and the
 months carry indices into those arrays. Nothing is dropped or thresholded.
 """
 import json
+import math
 import re
 import subprocess
 import sys
@@ -302,10 +303,88 @@ def main():
     print(f"size            {total / 1e6:.1f} MB of {BUDGET_MB} MB")
     if total > BUDGET_MB * 1e6:
         sys.exit(f"OVER BUDGET: {total / 1e6:.1f} MB > {BUDGET_MB} MB")
+    check_geography()
 
 
 def dump(obj) -> str:
     return json.dumps(obj, separators=(",", ":"))
+
+
+# Two places a cargo ship is always found, and a box around each. Drogden is
+# the deep-water gate of the Sound south of Copenhagen; the Great Belt carries
+# everything that does not fit through it. Both are named in docs/DATA.md and
+# neither is anywhere near the other, which is what makes them an oracle: a
+# mirrored or transposed grid puts the busiest cells in the Arabian Sea, and a
+# map drawn from it looks perfectly plausible until somebody knows the water.
+DROGDEN = (55.536, 12.712)
+GREAT_BELT = (55.0, 10.7, 55.9, 11.3)   # lat0, lon0, lat1, lon1
+
+
+def check_geography(out=OUT, top=60):
+    """The oracle, on the files that were WRITTEN.
+
+    There was none at all: the whole pipeline could emit a mirrored world and
+    every assert in this script would pass, because nothing here ever asked
+    where anything is. This reads the committed cell index and the committed
+    months back, takes the busiest cargo cells, and puts them on the Earth
+    through `h3ToGeo` with BOTH argument-order settings pinned exactly as
+    scripts/ch.sh pins them — the project states which convention it means
+    rather than depending on which clickhouse is installed.
+    """
+    index = json.loads(read_js(out / "index.js", "window.SEAFOLK_INDEX="))
+    cells6 = index["cells6"]
+    total = {}
+    for f in sorted(out.glob("*.js")):
+        if not f.stem[:4].isdigit():
+            continue
+        month = json.loads(read_js(f, None))
+        idx, vals = month.get("cargo") or [[], []]
+        for i, v in zip(idx, vals):
+            total[int(i)] = total.get(int(i), 0) + v
+    if not total:
+        sys.exit("no cargo cells in the written months — nothing to check")
+
+    busiest = sorted(total, key=total.get, reverse=True)[:top]
+    ids = "','".join(cells6[i] for i in busiest)
+    out_tsv = subprocess.run(
+        ["clickhouse", "local",
+         "--geotoh3_argument_order=lat_lon",
+         "--h3togeo_lon_lat_result_order=0",
+         "-q", f"""SELECT round(tupleElement(g, 1), 4),
+                          round(tupleElement(g, 2), 4)
+                   FROM (SELECT h3ToGeo(stringToH3(h)) AS g
+                         FROM (SELECT arrayJoin(['{ids}']) AS h))"""],
+        capture_output=True, text=True, check=True).stdout
+    places = [tuple(float(v) for v in ln.split("\t"))
+              for ln in out_tsv.splitlines() if ln.strip()]
+
+    near = min(_km(DROGDEN, p) for p in places)
+    belt = [p for p in places if GREAT_BELT[0] <= p[0] <= GREAT_BELT[2]
+            and GREAT_BELT[1] <= p[1] <= GREAT_BELT[3]]
+    if near > 10:
+        sys.exit(f"geography: the busiest {top} cargo cells come no closer "
+                 f"than {near:.0f} km to the Drogden channel {DROGDEN} — the "
+                 f"grid is mirrored or the h3 argument order is not pinned")
+    if not belt:
+        sys.exit(f"geography: none of the busiest {top} cargo cells is in the "
+                 f"Great Belt {GREAT_BELT} — the grid is mirrored")
+    print(f"geography      busiest cargo cells: {near:.1f} km from Drogden, "
+          f"{len(belt)} in the Great Belt")
+
+
+def _km(a, b):
+    """Kilometres between two (lat, lon) points; flat earth is plenty here."""
+    return math.dist((a[0], a[1] * math.cos(math.radians(a[0]))),
+                     (b[0], b[1] * math.cos(math.radians(b[0])))) * 111.19
+
+
+def read_js(path: Path, prefix):
+    """The JSON out of one of the files this script writes."""
+    body = path.read_text().strip().rstrip(";")
+    if prefix:
+        assert body.startswith(prefix), f"{path}: not {prefix}…"
+        return body[len(prefix):]
+    return body[body.index("]=") + 2:]
 
 
 # Same shape as the project's own guard (`grep -rEn '\b[0-9]{9}\b' site/`): a

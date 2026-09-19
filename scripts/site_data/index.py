@@ -29,23 +29,14 @@ import datetime
 import json
 import math
 import os
-import re
 import statistics
 from collections import defaultdict
 
-from . import ROOT, blocks, typed
-
-# The six years the store holds whole or nearly so. 2022 and 2023 are storm
-# months only, 59 days each, with no day in the common window at all — sql/61's
-# header says so at length, and a season drawn from them would be two winter
-# stripes.
-YEARS = [2015, 2018, 2021, 2024, 2025, 2026]
-
-# Class A autonomous mode sends at most one position report every 2 s, so a
-# transponder cannot produce more than this in a day (ITU-R M.1371). sql/60
-# block 6 counts the vessel-days above it; chart I7 draws the share.
-REPORT_SECONDS = 2
-CAP_A = 86_400 // REPORT_SECONDS
+from . import (A1, A1_INT, A4, B6, B6_INT, CAP_A, D1, D1_INT, FLEET_KEY,
+               FLEET_NAME, H1, H1_INT, H3, H3_INT, K_FLOOR, REPORT_SECONDS,
+               ROOT, STOP_ORDER, W, W_INT, WINDOW_DAYS, YEARS, blocks, clips,
+               hourly_series, media_key, onset, onset_words, private_count,
+               sailing_storms, sp, typed)
 
 # THE ONE HAND-TYPED NUMBER ON THE PAGE. The S4-redo reload ran 2026-09-06
 # 14:56:59 -> 2026-09-08 01:50:30 UTC = 34 h 54 min, docs/STATUS.md § S4-redo.
@@ -59,61 +50,7 @@ RELOAD_HOURS = 35
 # function its arguments the wrong way round, which is what the bug did.
 CPH = (55.6761, 12.5683)
 
-# S9's leisure floor, unchanged: the median number of private boats that
-# covered a mile on the REFERENCE day. Below it the sailing line is a ratio
-# built on a few dozen boats in a winter week and says nothing. Measured per
-# storm it runs 15.5 … 203, then 506, 2 056, 2 096; the literal sits in the
-# widest gap, exactly as notes/plot_ch04.py picks it.
-LEISURE_FLOOR = 250
-
-# The privacy floor itself, so that the sentence on the page saying a number
-# counts at least five boats cannot drift away from the guard in
-# scripts/build_site_data.py that enforces it.
-K_FLOOR = 5
-
-# sql/50's window: 72 hours on each side of the storm's own dates.
-WINDOW_DAYS = 3
-
-# Chart I6 mounts S14's player and Act 2 is written about whichever storm chart
-# I4 opens on, so that default has to be a storm S14 rendered. Which ones those
-# are is read off the directory rather than listed here.
-MEDIA = ROOT / "site" / "media"
-
-W = ("storm start_day hour offset_h mobile ship_group heard moving_msgs msgs "
-     "ref_hour ref_heard ref_moving_msgs ratio_moving ferry_crossings "
-     "ref_ferry_crossings").split()
-W_INT = "offset_h heard moving_msgs msgs ferry_crossings".split()
-A1 = ("year window coverage loaded_days class_b_vessels class_b_leisure_vessels "
-      "class_a_vessels class_a_vessels_5d leisure_per_class_a "
-      "leisure_per_class_a_5d class_b_5d class_b_1d class_a_1d").split()
-A1_INT = ("year loaded_days class_b_vessels class_b_leisure_vessels "
-          "class_a_vessels class_a_vessels_5d class_b_5d class_b_1d "
-          "class_a_1d").split()
-A4 = ("year vessel_days median_msgs_per_vessel_day vessel_hours msgs "
-      "msgs_per_vessel_hour vessel_days_moving median_dist_nm_moving "
-      "danish_share german_share").split()
-D1 = ("storm mobile ship_group day offset_d heard moved share_moved ref_day "
-      "ref_heard ref_moved ref_share_moved").split()
-B6 = ("mon loaded_days vessel_days median_msgs mean_msgs p90_msgs p99_msgs "
-      "max_msgs vd_over_cap share_over_cap max_over_cap_x dup_month").split()
-B6_INT = "loaded_days vessel_days max_msgs vd_over_cap dup_month".split()
-H1 = "year fleet visible_days hidden_days hidden_share vessels_with_hidden".split()
-H3 = "vessel year line kind island hidden_days dominant_hidden_type".split()
 FL = "year flag share".split()
-
-# The reader never sees "ship_group". These are the four public fleets chart I4
-# draws and the five rows of I5, in the order they stop.
-FLEET_NAME = {"fishing": "fishing boats", "leisure": "sailing boats",
-              "other": "work boats", "passenger": "ferries",
-              "cargo": "cargo ships"}
-FLEET_KEY = {"fishing": "fishing", "leisure": "sailing", "other": "work",
-             "passenger": "ferries", "cargo": "cargo"}
-STOP_ORDER = ["fishing", "leisure", "other", "passenger", "cargo"]
-
-
-def sp(x):
-    """12345.6 -> '12 346', with the thin space the chapters print."""
-    return f"{round(x):,}".replace(",", " ")
 
 
 def mean7(days, values):
@@ -163,8 +100,14 @@ def season(ch):
     for year in YEARS:
         rows = sorted(per_year[year])
         days = [d for d, _ in rows]
+        # The floor goes on the DAILY counts, not on the 7-day means drawn from
+        # them: a week holding one day of two boats averages to something
+        # comfortably over five, and the shape on screen is still that day.
+        # The smallest in the store is 12, on a January day in 2015.
+        vals = [private_count(v, f"sql/10 {d}: small boats that moved")
+                for d, v in rows]
         out[str(year)] = [[d.timetuple().tm_yday, v] for d, v
-                          in zip(days, mean7(days, [v for _, v in rows]))]
+                          in zip(days, mean7(days, vals))]
     return out
 
 
@@ -183,10 +126,13 @@ def fleet(ch):
     messages or fewer in the whole year. sql/61's header lays it out; the
     five-day count is the only denominator this project uses.
     """
-    rows = [typed(A1, r, A1_INT) for r in blocks(ch("61_adoption.sql"))[13]]
+    rows = [typed(A1, r, A1_INT) for r in
+            blocks(ch("61_adoption.sql"), "sql/61_adoption.sql")[13]]
     win = {r["year"]: r for r in rows if r["window"] == "mar_aug"}
     return {"years": YEARS,
-            "small_boats": [win[y]["class_b_leisure_vessels"] for y in YEARS],
+            "small_boats": [private_count(win[y]["class_b_leisure_vessels"],
+                                          f"sql/61 {y}: small boats heard")
+                            for y in YEARS],
             "big_ships": [win[y]["class_a_vessels_5d"] for y in YEARS]}, win
 
 
@@ -205,14 +151,16 @@ def flags(ch):
     the wrong population would look exactly like a chart drawn from the right
     one.
     """
-    rows = [typed(FL, r, ("year",)) for r in blocks(ch("80_site_flags.sql"))[3]]
+    rows = [typed(FL, r, ("year",)) for r in
+            blocks(ch("80_site_flags.sql"), "sql/80_site_flags.sql")[3]]
     raw, by = defaultdict(dict), defaultdict(dict)
     for r in rows:
         raw[r["year"]][r["flag"]] = r["share"]
         by[r["year"]][r["flag"]] = round(100 * r["share"], 1)
 
     check = {int(r["year"]): r for r in
-             (typed(A4, r) for r in blocks(ch("61_adoption.sql"))[10])}
+             (typed(A4, r) for r in
+              blocks(ch("61_adoption.sql"), "sql/61_adoption.sql")[10])}
     for y in YEARS:
         assert abs(sum(by[y].values()) - 100) < 0.2, \
             f"sql/80 {y}: the flag shares sum to {sum(by[y].values())}, not 100"
@@ -228,42 +176,6 @@ def flags(ch):
 
 
 # ---------------------------------------------------------------- I4, I5 ----
-def smooth5(series, lo, hi):
-    """A centred 5-hour mean over a dense offset range, as a percentage.
-
-    One fleet's messages against the same hour a fortnight away is noisy — the
-    denominator is one hour of one afternoon. Five hours is what chapter 04
-    uses everywhere (notes/plot_ch04.py's `smooth`), so the site and the
-    chapter draw the same line.
-    """
-    out = []
-    for o in range(lo, hi + 1):
-        w = [series.get(o + d) for d in range(-2, 3)]
-        if all(v is not None for v in w):
-            out.append([o, round(100 * sum(w) / 5, 1)])
-    return out
-
-
-def halves_at(series, ndays):
-    """The hour a fleet stops: the first offset at which its 5-hour mean falls
-    below HALF its own pre-window median (offsets -72 … -25), searched from -24
-    onward. None if it never does.
-
-    The normalisation is the point. A fleet that idles at 40 % of normal all
-    week has not stopped, and a fixed threshold would say it stopped three days
-    early. Same definition as notes/plot_ch04.py's `stops_at`, which is what
-    finding 40 is built on.
-    """
-    base = [v for o, v in series.items() if -72 <= o <= -25 and v is not None]
-    if not base or statistics.median(base) <= 0:
-        return None
-    half = 50 * statistics.median(base)
-    for o, v in smooth5(series, -24, 24 * ndays - 1):
-        if v < half:
-            return o
-    return None
-
-
 def storms(ch):
     """sql/50 + sql/52 -> chart I5, the ferry timetable's cost, and the storms
     whose sailing fleet is big enough to draw.
@@ -292,39 +204,18 @@ def storms(ch):
         ndays[storm] = max((max(o) + 1 - 72) // 24, 0)
     observed = sorted(s for s, n in ndays.items() if n > 0)
 
-    day_rows = [typed(D1, r, ("offset_d", "heard", "moved"))
-                for r in blocks(ch("52_who_stays.sql"))[12]]
-    # the private fleet's floor, off sql/52: boats that covered a mile on the
-    # reference day, median over the storm's own dates.
-    ref_moved = defaultdict(list)
-    for r in day_rows:
-        if (r["mobile"] == "Class B" and r["ship_group"] == "leisure"
-                and r["ref_moved"] is not None
-                and 0 <= r["offset_d"] < ndays.get(r["storm"], 0)):
-            ref_moved[r["storm"]].append(r["ref_moved"])
-    sailing_ok = sorted(s for s, v in ref_moved.items()
-                        if statistics.median(v) >= LEISURE_FLOOR)
+    day_rows = [typed(D1, r, D1_INT)
+                for r in blocks(ch("52_who_stays.sql"), "sql/52_who_stays.sql")[12]]
+    # The storms whose private fleet is big enough to say anything about, and
+    # the hour each fleet halves — both from site_data, because site/storms.html
+    # asks the same two questions and the two pages have to give one answer.
+    sailing_ok = sailing_storms(day_rows, ndays)
+    series = hourly_series(rows)
+    onsets = onset(series, ndays, sailing_ok)
 
-    # The private fleet is Class B and every public fleet is Class A. Keying on
-    # ship_group alone would fold the hundred-odd Class A yachts into the
-    # sailing line and overwrite it.
-    series = defaultdict(dict)
-    for r in rows:
-        if r["mobile"] == ("Class B" if r["ship_group"] == "leisure" else "Class A"):
-            series[(r["storm"], r["ship_group"])][r["offset_h"]] = r["ratio_moving"]
-
-    onset, ferry = defaultdict(list), {}
+    ferry = {}
     for storm in observed:
         n = ndays[storm]
-        # The sailing fleet is counted only over the storms where enough boats
-        # were out to mean anything — the same ones chart I4 draws — so I5
-        # cannot quote a crossing time computed from a dozen boats in a gale.
-        for g in STOP_ORDER:
-            if g == "leisure" and storm not in sailing_ok:
-                continue
-            h = halves_at(series[(storm, g)], n)
-            if h is not None:
-                onset[g].append(h)
         rs = [r for r in rows if r["storm"] == storm and r["mobile"] == "Class A"
               and r["ship_group"] == "passenger" and 0 <= r["offset_h"] < 24 * n]
         ferry[storm] = (sum(r["ferry_crossings"] for r in rs),
@@ -333,19 +224,15 @@ def storms(ch):
     # `of` is per fleet because the sailing fleet is measured over fewer storms
     # than the rest, and a row reading "3 of 14" would lie about what was seen.
     strip = {"of": len(observed), "rows": [
-        {"fleet": FLEET_KEY[g], "label": FLEET_NAME[g], "storms": len(onset[g]),
+        {"fleet": FLEET_KEY[g], "label": FLEET_NAME[g], "storms": len(onsets[g]),
          "of": len(sailing_ok) if g == "leisure" else len(observed),
-         "hour": round(statistics.median(onset[g])) if onset[g] else None}
+         "hour": round(statistics.median(onsets[g])) if onsets[g] else None}
         for g in STOP_ORDER]}
     panels = daily_panels(day_rows, ndays, start, sailing_ok)
     default = pick_default(panels)
     return ({"default": default, "media": media_key(default),
-             "sailing_shown": sailing_ok, "panels": panels}, strip, ferry)
-
-
-def media_key(storm):
-    """'Dagmar·Egon' -> 'dagmaregon', the name S14 files its animation under."""
-    return re.sub(r"[^a-z]", "", storm.lower())
+             "sailing_shown": sailing_ok, "panels": panels},
+            strip, ferry, onsets)
 
 
 # ------------------------------------------------------------------- I4 ----
@@ -372,7 +259,6 @@ def daily_panels(day_rows, ndays, start, sailing_ok):
     want = {"fishing": "Class A", "cargo": "Class A", "passenger": "Class A",
             "other": "Class A", "leisure": "Class B"}
     by = defaultdict(list)
-    usual = defaultdict(dict)
     for r in day_rows:
         g = r["ship_group"]
         if want.get(g) != r["mobile"] or r["storm"] not in ndays:
@@ -417,11 +303,7 @@ def pick_default(panels):
     whose run-up still sits near what that fleet ordinarily does, so that the
     fall on screen is the storm and not a fortnight of December.
     """
-    keyed = {media_key(s): s for s in panels}
-    have = [keyed[f.stem[len("storm-"):]] for f in sorted(MEDIA.glob("storm-*.js"))
-            if f.stem[len("storm-"):] in keyed]
-    assert have, f"no storm in {MEDIA} matches a storm in the archive"
-    scored = {s: drop(panels[s]) for s in have}
+    scored = {s: drop(panels[s]) for s in clips(panels).values()}
     return max(scored, key=lambda s: scored[s]["fall"]
                - abs(scored[s]["pre"] - scored[s]["usual"]))
 
@@ -435,7 +317,7 @@ def impossible(ch):
     `share_over_cap`, which sql/60 rounds to five places — at that resolution
     every clean pre-2023 month reads the same.
     """
-    rows = [typed(B6, r, B6_INT) for r in blocks(ch("60_coverage_index.sql"))[12]]
+    rows = [typed(B6, r, B6_INT) for r in blocks(ch("60_coverage_index.sql"), "sql/60_coverage_index.sql")[12]]
     worst = max(rows, key=lambda r: r["max_msgs"])
     return ({"cap": CAP_A, "step": "2023-12",
              "months": [[r["mon"][:7],
@@ -497,9 +379,8 @@ def coastline(step=2):
 def hidden(ch):
     """sql/44 -> the share of ferry vessel-days filed as something other than a
     passenger ship, in the last year the store holds whole."""
-    rows = [typed(H1, r, ("year", "fleet", "visible_days", "hidden_days",
-                          "vessels_with_hidden"))
-            for r in blocks(ch("44_hidden_fleet.sql"))[6]]
+    rows = [typed(H1, r, H1_INT) for r in
+            blocks(ch("44_hidden_fleet.sql"), "sql/44_hidden_fleet.sql")[6]]
     return next(r for r in rows if r["year"] == 2025)
 
 
@@ -542,8 +423,8 @@ def hidden_ship(ch):
     on it. Ferries are public and may be named (CLAUDE.md), which is the whole
     reason this paragraph can be concrete instead of a percentage.
     """
-    rows = [typed(H3, r, ("year", "hidden_days"))
-            for r in blocks(ch("44_hidden_fleet.sql"))[7]]
+    rows = [typed(H3, r, H3_INT) for r in
+            blocks(ch("44_hidden_fleet.sql"), "sql/44_hidden_fleet.sql")[7]]
     by = defaultdict(lambda: {"days": 0, "years": set()})
     for r in rows:
         v = by[(r["vessel"], r["line"], r["island"])]
@@ -571,7 +452,7 @@ def build(ch):
     charts = {"season": season(ch)}
     charts["fleet"], win = fleet(ch)
     charts["flags"] = flags(ch)
-    charts["storms"], charts["onset"], ferry = storms(ch)
+    charts["storms"], charts["onset"], ferry, onsets = storms(ch)
     charts["impossible"], months, worst = impossible(ch)
     charts["mirror"] = mirror(ch)
     hid, ship, size = hidden(ch), hidden_ship(ch), scale(ch)
@@ -602,6 +483,7 @@ def build(ch):
     clean = [r for r in months if r["mon"] < "2023-01-01" and not r["dup_month"]]
     recent = [r for r in months if r["mon"] >= "2023-12-01"]
     row = {r["fleet"]: r for r in charts["onset"]["rows"]}
+    sailing_hours, sailing_when = onset_words(onsets["leisure"])
     flag = charts["flags"]["shares"]
 
     charts["n"] = {
@@ -650,7 +532,11 @@ def build(ch):
         "ferry_hours": str(row["ferries"]["hour"]),
         "ferry_storms": str(row["ferries"]["storms"]),
         "sailing_storms": str(len(charts["storms"]["sailing_shown"])),
-        "sailing_hours": str(abs(row["sailing"]["hour"])),
+        # how many hours, and which side of the storm's first midnight — both
+        # from site_data.onset_words, so this page and site/storms.html cannot
+        # say "three hours before" and "about six hours in" about one fleet.
+        "sailing_hours": sailing_hours,
+        "sailing_when": sailing_when,
         # I7 — the impossible days
         "cap": sp(CAP_A),
         "cap_seconds": str(REPORT_SECONDS),

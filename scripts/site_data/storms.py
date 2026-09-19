@@ -37,35 +37,15 @@ import datetime
 import statistics
 from collections import defaultdict
 
-from . import blocks, typed
+from . import (D1, D1_INT, FLEET_KEY, STOP_ORDER, W, W_INT, blocks, clips,
+               hourly_series, onset, onset_words, private_count,
+               sailing_storms, smooth5, sp, storms_named, typed)
 
-W = ("storm start_day hour offset_h mobile ship_group heard moving_msgs msgs "
-     "ref_hour ref_heard ref_moving_msgs ratio_moving ferry_crossings "
-     "ref_ferry_crossings").split()
-W_INT = "offset_h heard moving_msgs msgs ferry_crossings".split()
-D1 = ("storm mobile ship_group day offset_d heard moved share_moved ref_day "
-      "ref_heard ref_moved ref_share_moved").split()
-D1_INT = "offset_d heard moved".split()
 D2 = ("storm peak_hour peak_offset_h peak_ratio mobile ship_group heard "
       "moving_share ref_heard ref_moving_share is_dip").split()
 D2_INT = "peak_offset_h heard is_dip".split()
 A3 = "storm name hour offset_h present still_share ref_hour ref_present".split()
 A3_INT = "offset_h present".split()
-
-# The reader never meets "ship_group". Five fleets, in the order they stop.
-FLEET = {"fishing": ("fishing", "fishing boats"),
-         "leisure": ("sailing", "sailing boats"),
-         "other": ("work", "work boats"),
-         "passenger": ("ferries", "ferries"),
-         "cargo": ("cargo", "cargo ships")}
-STOP_ORDER = ["fishing", "leisure", "other", "passenger", "cargo"]
-
-# S9's floor, unchanged from notes/plot_ch04.py and scripts/site_data/index.py:
-# the number of private boats that covered a mile on the REFERENCE day, taken
-# over the storm's own dates. Measured per storm it runs 15.5 … 203, then 506,
-# 2 056, 2 096; the literal sits in the widest gap of that list and leaves
-# exactly the three storms that fell in a sailing season.
-LEISURE_FLOOR = 250
 
 # T1's default panel has to survive a screenshot with no caption, so it is
 # chosen by the data rather than by taste: of the storms with a clean quiet
@@ -86,55 +66,11 @@ ANCHOR_SHORT = {"Skagen Red": "Skagen Red",
                 "Øresund anchorage off Landskrona": "off Landskrona",
                 "Isefjord entrance anchorage": "Isefjord entrance"}
 
-# The three clips S14 rendered, in date order.
-CLIPS = ["malik", "pia", "amy"]
-
-
-def sp(x):
-    """1557 -> '1 557', the thin-spaced form the chapters and index.py print."""
-    return f"{round(x):,}".replace(",", " ")
-
-
-def smooth5(series, lo, hi):
-    """A centred 5-hour mean of one fleet's hourly ratio, as a percentage.
-
-    One hour against one hour a fortnight away is noisy — the denominator is a
-    single afternoon. Five hours is what chapter 04 smooths with everywhere
-    (notes/plot_ch04.py's `smooth`), so the chapter and the page draw the same
-    line. A hole in the window breaks the line rather than bridging it.
-    """
-    out = []
-    for o in range(lo, hi + 1):
-        w = [series.get(o + d) for d in range(-2, 3)]
-        if all(v is not None for v in w):
-            out.append([o, round(100 * sum(w) / 5, 1)])
-    return out
-
 
 def level(line, lo, hi):
     """The typical value of a smoothed line over an offset range, or None."""
     v = [y for x, y in line if lo <= x <= hi]
     return statistics.median(v) if v else None
-
-
-def halves_at(series, ndays):
-    """The hour a fleet stops: the first offset at which its 5-hour mean falls
-    under HALF its own pre-window level (offsets -72 … -25), searched from -24
-    on. None if it never does.
-
-    Normalising against the fleet's own quiet week is the point — a fleet that
-    idles at 40 % of normal all winter has not stopped, and a fixed threshold
-    would say it stopped three days early. Same definition as
-    notes/plot_ch04.py's `stops_at`, which finding 40 is built on.
-    """
-    base = [v for o, v in series.items() if -72 <= o <= -25 and v is not None]
-    if not base or statistics.median(base) <= 0:
-        return None
-    half = 50 * statistics.median(base)
-    for o, v in smooth5(series, -24, 24 * ndays - 1):
-        if v < half:
-            return o
-    return None
 
 
 def window(ch):
@@ -206,23 +142,16 @@ def panels(ch, rows, ndays, start, overlap, no_dip):
     is a ratio over a few dozen boats and it swings from 5 % to 418 % inside one
     storm — true, useless, and it pulls the eye off the claim. Counted by the
     boat over a whole day it is the sharpest signal in the chapter, which is
-    what T2 draws. `onset` below still pools it, because the hour a fleet halves
-    is a comparison against its own quiet week and survives the noise.
-
-    The private fleet is Class B and every public fleet is Class A; keying on
-    the group alone would fold the hundred-odd big sailing yachts into the
-    fleets drawn here.
+    what T2 draws. site_data.onset still pools it, because the hour a fleet
+    halves is a comparison against its own quiet week and survives the noise.
     """
-    series = defaultdict(dict)
-    for r in rows:
-        if r["mobile"] == ("Class B" if r["ship_group"] == "leisure" else "Class A"):
-            series[(r["storm"], r["ship_group"])][r["offset_h"]] = r["ratio_moving"]
+    series = hourly_series(rows)
 
-    out, onset = {}, defaultdict(list)
+    out = {}
     for storm, n in sorted(ndays.items()):
         if not n:
             continue
-        lines = {FLEET[g][0]: smooth5(series[(storm, g)], -72, 24 * n + 71)
+        lines = {FLEET_KEY[g]: smooth5(series[(storm, g)], -72, 24 * n + 71)
                  for g in STOP_ORDER if g != "leisure"}
         first = datetime.date.fromisoformat(start[storm])
         notes = []
@@ -241,11 +170,7 @@ def panels(ch, rows, ndays, start, overlap, no_dip):
                          "stops for that too")
         out[storm] = {"days": n, "start": start[storm], "lines": lines,
                       "notes": notes}
-        for g in STOP_ORDER:
-            h = halves_at(series[(storm, g)], n)
-            if h is not None:
-                onset[g].append(h)
-    return out, onset, series
+    return out, series
 
 
 def pick_default(panels_, borrowed):
@@ -283,9 +208,9 @@ def moved(ch, ndays):
     shares: a three-day storm has one busy date and two quiet ones and the
     mean of the shares would weight them equally.
     """
-    day = [typed(D1, r, D1_INT) for r in blocks(ch("52_who_stays.sql"))[12]]
+    day = [typed(D1, r, D1_INT) for r in
+           blocks(ch("52_who_stays.sql"), "sql/52_who_stays.sql")[12]]
     pool = defaultdict(lambda: [0, 0, 0, 0])
-    ref_moved = defaultdict(list)
     winter = []
     for r in day:
         n = ndays.get(r["storm"], 0)
@@ -296,12 +221,10 @@ def moved(ch, ndays):
             p[1] += r["heard"]
             p[2] += r["ref_moved"]
             p[3] += r["ref_heard"]
-        if r["mobile"] == "Class B" and r["ship_group"] == "leisure":
-            if own and r["ref_moved"] is not None:
-                ref_moved[r["storm"]].append(r["ref_moved"])
-            if r["day"][5:7] in ("12", "01", "02"):
-                winter.append(r["moved"])
-    return pool, ref_moved, sorted(winter)
+        if (r["mobile"] == "Class B" and r["ship_group"] == "leisure"
+                and r["day"][5:7] in ("12", "01", "02")):
+            winter.append(r["moved"])
+    return pool, day, sorted(winter)
 
 
 def share(pool, storm, group, mobile="Class A"):
@@ -357,19 +280,24 @@ def anchorages(ch, ndays):
 # ------------------------------------------------------------------ page ----
 def build(ch):
     rows, ndays, start = window(ch)
-    pool, ref_moved, winter = moved(ch, ndays)
-    sailing_ok = sorted(s for s, v in ref_moved.items()
-                        if statistics.median(v) >= LEISURE_FLOOR)
+    pool, day_rows, winter = moved(ch, ndays)
+    sailing_ok = sailing_storms(day_rows, ndays)
     overlap = overlaps(rows, ndays)
 
     # the derived peak hour, and the storms that have no dip on their own date:
     # read before the panels, because a no-dip storm needs saying so on its own
     # panel and not only in the prose
-    peak = [typed(D2, r, D2_INT) for r in blocks(ch("52_who_stays.sql"))[11]]
+    peak = [typed(D2, r, D2_INT) for r in
+            blocks(ch("52_who_stays.sql"), "sql/52_who_stays.sql")[11]]
     no_dip = sorted({r["storm"] for r in peak if not r["is_dip"]})
     clock = sorted(int(h[11:13]) for h in {r["peak_hour"] for r in peak})
 
-    pans, onset, series = panels(ch, rows, ndays, start, overlap, no_dip)
+    pans, series = panels(ch, rows, ndays, start, overlap, no_dip)
+    # The hour each fleet halves, from site_data, with the sailing fleet
+    # counted only over the storms that clear S9's floor — the same rule
+    # site/index.html states, because it is the same measurement.
+    onsets = onset(series, ndays, sailing_ok)
+    sailing_hours, sailing_when = onset_words(onsets["leisure"])
     (_, default, pre, dip, post), scored = pick_default(pans, set(overlap))
     observed = sorted(pans)
 
@@ -382,7 +310,7 @@ def build(ch):
                 continue
             v = share(pool, storm, g, "Class B" if g == "leisure" else "Class A")
             if v:
-                row[FLEET[g][0]] = v
+                row[FLEET_KEY[g]] = v
         t2.append(row)
     t2.sort(key=lambda r: r["fishing"][1] - r["fishing"][0])
 
@@ -421,6 +349,7 @@ def build(ch):
                 + abs(1 - ferry[s][2]))
     quiet = min((s for s in observed if s not in no_dip), key=flat)
     dflt = pans[default]
+    have = clips(pans)
 
     # What the hourly chart adds and the day count cannot: the fishing fleet is
     # already below its own quiet week by the first midnight of the date the
@@ -435,12 +364,18 @@ def build(ch):
         "t3": {"names": [ANCHOR_SHORT[n] for n in ANCHORAGES], "rows": anch},
         # the clip that opens: the deepest of the three on T2's exact
         # instrument, so a screenshot of this figure is the strongest case
-        "t4": {"clips": CLIPS,
-               "default": min(CLIPS, key=lambda k: fish[k.capitalize()])},
+        # the clips that exist, discovered once in site_data.clips — not a
+        # literal here, a glob there and three <script> tags in the page. The
+        # key comes back with the storm it belongs to, so the default is chosen
+        # by looking a storm up rather than by k.capitalize(), which turns
+        # "dagmaregon" into "Dagmaregon" and finds nothing.
+        "t4": {"clips": list(have),
+               "default": min(have, key=lambda k: fish[have[k]])},
     }
     data["n"] = {
         # the shape of the chapter
-        "storms_named": "24",   # data/context/storms.csv, rows since 2013
+        # the list itself, counted: data/context/storms.csv
+        "storms_named": str(storms_named()),
         "storm_windows": str(len(ndays)),
         "storm_count": str(len(observed)),
         # T1 — the default panel
@@ -452,11 +387,12 @@ def build(ch):
         "fish_early_storms": str(len(early)),
         "sailing_storms": str(len(sailing_ok)),
         # who stops first, and how many hours in
-        "fishing_storms": str(len(onset["fishing"])),
-        "sailing_hours": str(round(statistics.median(onset["leisure"]))),
-        "work_hours": str(round(statistics.median(onset["other"]))),
-        "ferry_hours": str(round(statistics.median(onset["passenger"]))),
-        "cargo_storms": str(len(onset["cargo"])),
+        "fishing_storms": str(len(onsets["fishing"])),
+        "sailing_hours": sailing_hours,
+        "sailing_when": sailing_when,
+        "work_hours": str(round(statistics.median(onsets["other"]))),
+        "ferry_hours": str(round(statistics.median(onsets["passenger"]))),
+        "cargo_storms": str(len(onsets["cargo"])),
         # T2 — the exact instrument
         "fish_worst_storm": fish_worst,
         "fish_worst_ref": f"{100 * share(pool, fish_worst, 'fishing')[0]:.0f}",
@@ -477,8 +413,16 @@ def build(ch):
         "ferry_worst_ref": sp(ferry[worst_ferry][1]),
         "ferry_worst_share": f"{100 * ferry[worst_ferry][2]:.0f}",
         # the sailing fleet in winter
-        "winter_sailing_lo": str(round(statistics.quantiles(winter, n=4)[0])),
-        "winter_sailing_hi": str(round(statistics.quantiles(winter, n=4)[2])),
+        # The winter list itself runs down to nothing — these are the two
+        # quartiles of 68 whole days, and they go through the floor so that a
+        # winter quiet enough to put Q1 under five boats stops the build
+        # instead of printing it.
+        "winter_sailing_lo": str(private_count(
+            round(statistics.quantiles(winter, n=4)[0]),
+            "the quiet quarter of a winter day's private fleet")),
+        "winter_sailing_hi": str(private_count(
+            round(statistics.quantiles(winter, n=4)[2]),
+            "the busy quarter of a winter day's private fleet")),
         # T3 — the anchorages
         "anchorage_cells": str(len(anch)),
         "anchorage_mid": f"{statistics.median(ratios):.2f}",

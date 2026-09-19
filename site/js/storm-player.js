@@ -412,5 +412,46 @@
     };
   }
 
-  global.SeafolkStorm = { mount: mount };
+  /* load(keys, done) — pull in the clips the build asked for, then call
+   * done(the keys that arrived).
+   *
+   * Which storms have a clip is decided by scripts/render_storm.py and read
+   * off the directory by site_data.clips, so the page cannot carry the file
+   * names as <script src> tags: it would be a fourth place that has to agree
+   * with the other three. A <script> element appended here still works from
+   * file://, where fetch() does not.
+   */
+  function load(keys, done) {
+    var got = [], left = keys.length;
+    if (!left) return done(got);
+    keys.forEach(function (key) {
+      function settle(ok) {
+        if (ok) got.push(key);
+        if (--left === 0) done(keys.filter(function (k) {
+          return got.indexOf(k) >= 0;
+        }));
+      }
+      if ((global.SEAFOLK_STORM || {})[key]) return settle(true);
+      var s = document.createElement("script");
+      s.src = "media/storm-" + key + ".js";
+      s.onload = function () { settle(!!(global.SEAFOLK_STORM || {})[key]); };
+      s.onerror = function () { settle(false); };
+      document.head.appendChild(s);
+    });
+  }
+
+  /* The one thing a reader sees when the clip does not arrive. Both pages
+   * used to fail differently and both failures were silent: the story page
+   * hid the figure while the paragraph above it still said "here is the same
+   * storm as a map", and the chapter left an empty captioned box. */
+  function unavailable(host, key) {
+    host.innerHTML = "";
+    var p = document.createElement("p");
+    p.className = "source";
+    p.textContent = "The animation could not be loaded — open "
+      + "site/media/storm-" + key + ".mp4";
+    host.appendChild(p);
+  }
+
+  global.SeafolkStorm = { mount: mount, load: load, unavailable: unavailable };
 })(window);

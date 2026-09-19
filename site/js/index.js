@@ -432,21 +432,20 @@ function onset() {
 
 /* ========================= I6 — the sea empties ========================= */
 function seaEmpties() {
-  const fig = document.getElementById("i6");
   const host = document.getElementById("c-i6");
   const key = D.storms.media;
-  const fail = () => { fig.hidden = true; };
-  if (!window.SeafolkStorm || !window.SEAFOLK_LAND) return fail();
-  // The storm the build picked decides which data file to load, so the file
-  // name cannot be a <script src> in the page. A script element appended here
-  // still works from file://, where fetch() does not.
-  const s = document.createElement("script");
-  s.src = `media/storm-${key}.js`;
-  s.onerror = fail;
-  s.onload = () => {
+  // The figure STAYS, and says so. Hiding it left the paragraph above
+  // promising "here is the same storm as a map" and nothing underneath.
+  const fail = () => SeafolkStorm.unavailable(host, key);
+  if (!window.SeafolkStorm || !window.SEAFOLK_LAND) {
+    host.textContent = "The animation could not be loaded — open "
+      + `site/media/storm-${key}.mp4`;
+    return;
+  }
+  SeafolkStorm.load([key], got => {
+    if (!got.length) return fail();
     try { SeafolkStorm.mount(host, key); } catch (e) { fail(); }
-  };
-  document.head.appendChild(s);
+  });
 }
 
 

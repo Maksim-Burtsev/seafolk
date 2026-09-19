@@ -9,7 +9,7 @@ data/ch` store, one at a time (the store lock is exclusive), there is no client
 library, matplotlib is the one dependency, and every number the note quotes is
 printed by numbers() below.
 
-Chart 1 reproduces the geometry already prototyped in site/day-clocks.html:
+Chart 1 reproduces the geometry site/js/pulse.js draws:
 midnight at the top, hours clockwise, radius linear in the hour's share of the
 day, an inner hole, and a dashed reference circle at a flat day's 100/24 =
 4.167 %. The site's constants are R_IN 20 / R_MAX 92 inside a 240-unit box with
@@ -389,7 +389,7 @@ def weekday_mean(buckets, year, weekday, months):
 
 
 # ---------------------------------------------------------------- charts ----
-# site/day-clocks.html: R_IN 20, R_MAX 92 in a 240 box, PEAK 13 % at the rim.
+# site/js/pulse.js: R_IN 20, R_MAX 92 in a 240 box, PEAK 13 % at the rim.
 # A polar axis with rorigin = -PEAK * R_IN / (R_MAX - R_IN) has the same hole.
 PEAK_PCT = 13.0
 R_ORIGIN = -PEAK_PCT * 20 / (92 - 20)

@@ -210,8 +210,8 @@ says the numbers of boats are equal. That is as far as the aggregates go.)*
 to a share of the week; solid = May–Sep, dashed = Oct–Apr. The rule is a flat
 week, 100/168 = 0.595 % a slot. Slot 0 is Monday 00:00 local.*
 
-**Finding 17 — every fleet's busiest single hour of the week is on a different
-day, and fishing's week is the mirror image of leisure's.**
+**Finding 17 — the four fleets' busiest hours of the week fall on three
+different days, and fishing's week is the mirror image of leisure's.**
 `sql/32_week_shape.sql`. The maximum of the 168-hour week, May–Sep then
 Oct–Apr:
 
@@ -222,8 +222,11 @@ Oct–Apr:
 | cargo | Fri 04:00, 0.70 % | Sat 02:00, 0.66 % |
 | fishing | **Tue 05:00**, 0.93 % | Wed 07:00, 0.85 % |
 
-A flat week is 0.595 %, so the leisure maximum is **3.4× flat** and everything
-else is within 1.6×. And the day shares run in opposite directions: leisure
+Three days, not four: in summer ferries and cargo share Friday and are eleven
+hours apart on it — five in the afternoon against four in the morning — while
+leisure takes Sunday noon and fishing Tuesday before dawn. A flat week is
+0.595 %, so the leisure maximum is **3.4× flat** and everything else is within
+1.6×. And the day shares run in opposite directions: leisure
 takes 16.0 % of its summer week on Saturday and 15.8 % on Sunday against
 13.1–14.3 % on the weekdays, while fishing takes **9.8 % on Saturday** — its
 weekly *minimum* — against 18.1 % on Tuesday. The fishing fleet takes the

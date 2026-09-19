@@ -8,7 +8,7 @@
  * The data comes from the page's own <script type="application/json" id="data">
  * block, written by scripts/site_data/pulse.py. Nothing is fetched.
  *
- * The dial geometry is the one prototyped in site/day-clocks.html and
+ * The dial geometry is the one prototyped for the S3 day clocks and
  * reproduced by notes/plot_ch02.py: midnight at the top, hours clockwise, an
  * inner hole, and the radius linear in the hour's share of the fleet's own day
  * up to PEAK at the rim. Three drawings of one shape, so a reader who meets it

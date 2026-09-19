@@ -11,6 +11,11 @@
 #
 # CH_PATH is not read here: it is exported through to scripts/ch.sh, which is
 # the only thing in the chain that opens the store.
+#
+# The guards are tested before the store is opened: scripts/test_build_guards.py
+# takes milliseconds and needs nothing, and a guard that has stopped guarding is
+# worth knowing about before a thirty-second query, not after a green build.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+uv run scripts/test_build_guards.py
 exec uv run scripts/build_site_data.py "$@"

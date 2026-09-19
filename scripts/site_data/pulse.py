@@ -32,14 +32,16 @@ never any finer.
 """
 from collections import Counter, defaultdict
 
+from . import YEARS, private_count, sp
+
 # The four fleets, in the order the dials are drawn: the one with a day first,
 # then the three that keep going. `sailing` is the reader's word for the
-# private fleet; the schema's own word never reaches the page, and it never
-# reaches a key here either — the build guard reads 0 < x < 5 under a key
-# holding it as a head count of private boats and stops the build.
+# private fleet; the schema's own word never reaches the page. That rename is
+# exactly why the head counts here go through `private_count` where they are
+# read — the driver's guard can only see a key name, and this module's names
+# are the reader's.
 FLEETS = [("sailing", "leisure", "Class B"), ("ferries", "passenger", "Class A"),
           ("cargo", "cargo", "Class A"), ("fishing", "fishing", "Class A")]
-YEARS = [2015, 2018, 2021, 2024, 2025, 2026]
 DAYTYPES = ["weekday", "sat", "sun"]
 NIGHT = [22, 23, 0, 1, 2, 3, 4]          # sql/24's night, reused verbatim
 DOW = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
@@ -77,22 +79,34 @@ def clock(hour):
 
 # ------------------------------------------------------------------- P1 ----
 def hour_rows(ch):
-    """sql/30 -> {(year, season, group, mobile, daytype): {hour: share}}, msgs.
+    """sql/30 -> {(year, season, group, mobile, daytype): {hour: share}}, days.
 
     `share_of_day` is normalised inside each of those partitions, so pooling
-    daytypes or years means weighting each partition by its own message count —
-    which reproduces the pooled ratio exactly rather than averaging averages.
+    daytypes or years means WEIGHTING EACH PARTITION, and the weight is the
+    number of days it covers — sql/30's `local_days` — not the messages in it.
+
+    Messages were the weight until this was fixed, and message magnitudes are
+    not comparable across the store: the archive keeps some of them twice from
+    2023 on and again in 2015-09 (dataset card § Known biases 1 and 2). A
+    pooled clock weighted by messages therefore leans towards whichever years
+    are inflated. Days are days. sql/32's week has always been pooled this way
+    (`slot_days`), and now the two agree.
+
+    `local_days` is emitted per hour of the partition and the ten fleet pairs
+    disagree in exactly one bucket out of 1 008 (sql/30's header measures it),
+    so the partition's weight is the largest of its twenty-four — one number
+    per partition, which is what a weighted average of distributions needs.
     """
-    share, msgs = defaultdict(dict), Counter()
-    for (year, season, group, mobile, daytype, lhour, _days, mm, sh) in \
+    share, days = defaultdict(dict), Counter()
+    for (year, season, group, mobile, daytype, lhour, ldays, _mm, sh) in \
             ch("30_hour_profiles.sql"):
         key = (int(year), season, group, mobile, daytype)
         share[key][int(lhour)] = float(sh)
-        msgs[key] += int(mm)
-    return share, msgs
+        days[key] = max(days[key], int(ldays))
+    return share, days
 
 
-def day_curve(share, msgs, season, group, mobile, daytypes=DAYTYPES,
+def day_curve(share, days, season, group, mobile, daytypes=DAYTYPES,
               years=YEARS):
     """One fleet's 24-hour clock, as percentages of its own day."""
     tot, weight = Counter(), 0
@@ -101,9 +115,9 @@ def day_curve(share, msgs, season, group, mobile, daytypes=DAYTYPES,
             key = (year, season, group, mobile, daytype)
             if key not in share:
                 continue
-            weight += msgs[key]
+            weight += days[key]
             for hour, value in share[key].items():
-                tot[hour] += value * msgs[key]
+                tot[hour] += value * days[key]
     assert weight, f"{season} {group} {mobile}: no rows to pool"
     curve = [round(100 * tot[hour] / weight, 2) for hour in range(24)]
     # A clock is a distribution over 24 hours. The literals are the calendar,
@@ -190,8 +204,8 @@ def harbour(ch):
     # CLAUDE.md's export rule, on every hour that reaches the page rather than
     # on the ones the prose happens to quote. sql/31 emits vessels_seen so this
     # is checkable at all; without the check the rule would live in a comment.
-    low = [(h, prof[h]["k"]) for h in range(24) if prof[h]["k"] < 5]
-    assert not low, f"{PORT}: hours under five boats: {low}"
+    for h in range(24):
+        private_count(prof[h]["k"], f"{PORT} at {h:02d}:00 (sql/31 vessels_seen)")
 
     # how much of an "arrival" was a boat that was already nearby an hour
     # earlier, over the whole day, in each of the ten cells. The rest had no
@@ -209,13 +223,13 @@ def harbour(ch):
 
 # ------------------------------------------------------------------ page ----
 def build(ch):
-    share, msgs = hour_rows(ch)
+    share, days = hour_rows(ch)
     week = week_curves(ch)
     prof, nowhere, floors = harbour(ch)
 
-    clocks = {name: day_curve(share, msgs, "May-Sep", group, mobile)
+    clocks = {name: day_curve(share, days, "May-Sep", group, mobile)
               for name, group, mobile in FLEETS}
-    winter = {name: day_curve(share, msgs, "Oct-Apr", group, mobile)
+    winter = {name: day_curve(share, days, "Oct-Apr", group, mobile)
               for name, group, mobile in FLEETS}
     weeks = {name: week_curve(week, "May-Sep", group, mobile)
              for name, group, mobile in FLEETS}
@@ -228,9 +242,9 @@ def build(ch):
     assert clocks["sailing"][peak] > 8, \
         f"the summer sailing peak is {clocks['sailing'][peak]} % of the day"
 
-    sun = day_curve(share, msgs, "May-Sep", "leisure", "Class B", ["sun"])
-    sat = day_curve(share, msgs, "May-Sep", "leisure", "Class B", ["sat"])
-    wdy = day_curve(share, msgs, "May-Sep", "leisure", "Class B", ["weekday"])
+    sun = day_curve(share, days, "May-Sep", "leisure", "Class B", ["sun"])
+    sat = day_curve(share, days, "May-Sep", "leisure", "Class B", ["sat"])
+    wdy = day_curve(share, days, "May-Sep", "leisure", "Class B", ["weekday"])
 
     tops = {name: max(range(168), key=lambda s: curve[s])
             for name, curve in weeks.items()}
@@ -311,6 +325,7 @@ def build(ch):
             "port_nowhere_high": f"{max(nowhere):.0f}",
             "port_floor_low": f"{min(floors):.0f}",
             "port_floor_high": f"{max(floors):.0f}",
-            "small_boats_min": f"{min(prof[h]['k'] for h in range(24)):,}".replace(",", " "),
+            "small_boats_min": sp(private_count(
+                min(prof[h]["k"] for h in range(24)), f"{PORT}'s quietest hour")),
         },
     }

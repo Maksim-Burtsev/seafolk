@@ -27,13 +27,11 @@ import csv
 import datetime
 import statistics
 
-from . import ROOT, blocks, typed
-
-# The six years the store holds whole or nearly so; 2022 and 2023 are 59-day
-# winter windows and belong in no per-year comparison. Same list as the chapter
-# (notes/plot_ch03.py). The storm chart is the one place the windows are used,
-# and there they are used as days, not as years.
-YEARS = [2015, 2018, 2021, 2024, 2025, 2026]
+from . import ROOT, YEARS, blocks, sp, typed  # noqa: F401  (YEARS is the six
+# years the store holds whole or nearly so; 2022 and 2023 are 59-day winter
+# windows and belong in no per-year comparison, same list as the chapter in
+# notes/plot_ch03.py. The storm chart is the one place the windows are used,
+# and there they are used as days, not as years.)
 
 # F1 draws one whole recent year. 2025 is the last one the archive holds end to
 # end — 2026 stops on 26 August.
@@ -445,13 +443,9 @@ def lost_days(by_line, island):
 
 
 # ----------------------------------------------------------------- page ----
-def sp(x):
-    return f"{round(x):,}".replace(",", " ")
-
-
 def build(ch):
     rows = [typed(DAILY, r, DAILY_INT)
-            for r in blocks(ch("41_ferry_daily.sql"))[18]]
+            for r in blocks(ch("41_ferry_daily.sql"), "sql/41_ferry_daily.sql")[18]]
     assert rows, "sql/41's 18-column block is missing"
     check_labels({r["line"] for r in rows})
 
@@ -465,8 +459,8 @@ def build(ch):
 
     speed = {(r["line"], r["year"]): r for r in
              (typed(SPEED, s, SPEED_INT)
-              for s in blocks(ch("42_ferry_speed.sql"))[16])}
-    hid = blocks(ch("44_hidden_fleet.sql"))
+              for s in blocks(ch("42_ferry_speed.sql"), "sql/42_ferry_speed.sql")[16])}
+    hid = blocks(ch("44_hidden_fleet.sql"), "sql/44_hidden_fleet.sql")
     hid_line = {(r["line"], r["year"]): r for r in
                 (typed(HID, h, HID_INT) for h in hid[9])}
     hid_year = {r["year"]: r for r in

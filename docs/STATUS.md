@@ -997,10 +997,11 @@ Full text with charts: `notes/ch02-findings.md`. The headlines:
     only 09:00–13:00 (+7 332 at 11:00) and is below it the other nineteen
     hours, hardest 15:00–19:00; over the day Sunday is 1.3 % *below*. A Sunday
     outing is compressed into the middle of the day.
-17. **Every fleet's busiest hour of the week is on a different day** (`sql/32`):
-    leisure Sun 12:00 (summer) / Sat 13:00 (winter), ferries Fri 17:00, cargo
-    Fri 04:00, fishing Tue 05:00. Saturday is fishing's weekly minimum (9.8 %)
-    and leisure's maximum (16.0 %).
+17. **The four fleets' busiest hours of the week fall on three different days**
+    (`sql/32`): leisure Sun 12:00 (summer) / Sat 13:00 (winter), fishing
+    Tue 05:00, and ferries and cargo both on Friday, eleven hours apart —
+    17:00 against 04:00. Saturday is fishing's weekly minimum (9.8 %) and
+    leisure's maximum (16.0 %).
 18. **A leisure harbour inhales 10:00–12:00 and exhales an hour later**
     (`sql/31`): appearance peaks 10–12 in all ten cells, departures 11–13.
 19. **73–89 % of the morning appearances are transponders switching on, not

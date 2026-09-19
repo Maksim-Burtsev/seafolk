@@ -169,9 +169,26 @@ kit.table = function (el, head, rows) {
  * screenshot a page but not crop to an element, and its dark-mode flag repaints
  * the page instead of asking the stylesheet for its dark tokens. */
 const q = new URLSearchParams(location.search);
-if (q.get("theme")) document.documentElement.dataset.theme = q.get("theme");
-if (q.get("only")) {
-  document.body.classList.add("only");
-  document.getElementById(q.get("only"))?.classList.add("shot");
+// An unknown theme is ignored rather than written through: ?theme=drak used to
+// set data-theme="drak", which matches no rule in site.css and silently gives
+// the light palette under a dark-looking file name.
+const theme = q.get("theme");
+if (theme === "light" || theme === "dark") {
+  document.documentElement.dataset.theme = theme;
+} else if (theme) {
+  console.error(`kit: unknown ?theme=${theme} — light or dark`);
+}
+// …and an unknown figure id leaves the page alone. Hiding everything and then
+// failing to un-hide the figure is a blank PNG, which scripts/shot.sh happily
+// wrote and returned 0 for.
+const only = q.get("only");
+if (only) {
+  const fig = document.getElementById(only);
+  if (fig) {
+    document.body.classList.add("only");
+    fig.classList.add("shot");
+  } else {
+    console.error(`kit: no figure #${only} on this page`);
+  }
 }
 })();

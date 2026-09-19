@@ -361,8 +361,20 @@ function anchorages() {
 /* ======================== T4 — the animation ============================ */
 function sea() {
   const host = document.getElementById("c-t4");
-  const clips = D.t4.clips.filter(k => (window.SEAFOLK_STORM || {})[k]);
-  if (!clips.length) return;
+  const first = D.t4.default;
+  // Same behaviour as I6 on the story page: the figure keeps its place and
+  // says what went wrong, rather than leaving a captioned empty box.
+  if (!window.SeafolkStorm || !window.SEAFOLK_LAND) {
+    host.textContent = "The animation could not be loaded — open "
+      + `site/media/storm-${first}.mp4`;
+    return;
+  }
+  SeafolkStorm.load(D.t4.clips, got =>
+    got.length ? mountAll(host, got) : SeafolkStorm.unavailable(host, first));
+}
+
+
+function mountAll(host, clips) {
   const asked = (Q.get("clip") || Q.get("storm") || "").toLowerCase();
   let current = clips.includes(asked) ? asked
     : (clips.includes(D.t4.default) ? D.t4.default : clips[0]);

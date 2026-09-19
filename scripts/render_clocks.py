@@ -21,8 +21,8 @@ There is nothing private in here. The four curves are each fleet's share of its
 own day, pooled over the whole country and six summers — the same numbers the
 page prints in its table.
 
-The geometry is site/day-clocks.html's, the same one site/js/pulse.js and
-notes/plot_ch02.py draw: midnight at the top, hours clockwise, an inner hole,
+The geometry is site/js/pulse.js's, the same one notes/plot_ch02.py
+draws: midnight at the top, hours clockwise, an inner hole,
 and the radius linear in the hour's share of that fleet's day up to PEAK at the
 rim. matplotlib gets the hole from set_rorigin.
 """
@@ -48,7 +48,7 @@ FFMPEG = "/opt/homebrew/bin/ffmpeg"
 W, H, DPI = 1280, 720, 100
 FPS, STEPS = 24, 16          # 16 sub-steps an hour: 384 frames, 16 seconds
 PEAK = 13.0                  # the share that reaches the rim
-R_IN, R_MAX = 20, 92         # site/day-clocks.html's hole, as a fraction
+R_IN, R_MAX = 20, 92         # site/js/pulse.js's hole, as a fraction
 R_ORIGIN = -PEAK * R_IN / (R_MAX - R_IN)
 FLAT = 100 / 24              # 4.17 % — a day with no rhythm
 

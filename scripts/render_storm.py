@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import csv
 import json
 import math
 import re
@@ -72,7 +73,7 @@ H3_RES = 6  # ~36 km2, ~7 km across; res 7 is 5x the dots and 5x the bytes
 W, H, DPI = 1280, 720, 100
 MAP_ASPECT = (BBOX[2] - BBOX[0]) * math.cos(math.radians(LAT0)) / (BBOX[3] - BBOX[1])
 
-# site/day-clocks.html, light theme. The video is light-theme only; the in-page
+# site/css/site.css, light theme. The video is light-theme only; the in-page
 # player reads the live custom properties instead.
 GROUND, SURFACE, HAIRLINE = "#e9eeef", "#f7f9f9", "#cfdadc"
 INK, LABEL, ACCENT, ACCENT_TX = "#0f1a1d", "#55676c", "#eb6834", "#b8441a"
@@ -170,11 +171,57 @@ def ch(sql: str) -> list[list[str]]:
     return [ln.split("\t") for ln in out.splitlines()]
 
 
+def km_between(a: tuple[float, float], b: tuple[float, float]) -> float:
+    """Kilometres between two (lat, lon) points, flat-earth over 5 km of the
+    Sound. Good to a metre at this size and it needs no library."""
+    return math.dist(
+        (a[0], a[1] * math.cos(math.radians(a[0]))),
+        (b[0], b[1] * math.cos(math.radians(b[0]))),
+    ) * 111.19
+
+
+def check_dates() -> None:
+    """The storm windows are hand-typed up there. data/context/storms.csv is
+    the DMI list this project actually cites, so the two have to agree.
+
+    Only Pia's window is allowed to differ, and only at its end: +3 d from its
+    last date lands on Christmas Eve, and a viewer who never sees the fleet
+    come back learns something false, so the clip runs to 27 December. The
+    timeline says which band is which.
+    """
+    listed = {}
+    with (ROOT / "data" / "context" / "storms.csv").open() as f:
+        for row in csv.DictReader(f):
+            listed[row["name"]] = (row["start_utc"][:10], row["end_utc"][:10])
+    for s in STORMS:
+        want = listed.get(s["name"])
+        if want is None:
+            sys.exit(f"{s['name']} is not in data/context/storms.csv")
+        if tuple(s["storm"]) != want:
+            sys.exit(f"{s['name']}: the clip says {tuple(s['storm'])}, "
+                     f"data/context/storms.csv says {want}")
+        span = (str(day(want[0]).date() - timedelta(days=3)),
+                str(day(want[1]).date() + timedelta(days=3)))
+        allowed = [span]
+        if s["key"] == "pia":                       # the documented exception
+            allowed.append((span[0], "2023-12-27"))
+        if tuple(s["window"]) not in [tuple(a) for a in allowed]:
+            sys.exit(f"{s['name']}: window {tuple(s['window'])} is neither the "
+                     f"storm's dates +/- 3 days {span} nor a documented "
+                     f"exception")
+    print(f"  dates ok: {len(STORMS)} clips against "
+          f"data/context/storms.csv ({len(listed)} storms)")
+
+
 def check_geography() -> None:
     """An external oracle for the H3 pin: the Drogden channel, the deep-water
     gate of the Sound south of Copenhagen, carries cargo every hour of every
     day.  If the cell centre nearest 55.536 N 12.712 E is not within 5 km of
-    it, the grid is mirrored and nothing below is worth rendering."""
+    it, the grid is mirrored and nothing below is worth rendering.
+
+    This checks the QUERY layer only.  check_emitted() below checks the same
+    fact on what was actually written, because a swap between here and the
+    page is a mirrored clip with every check above it green."""
     lat, lon = 55.536, 12.712
     rows = ch(
         f"""
@@ -186,16 +233,36 @@ def check_geography() -> None:
                  tupleElement(g, 2), tupleElement(g, 1)) LIMIT 1"""
     )
     got = (float(rows[0][0]), float(rows[0][1]))
-    km = math.dist(
-        (lat, lon * math.cos(math.radians(lat))),
-        (got[0], got[1] * math.cos(math.radians(got[0]))),
-    ) * 111.19
+    km = km_between((lat, lon), got)
     if km > 5.0:
         sys.exit(
             f"H3 geography check failed: nearest cargo cell to Drogden is "
             f"{got} — {km:.0f} km away. Check the h3ToGeo argument order."
         )
     print(f"  geography ok: cargo at Drogden within {km:.1f} km of {lat},{lon}")
+
+
+DROGDEN = (55.536, 12.712)  # lat, lon — see check_geography()
+
+
+def check_axis_order(points, what: str) -> None:
+    """The same Drogden oracle, on the coordinates as the CONSUMER will read
+    them.  `points` are (lat, lon) after applying whatever axis convention the
+    consumer applies, so a swap anywhere between the query and the pixel — at
+    the emit, in the player, in the matplotlib offsets — comes out as Drogden
+    six thousand kilometres away instead of as a mirrored picture nobody looks
+    at twice.
+
+    check_geography() cannot see any of that: it asks clickhouse the question
+    and never looks at what this file does with the answer."""
+    km = min(km_between(DROGDEN, p) for p in points)
+    if km > 5.0:
+        sys.exit(
+            f"{what}: the nearest cargo cell to the Drogden channel is "
+            f"{km:.0f} km away. The coordinates are mirrored or transposed "
+            f"somewhere between the query and this point."
+        )
+    print(f"  {what}: cargo at Drogden within {km:.1f} km")
 
 
 def fetch(storm: dict) -> dict:
@@ -432,6 +499,14 @@ def build_figure(storm: dict, data: dict, land):
 
 
 def render(storm: dict, data: dict, land, video: bool) -> None:
+    # The matplotlib half of the axis oracle: exactly the expression
+    # set_offsets is fed below, read back as (lat, lon). Swap the two indices
+    # in the loop and this stops before a mirrored clip is encoded.
+    cells = data["fleets"]["cargo"]["cells"]
+    check_axis_order([(y, x) for x, y in
+                      [(c[1], c[0]) for c in cells]],
+                     f"{storm['key']} matplotlib offsets")
+
     fig, dots, clock, nums, cursor, head, ys = build_figure(storm, data, land)
     n = data["hours"]
     fps = max(6, round(n / 24))
@@ -522,7 +597,31 @@ def emit_storm_js(storm: dict, data: dict) -> None:
         + json.dumps(obj, separators=(",", ":"))
         + ";\n"
     )
-    write_js(MEDIA / f"storm-{storm['key']}.js", body)
+    path = MEDIA / f"storm-{storm['key']}.js"
+    write_js(path, body)
+    check_written(path, storm)
+
+
+STORM_JS = re.compile(r'window\.SEAFOLK_STORM\["[^"]+"\] = (\{.*\});\s*\Z', re.S)
+
+
+def check_written(path: Path, storm: dict) -> None:
+    """Re-read the file that was just written and ask it where Drogden is.
+
+    `cells` is lon, lat interleaved and site/js/storm-player.js reads it that
+    way — `project(f.cells[c] / 1000, f.cells[c + 1] / 1000)` with the
+    signature `project(lon, lat)`. So the pairs come back (lon, lat) and are
+    handed to the oracle as (lat, lon); if the emit above ever writes them the
+    other way round, or the player is changed to read them the other way round
+    and this is updated to match, the check fails rather than the map silently
+    turning inside out."""
+    m = STORM_JS.search(path.read_text())
+    if not m:
+        sys.exit(f"{path}: cannot read back what was just written")
+    flat = json.loads(m.group(1))["fleets"]["cargo"]["cells"]
+    check_axis_order([(flat[i + 1] / 1000, flat[i] / 1000)
+                      for i in range(0, len(flat), 2)],
+                     f"{storm['key']} written coordinates")
 
 
 def emit_land_js(land) -> None:
@@ -552,6 +651,7 @@ def main() -> None:
         sys.exit(f"unknown storm; have: {', '.join(s['key'] for s in STORMS)}")
 
     MEDIA.mkdir(parents=True, exist_ok=True)
+    check_dates()
     check_geography()
     land = load_land()
     print(f"  land: {len(land)} rings, {sum(len(r) for r in land)} points")

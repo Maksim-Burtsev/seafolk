@@ -25,16 +25,19 @@ over the floor, and its cell id is deliberately not carried into the page.
 """
 import os
 
-from . import ROOT, blocks, typed
+from . import (A1, A1_INT, A4, B6, B6_INT, CAP_A, H1, H1_INT, H3, H3_INT,
+               K_FLOOR, REPORT_SECONDS, ROOT, YEARS, blocks, private_count,
+               sp, typed)
 
 # The floor itself (CLAUDE.md, docs/dataset-card.md § Privacy rule).
-FLOOR = 5
+FLOOR = K_FLOOR
 
-# ITU-R M.1371: a Class A transponder sends at most one position report every
-# 2 s, so this many in a day is a property of the radio. sql/60 block 6 counts
-# the vessel-days above it.
-REPORT_SECONDS = 2
-CAP_A = 86_400 // REPORT_SECONDS
+# What scripts/test_export.py pins on the published files: the res-5 cell-days
+# of the private fleet that clear the floor, and their share of all of them
+# (LEISURE_ROWS, LEISURE_SHARE). This page recomputes both from the store, so
+# the two have to agree to the unit or one of them has drifted.
+EXPORT_CELLS_KEPT = 341_092
+EXPORT_CELLS_TOTAL = 1_445_495
 
 # THE HAND-TYPED NUMBERS ON THIS PAGE. Every one is a wall clock or a byte
 # count in a log, not a column in any table, and each carries its source.
@@ -57,29 +60,12 @@ PREFETCH_SPEEDUP = 3.6
 OOM_MILLION = 806
 SPILL_GB = 6
 
-# The six years the store holds whole or nearly so; 2022 and 2023 are two storm
-# months each and a head count over 59 days is not a year's head count.
-YEARS = [2015, 2018, 2021, 2024, 2025, 2026]
-
 # Copenhagen, as scripts/test_load.sh hard-codes it after S4-redo.
 CPH = (55.6761, 12.5683)
 
-# Column names, as index.py spells them: these query files emit several result
-# sets on one stdout and `blocks` tells them apart by width.
-A1 = ("year window coverage loaded_days class_b_vessels class_b_leisure_vessels "
-      "class_a_vessels class_a_vessels_5d leisure_per_class_a "
-      "leisure_per_class_a_5d class_b_5d class_b_1d class_a_1d").split()
-A1_INT = ("year loaded_days class_b_vessels class_b_leisure_vessels "
-          "class_a_vessels class_a_vessels_5d class_b_5d class_b_1d "
-          "class_a_1d").split()
-A4 = ("year vessel_days median_msgs_per_vessel_day vessel_hours msgs "
-      "msgs_per_vessel_hour vessel_days_moving median_dist_nm_moving "
-      "danish_share german_share").split()
-B6 = ("mon loaded_days vessel_days median_msgs mean_msgs p90_msgs p99_msgs "
-      "max_msgs vd_over_cap share_over_cap max_over_cap_x dup_month").split()
-B6_INT = "loaded_days vessel_days max_msgs vd_over_cap dup_month".split()
-H1 = "year fleet visible_days hidden_days hidden_share vessels_with_hidden".split()
-H3 = "name year line kind island hidden_days ship_type".split()
+# Column names for the files only this page reads. The ones shared with
+# index.py and storms.py live in site_data/__init__.py, next to the widths
+# `blocks` tells the result sets apart by.
 E3 = ("res n_both n_emodnet_only n_ours_only rank_both rank_union pearson "
       "top10 top25 floored_out emo_in_our_zero our_in_emo_zero n_union").split()
 E4 = ("res side h3 lat lon our_hours our_vessels emo_hours rank_ours "
@@ -92,11 +78,6 @@ E5 = "zone emo_hours emo_missed missed_share cells".split()
 FRACTIONS = {0.1: "a tenth", 0.2: "a fifth", 0.25: "a quarter",
              1 / 3: "a third", 0.5: "half", 2 / 3: "two thirds",
              0.75: "three quarters", 0.8: "four fifths", 0.9: "nine tenths"}
-
-
-def sp(x):
-    """12345.6 -> '12 346', the separator the rest of the site prints."""
-    return f"{round(x):,}".replace(",", " ")
 
 
 def frac(x):
@@ -133,7 +114,17 @@ def floor_cost(ch):
             FROM h3_hourly WHERE {private} GROUP BY h3, hour, g)
         SELECT round(countIf(v >= {FLOOR}) / count(), 4),
                round(sumIf(mm, v >= {FLOOR}) / sum(mm), 4) FROM d""")[0]
-    return {"cells_total": int(day[0]), "cells_kept": int(day[1]),
+    total, kept = int(day[0]), int(day[1])
+    # scripts/test_export.py pins the same two numbers on the published
+    # parquet. The page recomputes them from the store; if the two ever part
+    # company one of them is stale and the page is quoting a cost that is not
+    # the export's.
+    assert (kept, total) == (EXPORT_CELLS_KEPT, EXPORT_CELLS_TOTAL), \
+        (f"the floor's cost moved: {kept} of {total} patch-days survive here, "
+         f"against {EXPORT_CELLS_KEPT} of {EXPORT_CELLS_TOTAL} pinned by "
+         f"scripts/test_export.py (LEISURE_ROWS, LEISURE_SHARE). Re-export, "
+         f"or update both.")
+    return {"cells_total": total, "cells_kept": kept,
             "cells_share": float(day[2]), "moving_share": float(day[3]),
             "hourly_cells_share": float(hour[0]),
             "hourly_moving_share": float(hour[1])}
@@ -150,7 +141,8 @@ def pleasure_with_a_big_radio(ch):
     rows = ch("-q", "SELECT toYear(day), uniqExact(mmsi) FROM vessel_day "
                     "WHERE mobile = 'Class A' AND ship_group = 'leisure' "
                     "GROUP BY 1 ORDER BY 1")
-    counts = [int(v) for y, v in rows if int(y) in YEARS]
+    counts = [private_count(int(v), f"pleasure craft with a big radio in {y}")
+              for y, v in rows if int(y) in YEARS]
     return min(counts), max(counts)
 
 
@@ -209,7 +201,8 @@ def impossible(ch):
     ceiling test finds unaided; those two months are not part of "before",
     because they are the thing the test is being validated against.
     """
-    rows = [typed(B6, r, B6_INT) for r in blocks(ch("60_coverage_index.sql"))[12]]
+    rows = [typed(B6, r, B6_INT) for r in
+            blocks(ch("60_coverage_index.sql"), "sql/60_coverage_index.sql")[12]]
     clean = [r for r in rows if r["mon"] < "2023-01-01" and not r["dup_month"]]
     recent = [r for r in rows if r["mon"] >= "2023-12-01"]
     worst = max(rows, key=lambda r: r["max_msgs"])
@@ -222,11 +215,10 @@ def hidden(ch):
     """sql/44 — the ferry fleet the archive filed as something else, in the
     last year the store holds whole, plus the worst single case: the longest
     run of hidden days any one Fano vessel has in a single year."""
-    rows = [typed(H1, r, ("year", "fleet", "visible_days", "hidden_days",
-                          "vessels_with_hidden"))
-            for r in blocks(ch("44_hidden_fleet.sql"))[6]]
-    ships = [typed(H3, r, ("year", "hidden_days"))
-             for r in blocks(ch("44_hidden_fleet.sql"))[7]]
+    rows = [typed(H1, r, H1_INT) for r in
+            blocks(ch("44_hidden_fleet.sql"), "sql/44_hidden_fleet.sql")[6]]
+    ships = [typed(H3, r, H3_INT) for r in
+             blocks(ch("44_hidden_fleet.sql"), "sql/44_hidden_fleet.sql")[7]]
     fano = max((s for s in ships if s["island"] == "Fanø"),
                key=lambda s: s["hidden_days"])
     return next(r for r in rows if r["year"] == 2025), fano
@@ -236,15 +228,19 @@ def hidden(ch):
 def adoption(ch):
     """sql/61 block 1 — the private fleet and the instrument it is heard by,
     over the window all six years share, and block 4's flag split."""
-    a1 = [typed(A1, r, A1_INT) for r in blocks(ch("61_adoption.sql"))[13]]
+    a1 = [typed(A1, r, A1_INT) for r in
+          blocks(ch("61_adoption.sql"), "sql/61_adoption.sql")[13]]
     win = {r["year"]: r for r in a1 if r["window"] == "mar_aug"}
     a4 = {int(r["year"]): r for r in
-          (typed(A4, r) for r in blocks(ch("61_adoption.sql"))[10])}
+          (typed(A4, r) for r in
+           blocks(ch("61_adoption.sql"), "sql/61_adoption.sql")[10])}
     raw = win[2026]["class_b_leisure_vessels"] / win[2015]["class_b_leisure_vessels"]
     divided = (win[2026]["leisure_per_class_a_5d"]
                / win[2015]["leisure_per_class_a_5d"])
-    return {"boats_2015": win[2015]["class_b_leisure_vessels"],
-            "boats_2026": win[2026]["class_b_leisure_vessels"],
+    return {"boats_2015": private_count(win[2015]["class_b_leisure_vessels"],
+                                       "sql/61 2015: small boats heard"),
+            "boats_2026": private_count(win[2026]["class_b_leisure_vessels"],
+                                        "sql/61 2026: small boats heard"),
             "raw": raw, "divided": divided, "cost": 100 * (raw - divided) / raw,
             "german": 100 * a4[2026]["german_share"],
             "danish": 100 * a4[2026]["danish_share"]}
@@ -258,16 +254,18 @@ def emodnet(ch):
     block 4's worst-ranked cell of ours is the marina the other method cannot
     see. The cell id stays in the query output and out of the page.
     """
-    out = ch("62_emodnet_compare.sql")
-    s = next(typed(E3, r) for r in blocks(out)[13] if r[0] == "7")
-    core = next(typed(E5, r) for r in blocks(out)[5] if r[0] == "Danish core")
+    out = blocks(ch("62_emodnet_compare.sql"), "sql/62_emodnet_compare.sql")
+    s = next(typed(E3, r) for r in out[13] if r[0] == "7")
+    core = next(typed(E5, r) for r in out[5] if r[0] == "Danish core")
     mine = [typed(E4, r, ("our_hours", "our_vessels", "rank_ours", "rank_emo"))
-            for r in blocks(out)[10] if r[0] == "7" and r[1] == "ours"]
+            for r in out[10] if r[0] == "7" and r[1] == "ours"]
     marina = max(mine, key=lambda r: r["rank_emo"])
     return {"agreement": s["rank_both"], "missing": 100 * s["emo_in_our_zero"],
             "core_missing": 100 * core["missed_share"],
             "rank_ours": marina["rank_ours"], "rank_emo": marina["rank_emo"],
-            "boats": marina["our_vessels"], "emo_hours": marina["emo_hours"]}
+            "boats": private_count(round(marina["our_vessels"]),
+                                   "the marina EMODnet cannot see"),
+            "emo_hours": marina["emo_hours"]}
 
 
 # ------------------------------------------------------------------ page ----
@@ -329,7 +327,7 @@ def build(ch):
         # --- bug 3, the ferries filed as something else
         "hidden_share": f"{100 * ferries['hidden_share']:.0f}",
         "hidden_fleet": sp(ferries["fleet"]),
-        "fano_ship": fano["name"],
+        "fano_ship": fano["vessel"],
         "fano_year": str(int(fano["year"])),
         "fano_days": sp(fano["hidden_days"]),
         # --- what this data cannot say
