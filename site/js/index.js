@@ -218,215 +218,136 @@ function flags() {
 }
 
 
-/* ====================== I4 — one storm, every fleet ===================== */
-/* The headline is about fishing against cargo, so those two are drawn to be
- * followed and the rest is context: same hue family, thinner, paler, still
- * labelled. `short` is the label at 380 px, where the gutter is 62 px. */
-const LINES = [
-  ["fishing", "fishing boats", "fishing", "accent", 3.2, null],
-  ["cargo", "cargo ships", "cargo", "ink", 2.2, null],
-  ["ferries", "ferries", "ferries", "working", 1.3, null],
-  ["work", "work boats", "work", "ref", 1.3, null],
-  ["sailing", "sailing boats", "sailing", "accent-tx", 1.6, "4 3"],
-];
+/* ========================= I4 — every storm at once ====================== */
+/* Round 2: no selector. Two fleets, their mean over every storm with a whole
+ * window, and each of those storms behind them as a hairline of its own hue.
+ * The reader gets the claim without touching anything. */
+const I4 = [["fishing", "fishing boats", "accent", "accent-tx"],
+            ["cargo", "cargo ships", "ink", "ink"]];
 
 function storms() {
   const S = D.storms;
-  const names = Object.keys(S.panels).sort((a, b) =>
-    d3.ascending(S.panels[a].start, S.panels[b].start));
-  // ?storm=<name> so scripts/shot.sh can photograph a storm that is not the
-  // default; anything unknown falls back to the default the build chose.
-  const asked = new URLSearchParams(location.search).get("storm");
-  let current = names.find(n => n.toLowerCase() === (asked || "").toLowerCase())
-    || S.default;
+  const OFF = S.offsets;
+  const off = o => (o > 0 ? "+" : o < 0 ? "−" : "") + Math.abs(o);
+  const line = d3.line().x(d => x(d[0])).y(d => y(d[1]));
+  let x, y;
 
-  const keys = d3.select("#k-i4").selectAll("button").data(names).join("button")
-    .attr("type", "button").text(d => d)
-    .attr("aria-pressed", d => String(d === current))
-    .on("click", (e, d) => { current = d; keys.attr("aria-pressed", k => String(k === d)); draw(); });
-
-  const day = o => d3.utcDay.offset(d3.utcParse("%Y-%m-%d")(S.panels[current].start), o);
-
-  let redraw = () => {};
   kit.figure(document.getElementById("c-i4"),
     { ratio: 0.46, ratioNarrow: 0.95,
-      margin: { top: 30, right: 104, bottom: 46, left: 50 },
-      marginNarrow: { right: 62, left: 46 } },
-    (g, w, h, narrow) => { redraw = () => panel(g, w, h, narrow); redraw(); });
+      margin: { top: 24, right: 106, bottom: 46, left: 50 },
+      marginNarrow: { right: 70, left: 46 } },
+    (g, w, h, narrow) => {
+      x = d3.scaleLinear(d3.extent(OFF), [0, w]);
+      y = d3.scaleLinear([0, 100], [h, 0]);
 
-  function panel(g, w, h, narrow) {
-    g.selectAll("*").remove();
-    const P = S.panels[current];
-    const lo = d3.min(P.lines.fishing, d => d[0]);
-    const hi = d3.max(P.lines.fishing, d => d[0]);
-    const x = d3.scaleLinear([lo, hi], [0, w]);
-    const y = d3.scaleLinear([0, 100], [h, 0]);
+      // the storm's own date, one day wide, shaded across the panel
+      const pad = (x(1) - x(0)) / 2;
+      g.append("rect").attr("x", x(0) - pad).attr("width", 2 * pad)
+        .attr("y", 0).attr("height", h)
+        .attr("fill", ink("hairline")).attr("opacity", 0.55);
+      kit.halo(g.append("text").attr("x", x(0)).attr("y", 11)
+        .attr("text-anchor", "middle").attr("fill", ink("label"))
+        .style("font", `500 ${narrow ? 11 : 12}px "IBM Plex Mono", ui-monospace, monospace`)
+        .text("the storm"));
 
-    // the storm's own calendar dates, shaded across the whole panel
-    const pad = (x(1) - x(0)) / 2;
-    g.append("rect").attr("x", x(0) - pad).attr("width", x(P.days - 1) - x(0) + 2 * pad)
-      .attr("y", 0).attr("height", h).attr("fill", ink("hairline")).attr("opacity", 0.55);
-    const month = narrow ? "%-d %b %Y" : "%-d %B %Y";
-    const when = P.days > 1
-      ? d3.utcFormat("%-d")(day(0)) + "\u2013" + d3.utcFormat(month)(day(P.days - 1))
-      : d3.utcFormat(month)(day(0));
-    kit.halo(g.append("text").attr("x", x((P.days - 1) / 2)).attr("y", 13)
-      .attr("text-anchor", "middle").attr("fill", ink("label"))
-      .style("font", `500 ${narrow ? 11 : 12}px "IBM Plex Mono", ui-monospace, monospace`)
-      .call(t => (narrow ? [current, when] : [`${current} \u00b7 ${when}`])
-        .forEach((line, i) => t.append("tspan").attr("x", x((P.days - 1) / 2))
-          .attr("dy", i ? "1.3em" : 0).text(line))));
+      kit.axis(g, y, { side: "left", values: [0, 25, 50, 75, 100], fmt: d => d + " %",
+                       grid: w, title: narrow ? "% that went out"
+                         : "of every 100 boats heard, how many went out" });
+      kit.axis(g, x, { side: "bottom", at: h, values: OFF,
+                       fmt: o => o === 0 ? "day" : off(o) });
 
-    kit.axis(g, y, { side: "left", values: [0, 25, 50, 75, 100], fmt: d => d + " %",
-                     grid: w, title: narrow ? "% that went out"
-                       : "of every 100 boats heard, how many went out" });
-    // three dated ticks, not eight: the dots say where the days are.
-    kit.axis(g, x, { side: "bottom", at: h, values: [lo, 0, hi],
-                     fmt: o => d3.utcFormat(o === 0 && !narrow ? "%-d %B" : "%-d %b")(day(o)) });
+      // every storm first, as its fleet's hue at a fifth of the weight: the
+      // spread is the evidence that the mean is not one lucky gale.
+      I4.forEach(([key, , tok]) => S[key].each.forEach(pts => g.append("path")
+        .attr("d", line(pts)).attr("fill", "none").attr("stroke", ink(tok))
+        .attr("stroke-width", 1).attr("opacity", 0.22)
+        .attr("stroke-linejoin", "round")));
 
-    const line = d3.line().x(d => x(d[0])).y(d => y(d[1]));
-    const ends = [];
-    LINES.forEach(([key, label, short, colour, width, dash]) => {
-      const pts = P.lines[key];
-      if (!pts) return;
-      g.append("path").attr("d", line(pts))
-        .attr("fill", "none").attr("stroke", ink(colour)).attr("stroke-width", width)
-        .attr("stroke-dasharray", dash).attr("stroke-linejoin", "round")
-        .attr("stroke-linecap", "round");
-      g.selectAll(null).data(pts).join("circle")
-        .attr("cx", d => x(d[0])).attr("cy", d => y(d[1]))
-        .attr("r", key === "fishing" ? 3.4 : 2.6).attr("fill", ink(colour));
-      ends.push({ y: y(pts.at(-1)[1]), text: narrow ? short : label,
-                  color: colour === "accent" ? ink("accent-tx") : ink(colour),
-                  weight: key === "fishing" || key === "cargo" ? 600 : 400 });
+      const ends = [];
+      I4.forEach(([key, label, tok, txt]) => {
+        g.append("path").attr("d", line(S[key].mean)).attr("fill", "none")
+          .attr("stroke", ink(tok)).attr("stroke-width", 3.4)
+          .attr("stroke-linejoin", "round").attr("stroke-linecap", "round");
+        g.selectAll(null).data(S[key].mean).join("circle")
+          .attr("cx", d => x(d[0])).attr("cy", d => y(d[1])).attr("r", 3.6)
+          .attr("fill", ink(tok));
+        ends.push({ y: y(S[key].mean.at(-1)[1]), color: ink(txt), weight: 600,
+                    text: narrow ? label.split(" ")[0] : label + ", all storms" });
+      });
+      kit.endLabels(g, w, ends);
+
+      // one annotation, under the fishing mean on the storm's own date: every
+      // line here is a share of a fleet, so the band down to zero is empty.
+      const low = S.fishing.mean.find(d => d[0] === 0)[1];
+      const n = D.n.storm_fishing_day;
+      kit.note(g, narrow
+        ? { x: 0, y: h - 24, size: 11.5, color: ink("accent-tx"),
+            text: [`on the storm day ${n} of every`, "100 fishing boats went out"] }
+        : { x: x(0), y: y(low), dy: 22, anchor: "middle", color: ink("accent-tx"),
+            text: [`on the storm day ${n} of every 100 fishing boats went out`] });
+
+      const flat = I4.flatMap(([key, label, tok]) =>
+        S[key].mean.map(d => [...d, label, tok]));
+      kit.hover(g, w, h, (px, py) => {
+        const d = d3.least(flat, p => (x(p[0]) - px) ** 2 + (y(p[1]) - py) ** 2);
+        return Math.abs(x(d[0]) - px) > (x(1) - x(0)) / 2 ? null : {
+          x: x(d[0]), y: y(d[1]), color: ink(d[3]),
+          text: `${d[2]}, mean of ${S.storms.length} storms\nday ${off(d[0])}\n${d[1]} % went out` };
+      });
     });
-    kit.endLabels(g, w, ends);
 
-    // one annotation, on the day the fishing fleet stayed in
-    // under the low point, where nothing else can be: every line on this chart
-    // is a share of a fleet, so the band between the worst day and zero is the
-    // one piece of the panel that is always empty.
-    const own = P.lines.fishing.filter(d => d[0] >= 0 && d[0] < P.days);
-    const low = d3.least(own, d => d[1]);
-    const say = [`${Math.round(low[1])} of every 100 fishing boats went out`];
-    const room = h - 6 - y(low[1]);   // space under the point, inside the plot
-    const late = x(low[0]) > w * 0.55;
-    kit.note(g, narrow
-      ? { x: 0, y: h - 4, size: 11.5, color: ink("accent-tx"), text: say }
-      : room >= 22
-        ? { x: x(low[0]), y: y(low[1]), dy: 22, anchor: "middle",
-            color: ink("accent-tx"), text: say }
-        // a fleet that went to almost nothing leaves no room underneath, so the
-        // label goes above it instead of over the date ticks.
-        : { x: x(low[0]), y: y(low[1]), dy: -18, dx: late ? -10 : 10,
-            anchor: late ? "end" : "start", color: ink("accent-tx"), text: say });
-
-    const flat = LINES.flatMap(([key, label, short, colour]) =>
-      (P.lines[key] || []).map(d => [...d, label, colour]));
-    kit.hover(g, w, h, (px, py) => {
-      const d = d3.least(flat, p => (x(p[0]) - px) ** 2 + (y(p[1]) - py) ** 2);
-      return Math.abs(x(d[0]) - px) > x(1) - x(0) ? null : {
-        x: x(d[0]), y: y(d[1]), color: ink(d[4]),
-        text: `${d[3]}\n${d3.utcFormat("%-d %B %Y")(day(d[0]))}\n${d[1]} % went out` +
-              (d[2] === null ? "" : `\nof ${sp(d[2])} heard`) };
-    });
-  }
-
-  function draw() { redraw(); table(); }
-
-  function table() {
-    const P = S.panels[current];
-    const offs = P.lines.fishing.map(d => d[0]);
-    kit.table(document.getElementById("t-i4"),
-      [`${current} — % of the boats heard that went out`,
-       ...offs.map(o => d3.utcFormat("%-d %b")(day(o)))],
-      LINES.filter(([k]) => P.lines[k]).map(([k, label]) => {
-        const by = new Map(P.lines[k].map(d => [d[0], d[1]]));
-        return [label, ...offs.map(o => by.has(o) ? by.get(o) + " %" : "—")];
-      }));
-  }
-
-  table();
+  kit.table(document.getElementById("t-i4"),
+    ["mean over the storms — % of the boats heard that went out",
+     ...OFF.map(o => o === 0 ? "the storm" : "day " + off(o))],
+    I4.map(([key, label]) => [label, ...S[key].mean.map(d => d[1] + " %")])
+      .concat([["storms in the mean", ...OFF.map(() => S.storms.length)]]));
 }
 
 
-/* ========================== I5 — who goes in first ====================== */
-/* A fleet that crossed the half-way line in fewer than this share of the
- * storms is not drawn as "stopping at hour N" — it is drawn as carrying on,
- * because a median over two storms out of fourteen is not a habit. */
-const RARE = 0.25;
-
-function onset() {
-  const rows = D.onset.rows;
+/* ====================== I5 — who stays in, per fleet ===================== */
+function stayedIn() {
+  const rows = D.stayed;
   kit.figure(document.getElementById("c-i5"),
-    { ratio: 0.36, ratioNarrow: 0.8, margin: { top: 26, right: 30, bottom: 48, left: 112 },
-      marginNarrow: { left: 92, right: 16, bottom: 46 } },
+    { ratio: 0.42, ratioNarrow: 0.8,
+      margin: { top: 12, right: 64, bottom: 44, left: 116 },
+      marginNarrow: { left: 96, right: 52, bottom: 42 } },
     (g, w, h, narrow) => {
-      const kept = rows.filter(r => r.storms >= RARE * r.of && r.hour !== null);
-      const lo = Math.min(0, d3.min(kept, r => r.hour) - 3);
-      const x = d3.scaleLinear([lo, d3.max(kept, r => r.hour) + (narrow ? 21 : 8)], [0, w]);
-      const y = d3.scalePoint(rows.map(r => r.fleet), [0, h]).padding(0.6);
-      kit.axis(g, x, { side: "bottom", at: h,
-                       values: d3.range(0, d3.max(kept, r => r.hour) + 1, narrow ? 12 : 6),
-                       fmt: d => d ? "+" + d + " h" : "0 h",
-                       title: narrow ? null : "hours after the storm's day began" });
-      g.append("line").attr("x1", x(0)).attr("x2", x(0)).attr("y1", -6).attr("y2", h)
-        .attr("stroke", ink("ref"));
-
-      const arrow = g.append("defs").append("marker").attr("id", "i5-arrow")
-        .attr("viewBox", "0 0 8 8").attr("refX", 7).attr("refY", 4)
-        .attr("markerWidth", 6).attr("markerHeight", 6).attr("orient", "auto");
-      arrow.append("path").attr("d", "M0 0 L8 4 L0 8 Z").attr("fill", ink("working"));
+      const x = d3.scaleLinear([0, 100], [0, w]);
+      const y = d3.scaleBand(rows.map(r => r.fleet), [0, h]).padding(0.42);
+      const pooled = d3.max(rows, r => r.storms);
+      kit.axis(g, x, { side: "bottom", at: h, values: [0, 25, 50, 75, 100],
+                       fmt: d => d + " %",
+                       title: narrow ? null : "of every 100 that go out on a usual day" });
 
       rows.forEach(r => {
-        const rare = r.storms < RARE * r.of;
-        const colour = ink(r.fleet === "fishing" || r.fleet === "sailing"
-                           ? "accent" : "working");
-        g.append("text").attr("x", -14).attr("y", y(r.fleet)).attr("dy", "0.34em")
-          .attr("text-anchor", "end").attr("fill", ink("ink"))
-          .style("font", `${r.fleet === "fishing" || r.fleet === "sailing" ? 600 : 500} `
-                 + `${narrow ? 12 : 13}px Karla, ui-sans-serif, sans-serif`)
-          .text(r.label);
-
-        if (rare) {
-          // no dot, on purpose: this fleet did not stop. The line leaves the
-          // chart to the right, which is what "kept sailing" looks like.
-          g.append("line").attr("x1", x(0)).attr("x2", w - 2)
-            .attr("y1", y(r.fleet)).attr("y2", y(r.fleet))
-            .attr("stroke", ink("working")).attr("stroke-width", 1.6)
-            .attr("marker-end", "url(#i5-arrow)");
-          kit.halo(g.append("text").attr("x", x(0) + 10).attr("y", y(r.fleet) - 11)
-            .attr("fill", ink("label"))
-            .style("font", `400 ${narrow ? 11 : 12.5}px Karla, ui-sans-serif, sans-serif`)
-            .text(narrow ? `kept sailing in ${r.of - r.storms}/${r.of}`
-                         : `kept sailing in ${r.of - r.storms} of ${r.of} storms`));
-          return;
-        }
-        g.append("line").attr("x1", x(Math.min(0, r.hour))).attr("x2", x(Math.max(0, r.hour)))
-          .attr("y1", y(r.fleet)).attr("y2", y(r.fleet))
-          .attr("stroke", colour).attr("stroke-width", 3).attr("stroke-linecap", "round");
-        g.append("circle").attr("cx", x(r.hour)).attr("cy", y(r.fleet)).attr("r", 6)
+        const own = r.fleet === "fishing";
+        const colour = ink(own ? "accent" : "working");
+        g.append("rect").attr("x", 0).attr("y", y(r.fleet))
+          .attr("width", Math.max(x(r.value), 1)).attr("height", y.bandwidth())
           .attr("fill", colour);
-        const half = r.storms < 0.5 * r.of;
-        // a fleet that goes in BEFORE the storm's date has its dot left of the
-        // zero line; its label still starts right of it, in the same column as
-        // every other row, rather than running back over the fleet names.
-        kit.halo(g.append("text").attr("x", Math.max(x(r.hour), x(0)) + 13)
-          .attr("y", y(r.fleet))
-          .attr("dy", "0.34em").attr("fill", ink("label"))
-          .style("font", `400 ${narrow ? 11 : 12.5}px Karla, ui-sans-serif, sans-serif`)
-          .text(`${r.hour >= 0 ? "+" : "\u2212"}${Math.abs(r.hour)} h \u00b7 ` + (narrow
-            ? `${r.storms}/${r.of}`
-            : `${half ? "only " : ""}${r.storms} of ${r.of} storms`)));
+        g.append("text").attr("x", -14).attr("y", y(r.fleet) + y.bandwidth() / 2)
+          .attr("dy", "0.34em").attr("text-anchor", "end").attr("fill", ink("ink"))
+          .style("font", `${own ? 600 : 500} ${narrow ? 12 : 13.5}px `
+                 + "Karla, ui-sans-serif, sans-serif")
+          .text(r.label);
+        kit.halo(g.append("text").attr("x", x(r.value) + 9)
+          .attr("y", y(r.fleet) + y.bandwidth() / 2).attr("dy", "0.34em")
+          .attr("fill", own ? ink("accent-tx") : ink("label"))
+          .style("font", `${own ? 600 : 500} 13px "IBM Plex Mono", ui-monospace, monospace`)
+          .text(Math.round(r.value)));
+        // every fleet is measured over every storm except the sailing one,
+        // which has only the storms with enough boats out to divide by. That
+        // row says so; the rest would say the same thing five times.
+        if (r.storms !== pooled) kit.halo(g.append("text")
+          .attr("x", 4).attr("y", y(r.fleet) - 5).attr("fill", ink("label"))
+          .style("font", '400 11.5px Karla, ui-sans-serif, sans-serif')
+          .text(`${r.storms} storms`));
       });
     });
 
   kit.table(document.getElementById("t-i5"),
-    ["fleet", "goes in at", "storms it went in"],
-    rows.map(r => [r.label,
-      r.storms < RARE * r.of || r.hour === null ? "kept sailing"
-        : `${r.hour >= 0 ? "+" : "\u2212"}${Math.abs(r.hour)} h`,
-      `${r.storms} of ${r.of}`]));
+    ["fleet", "stayed in, of every 100", "storms pooled"],
+    rows.map(r => [r.label, r.value + " %", r.storms]));
 }
 
 
@@ -449,48 +370,94 @@ function seaEmpties() {
 }
 
 
-/* ======================= I7 — days that cannot happen =================== */
+/* ======================== the static map figures ========================= */
+/* site/js/minimap.js + site/media/maps.js belong to another session. If they
+ * are not on the page the slot stays empty and the story still opens from
+ * file://, rather than one missing component taking the page down with it.
+ * Each map's own title and note come out of the data (see minimap.js), so the
+ * only thing said here is which layer and which one is the subject. */
+function maps(id, method, list) {
+  const el = document.getElementById(id);
+  if (!el || !list.length) return;
+  if (!window.SeafolkMap || typeof SeafolkMap[method] !== "function") return;
+  try { SeafolkMap[method](el, method === "draw" ? list[0] : list); }
+  catch (e) { el.textContent = ""; console.error("minimap " + id, e); }
+}
+
+
+/* ======================= I7 — a day that cannot happen =================== */
 function impossible() {
   const I = D.impossible;
   const months = I.months.map(([m, v, dup]) => [d3.utcParse("%Y-%m")(m), v, dup, m]);
-  const TOP = 1.2;
+
+  /* the picture: two bars, to scale, one against the other. */
   kit.figure(document.getElementById("c-i7"),
-    { ratio: 0.42, ratioNarrow: 0.78, margin: { top: 30, right: 20, bottom: 40, left: 52 },
-      marginNarrow: { left: 46 } },
+    { ratio: 0.14, ratioNarrow: 0.5,
+      margin: { top: 10, right: 16, bottom: 4, left: 0 },
+      marginNarrow: { right: 8, left: 0 } },
+    (g, w, h, narrow) => {
+      const x = d3.scaleLinear([0, I.worst.msgs], [0, w]);
+      const bars = [
+        { v: I.cap, tok: "working", tx: "label",
+          label: narrow ? ["the most a ship's radio", "can send in a day"]
+                        : ["the most a ship's radio can send in a day"] },
+        { v: I.worst.msgs, tok: "accent", tx: "accent-tx",
+          label: narrow ? ["what this archive holds for", "one ship on its worst day"]
+                        : ["what this archive holds for one ship on its worst day"] }];
+      const row = h / 2, bh = Math.min(30, row * 0.38);
+      bars.forEach((b, i) => {
+        const top = i * row;
+        b.label.forEach((t, k) => g.append("text").attr("x", 0)
+          .attr("y", top + 12 + k * 15).attr("fill", ink(b.tx))
+          .style("font", `${i ? 600 : 500} ${narrow ? 12.5 : 14}px `
+                 + "Karla, ui-sans-serif, sans-serif").text(t));
+        const by = top + 12 + b.label.length * 15;
+        g.append("rect").attr("x", 0).attr("y", by)
+          .attr("width", Math.max(x(b.v), 2)).attr("height", bh)
+          .attr("fill", ink(b.tok));
+        // a bar that fills the frame has no room beside it for its own number,
+        // so on a phone the long one carries it inside instead.
+        const out = x(b.v) < w * 0.72;
+        kit.halo(g.append("text")
+          .attr("x", out ? x(b.v) + 9 : x(b.v) - 10).attr("y", by + bh / 2)
+          .attr("text-anchor", out ? "start" : "end")
+          .attr("dy", "0.34em").attr("fill", out ? ink(b.tx) : ink("surface"))
+          .style("font", `${i ? 600 : 500} ${narrow ? 12 : 13.5}px `
+                 + '"IBM Plex Mono", ui-monospace, monospace')
+          .text(sp(b.v) + (i ? `  \u00d7${I.worst.times}` : "")))
+          .attr("stroke", out ? ink("surface") : ink(b.tok));
+      });
+    });
+
+  /* …and under it, quietly, when it started. */
+  const TOP = 1.2;
+  kit.figure(document.getElementById("c-i7b"),
+    { ratio: 0.17, ratioNarrow: 0.32,
+      margin: { top: 16, right: 16, bottom: 30, left: 44 },
+      marginNarrow: { left: 40 } },
     (g, w, h, narrow) => {
       const x = d3.scaleUtc([new Date(Date.UTC(2014, 11, 1)), new Date(Date.UTC(2026, 9, 1))], [0, w]);
       const y = d3.scaleLinear([0, TOP], [h, 0]);
-      const bw = Math.max(2, w / 145);
-      kit.axis(g, y, { side: "left", values: [0, 0.5, 1], fmt: d => d + " %", grid: w,
-                       title: narrow ? "impossible days"
-                         : "share of ships' days with impossible message counts" });
+      const bw = Math.max(2, w / 150);
+      kit.axis(g, y, { side: "left", values: [0, 1], fmt: d => d + " %" });
       kit.axis(g, x, { side: "bottom", at: h,
-                       values: [2015, 2018, 2021, 2024, 2026].map(k => new Date(Date.UTC(k, 0, 1))),
+                       values: [2015, 2018, 2021, 2024].map(k => new Date(Date.UTC(k, 0, 1))),
                        fmt: d3.utcFormat("%Y") });
-
       g.selectAll(null).data(months).join("rect")
         .attr("x", d => x(d[0]) - bw / 2).attr("width", bw)
         .attr("y", d => y(Math.min(d[1], TOP)))
         .attr("height", d => h - y(Math.min(d[1], TOP)))
         .attr("fill", d => d[3] >= I.step ? ink("accent") : ink("working"));
       // the one bar that runs off the top keeps its value rather than a taller
-      // axis, which would flatten the wall this chart is about.
-      months.filter(d => d[1] > TOP).forEach(d => {
-        g.append("path").attr("d", d3.symbol(d3.symbolTriangle, 30))
-          .attr("transform", `translate(${x(d[0])},-7)`).attr("fill", ink("working"));
-        kit.halo(g.append("text").attr("x", x(d[0]) + 9).attr("y", 14)
-          .attr("fill", ink("label"))
-          .style("font", '400 12px "IBM Plex Mono", ui-monospace, monospace')
-          .text(`${d[1].toFixed(1)} % in ${d3.utcFormat("%B %Y")(d[0])}`));
-      });
-
-      // the empty middle of the chart, pointing right at where the wall starts.
-      const step = months.find(d => d[3] === I.step);
-      kit.note(g, { x: x(step[0]), y: y(TOP * 0.5), dx: -14, anchor: "end",
-        leader: true, color: ink("accent-tx"), text: narrow
-          ? ["from December 2023", "on: every month"]
-          : ["from December 2023 onward, every single month",
-             "holds days that cannot have happened"] });
+      // axis, which would flatten the wall this strip is about.
+      months.filter(d => d[1] > TOP).forEach(d => kit.halo(g.append("text")
+        .attr("x", x(d[0]) + 7).attr("y", 8).attr("fill", ink("label"))
+        .style("font", '400 11px "IBM Plex Mono", ui-monospace, monospace')
+        .text(`${d[1].toFixed(1)} %`)));
+      kit.halo(g.append("text").attr("x", x(new Date(Date.UTC(2023, 11, 1))) + 6)
+        .attr("y", 11).attr("fill", ink("accent-tx"))
+        .style("font", '400 12px Karla, ui-sans-serif, sans-serif')
+        .text(narrow ? "from 2024 on" : "every month from December 2023 on"));
 
       kit.hover(g, w, h, px => {
         const d = d3.least(months, m => Math.abs(x(m[0]) - px));
@@ -506,76 +473,24 @@ function impossible() {
 }
 
 
-/* ====================== I8 — Copenhagen, mirrored ======================= */
-function mirror() {
-  const M = D.mirror;
-  kit.figure(document.getElementById("c-i8"),
-    { ratio: 0.45, ratioNarrow: 0.68, margin: { top: 18, right: 18, bottom: 18, left: 18 } },
-    (g, w, h, narrow) => {
-      const x = d3.scaleLinear([-180, 180], [0, w]);
-      const y = d3.scaleLinear([80, -58], [0, h]);
-      const path = d3.line().x(d => x(d[0])).y(d => y(d[1]));
-
-      // the land runs past the bottom of the frame (Antarctica) and the figure's
-      // SVG deliberately does not clip, so that end labels can sit in the margin.
-      // This one group is clipped instead.
-      const id = "land-clip";
-      g.append("clipPath").attr("id", id).append("rect")
-        .attr("x", -4).attr("y", -4).attr("width", w + 8).attr("height", h + 8);
-      g.append("g").attr("clip-path", `url(#${id})`)
-        .selectAll("path").data(M.land).join("path")
-        .attr("d", d => path(d) + "Z").attr("fill", ink("hairline"));
-
-      // the mirror is a reflection across lat = lon, so the line itself is the
-      // explanation: the two dots are the same point on either side of it.
-      g.append("line").attr("x1", x(y.domain()[1])).attr("y1", y(y.domain()[1]))
-        .attr("x2", x(y.domain()[0])).attr("y2", y(y.domain()[0]))
-        .attr("stroke", ink("ref")).attr("stroke-dasharray", "5 5");
-      g.append("line")
-        .attr("x1", x(M.cph[1])).attr("y1", y(M.cph[0]))
-        .attr("x2", x(M.mirrored[1])).attr("y2", y(M.mirrored[0]))
-        .attr("stroke", ink("accent")).attr("stroke-width", 1.2)
-        .attr("stroke-dasharray", "3 4");
-
-      const dot = (lat, lon, filled) => g.append("circle")
-        .attr("cx", x(lon)).attr("cy", y(lat)).attr("r", 6)
-        .attr("fill", filled ? ink("accent") : ink("surface"))
-        .attr("stroke", ink("accent")).attr("stroke-width", 2.4);
-      dot(M.cph[0], M.cph[1], true);
-      dot(M.mirrored[0], M.mirrored[1], false);
-
-      kit.note(g, { x: x(M.cph[1]), y: y(M.cph[0]), dx: -12, dy: -14, anchor: "end",
-        color: ink("ink"), text: narrow ? ["Copenhagen,", "where it is"]
-                                        : ["Copenhagen, where it is"] });
-      kit.note(g, { x: x(M.mirrored[1]), y: y(M.mirrored[0]), dx: 12, dy: 16,
-        color: ink("accent-tx"),
-        text: narrow ? ["where my grid", "put it"]
-                     : ["where my grid put it — the Arabian Sea,", "and every other boat with it"] });
-      // the South Pacific is the one large piece of empty water on this map.
-      kit.halo(g.append("text").attr("x", x(-176)).attr("y", y(-26))
-        .attr("fill", ink("label"))
-        .style("font", '400 12px Karla, ui-sans-serif, sans-serif')
-        .call(t => (narrow ? ["every point mirrored", "across the line where",
-                              "latitude equals longitude"]
-                           : ["every point mirrored across the line",
-                              "where latitude equals longitude"])
-          .forEach((line, i) => t.append("tspan").attr("x", x(-176))
-            .attr("dy", i ? "1.3em" : 0).text(line))));
-    });
-
-  kit.table(document.getElementById("t-i8"),
-    ["point", "latitude", "longitude"],
-    [["Copenhagen", M.cph[0] + " N", M.cph[1] + " E"],
-     ["where the first grid put it", M.mirrored[0] + " N", M.mirrored[1] + " E"]]);
-}
-
-
 season();
+maps("c-i1-maps", "pair", [{ layer: "small_july_2025", colour: "accent" },
+                           { layer: "small_january_2025" }]);
 fleet();
+maps("c-i2-maps", "pair", [{ layer: "small_july_2015" },
+                           { layer: "small_july_2025", colour: "accent" }]);
 flags();
+// Who else is out there — the three public fleets, each on its own scale.
+maps("c-i3-cargo", "draw", [{ layer: "cargo_2025", colour: "ink" }]);
+maps("c-i3-ferries", "draw", [{ layer: "ferries_2025" }]);
+maps("c-i3-fishing", "draw", [{ layer: "fishing_2025" }]);
 storms();
-onset();
+stayedIn();
 seaEmpties();
+// the three keys, and their titles, are the build's — this page only says
+// which storm, and it is the storm the animation above is playing.
+if (window.SeafolkMap) maps("c-i6-triptych", "triptych",
+  (SeafolkMap.storm(D.storms.media) || []).map((layer, i) =>
+    ({ layer, colour: i === 1 ? "accent" : "ink" })));
 impossible();
-mirror();
 })();

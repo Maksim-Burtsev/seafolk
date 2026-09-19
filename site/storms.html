@@ -5,7 +5,7 @@
 <title>When the storm comes — Seafolk</title>
 <meta name="description" content="Fourteen named Danish storms, fleet by fleet: who stops, how long it takes, and where the ships that stop do not go.">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500&family=Karla:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,600;1,8..60,600&family=Karla:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="css/site.css">
 
 <!-- Every number below is written by scripts/build_site_data.py from the store.
@@ -75,6 +75,26 @@
       to <span data-n="fish_worst_now">6</span>. The rest were still on the
       radio all through it, sitting still in a harbour somewhere.</p>
 
+    <p>It is worth knowing where that fleet works, because it is not everywhere
+      the weather is.</p>
+  </div>
+
+  <figure id="t2-fishing">
+    <h3>The fishing is on the north and west coast, and hardly at all in the
+      Baltic</h3>
+    <div class="chart" id="c-t2-fishing"></div>
+    <figcaption>Every hour of 2025 in which a fishing boat was moving
+      somewhere. Most of it is in the Skagerrak, off the west coast of Jutland
+      and out in the North Sea — open water, and the water a named storm hits
+      hardest. East of the Belts there is almost nothing. The strongest patches
+      are the fishing harbours themselves, where boats manoeuvre for hours at
+      walking pace.</figcaption>
+    <p class="source">Danish Maritime Authority AIS archive, through the open
+      dataset · built by
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/build_map_figures.py"><code>scripts/build_map_figures.py</code></a></p>
+  </figure>
+
+  <div class="prose">
     <p>Cargo's pairs of dots barely separate at all. Its worst storm in the
       whole archive, <span data-n="cargo_worst_storm">Dagmar·Egon</span>, took
       it from <span data-n="cargo_worst_ref">87</span> in a hundred to
@@ -245,6 +265,52 @@
   </figure>
 
   <div class="prose">
+    <p>A clip is a bad thing to argue with, so here are the same three storms
+      as still maps: the day before, the storm, and two days after, each set of
+      three on one colour scale.</p>
+  </div>
+
+  <figure id="t4-amy">
+    <h3>The fleet went in before Amy arrived, and came back two days later</h3>
+    <div class="chart" id="c-t4-amy"></div>
+    <figcaption>Daylight hours with a fishing boat under way. The Friday is
+      already thin against the week before it, the Saturday of the storm is
+      nearly empty, and by the Monday the fleet is back where it started.
+      Fishing boats do not wait for the weather; they read the
+      forecast.</figcaption>
+    <p class="source">Storm dates from the Danish Meteorological Institute;
+      Danish Maritime Authority AIS archive, through the open dataset · built by
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/build_map_figures.py"><code>scripts/build_map_figures.py</code></a></p>
+  </figure>
+
+  <figure id="t4-malik">
+    <h3>Before Malik the fleet had already been home for two days</h3>
+    <div class="chart" id="c-t4-malik"></div>
+    <figcaption>The same three days for Malik, and the reason the first panel
+      is not a calm day: the week that ran up to it was an ordinary working
+      week, and the fleet came in two days before the storm's own date. What
+      the middle panel shows is water that had already been emptied. The
+      Tuesday after is still well short of a normal day.</figcaption>
+    <p class="source">Storm dates from the Danish Meteorological Institute;
+      Danish Maritime Authority AIS archive, through the open dataset · built by
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/build_map_figures.py"><code>scripts/build_map_figures.py</code></a></p>
+  </figure>
+
+  <figure id="t4-pia">
+    <h3>Pia shut the fishing down, and then Christmas kept it down</h3>
+    <div class="chart" id="c-t4-pia"></div>
+    <figcaption>Pia is the one storm of the three whose recovery never shows,
+      and the weather has nothing to do with it: two days after the storm is
+      Christmas Eve. The storm takes out more than half the fishing grounds and
+      the holiday takes most of what is left. Three maps cannot tell a storm
+      from a holiday, which is why the date is printed on every
+      panel.</figcaption>
+    <p class="source">Storm dates from the Danish Meteorological Institute;
+      Danish Maritime Authority AIS archive, through the open dataset · built by
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/build_map_figures.py"><code>scripts/build_map_figures.py</code></a></p>
+  </figure>
+
+  <div class="prose">
     <p>Press play: the orange thins out ahead of the weather while the grey
       keeps crossing at the same rate. On Pia the clip runs into Christmas,
       which empties the sea a second time for an entirely different reason. It
@@ -291,4 +357,20 @@
      one fact in one place instead of four that have to agree. -->
 <script src="js/storm-player.js"></script>
 <script src="js/storms.js"></script>
+<script src="media/maps.js"></script>
+<script src="js/minimap.js"></script>
+<script>
+  // The static map figures (site/js/minimap.js). Missing component, empty
+  // slot — the chapter still opens from file://. The three keys of a
+  // triptych, and their dates, are the build's; this page names the storm.
+  if (window.SeafolkMap) try {
+    SeafolkMap.draw(document.getElementById("c-t2-fishing"), { layer: "fishing_2025" });
+    ["amy", "malik", "pia"].forEach(function (key) {
+      SeafolkMap.triptych(document.getElementById("c-t4-" + key),
+        (SeafolkMap.storm(key) || []).map(function (layer, i) {
+          return { layer: layer, colour: i === 1 ? "accent" : "ink", labels: false };
+        }));
+    });
+  } catch (e) { console.error("minimap storms", e); }
+</script>
 </html>

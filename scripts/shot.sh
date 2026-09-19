@@ -51,7 +51,7 @@ figures=("$@")
 # page and would screenshot as an empty frame.
 available=$(perl -0777 -pe 's/<!--.*?-->//gs' "$page" |
               grep -o '<figure id="[^"]*"' | cut -d'"' -f2)
-for id in "${figures[@]}"; do
+for id in ${figures[@]+"${figures[@]}"}; do   # macOS bash 3.2: an empty array is "unbound" under set -u
   grep -qxF "$id" <<<"$available" || {
     echo "no <figure id=\"$id\"> on $page; it has:" >&2
     sed 's/^/  /' <<<"$available" >&2

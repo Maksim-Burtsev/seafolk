@@ -97,14 +97,25 @@ a:hover { text-decoration-color: var(--accent); }
 .topnav a { color: var(--label); text-decoration: none; }
 .topnav a:hover { color: var(--accent-tx); }
 .topnav a.home, .topnav a[aria-current] { color: var(--ink); }
+/* The headline face is Source Serif 4 at 600 — a sturdy text serif, not a
+   display one. Bodoni's hairlines broke up on screen (owner's review, round 2).
+   The weight carries the size now, so every headline is a few points smaller
+   and a touch tighter than the Bodoni setting it replaces, and the line height
+   opens up because a 600 serif at 60 px needs air between its lines.
+
+   THE OPTICAL SIZE IS PINNED, and that is the whole point of the change. Left
+   to itself the browser feeds the font its own pixel size, and Source Serif's
+   display cut at 60 px is exactly the hairline-and-ball-terminal headline the
+   owner rejected. Pinning the axis near a text size keeps the stems thick at
+   any headline size, which is what "deliberate, not default" means here. */
 h1 {
-  font: 400 clamp(38px, 7vw, 68px)/1.02 "Bodoni Moda", Georgia, serif;
-  letter-spacing: -.015em; text-wrap: balance; margin: 0;
+  font: 600 clamp(36px, 6.2vw, 60px)/1.08 "Source Serif 4", Georgia, serif;
+  letter-spacing: -.022em; text-wrap: balance; margin: 0;
 }
 h1 em { font-style: italic; color: var(--accent-tx); }
 h2 {
-  font: 400 clamp(25px, 3.4vw, 34px)/1.16 "Bodoni Moda", Georgia, serif;
-  margin: 0; max-width: 24ch; text-wrap: balance;
+  font: 600 clamp(24px, 3vw, 31px)/1.24 "Source Serif 4", Georgia, serif;
+  letter-spacing: -.014em; margin: 0; max-width: 24ch; text-wrap: balance;
 }
 .deck { font-size: clamp(18px, 2.1vw, 21px); color: var(--label); margin: 0; text-wrap: pretty; }
 .act {
@@ -128,9 +139,14 @@ figure {
   padding: clamp(16px, 2.6vw, 28px);
 }
 figure h3 {
-  font: 400 clamp(21px, 2.6vw, 27px)/1.2 "Bodoni Moda", Georgia, serif;
-  margin: 0; max-width: 30ch; text-wrap: balance;
+  font: 600 clamp(20px, 2.35vw, 25px)/1.3 "Source Serif 4", Georgia, serif;
+  letter-spacing: -.01em; margin: 0; max-width: 30ch; text-wrap: balance;
 }
+/* AFTER the three `font:` shorthands above, on purpose: the shorthand resets
+   font-variation-settings, so this rule is silently undone if it sits before
+   them — which is how the first attempt at this change shipped a headline that
+   still looked like Bodoni. */
+h1, h2, figure h3 { font-variation-settings: "opsz" 20; }
 figcaption { font-size: 15px; color: var(--label); max-width: 68ch; margin: 0; }
 .chart { width: 100%; }
 .chart svg { width: 100%; height: auto; display: block; overflow: visible; }

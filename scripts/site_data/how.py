@@ -10,7 +10,6 @@ the word anywhere under site/, in any file, on any page.
     H2      what that rule costs                h3_hourly, sql/70_export.sql's
                                                 own grouping, recomputed here
     H3      the pipeline                        load_log, vessel_day, du
-    prose   the mirrored grid                   geoToH3 under scripts/ch.sh's pin
     prose   the double-stored messages          sql/60_coverage_index.sql block 6
     prose   the ferries filed as something else sql/44_hidden_fleet.sql
     prose   a radio is not a boat               sql/61_adoption.sql block 1
@@ -59,9 +58,6 @@ PREFETCH_SPEEDUP = 3.6
 # memory cap inside the aggregation; scripts/ch.sh now spills past 6 GB.
 OOM_MILLION = 806
 SPILL_GB = 6
-
-# Copenhagen, as scripts/test_load.sh hard-codes it after S4-redo.
-CPH = (55.6761, 12.5683)
 
 # Column names for the files only this page reads. The ones shared with
 # index.py and storms.py live in site_data/__init__.py, next to the widths
@@ -169,26 +165,6 @@ def pipeline(ch):
             "years": int(years),
             "store_gb": round(sum(f.stat().st_size for f in store.rglob("*")
                                   if f.is_file()) / 2 ** 30)}
-
-
-# -------------------------------------------------------------- bug 1 ----
-def copenhagen(ch):
-    """The cell scripts/test_load.sh hard-codes, and the cell the bug made.
-
-    Handing the pinned geoToH3 its two arguments the wrong way round IS the
-    bug, so the mirrored cell is produced by doing exactly that. The store
-    should hold rows in the first and nothing at all in the second; the assert
-    is here because a page that says so should fail the build if it stops
-    being true.
-    """
-    lat, lon = CPH
-    rows = int(ch("-q", f"SELECT count() FROM h3_hourly "
-                        f"WHERE h3 = geoToH3({lat}, {lon}, 7)")[0][0])
-    mirrored = int(ch("-q", f"SELECT count() FROM h3_hourly "
-                            f"WHERE h3 = geoToH3({lon}, {lat}, 7)")[0][0])
-    assert rows > 0 and mirrored == 0, \
-        f"the grid moved: Copenhagen {rows} rows, its mirror {mirrored}"
-    return rows
 
 
 # -------------------------------------------------------------- bug 2 ----
@@ -315,9 +291,6 @@ def build(ch):
         "prefetch_speedup": str(PREFETCH_SPEEDUP),
         "oom_million": str(OOM_MILLION),
         "spill_gb": str(SPILL_GB),
-        # --- bug 1, the mirrored grid
-        "cph_rows": sp(copenhagen(ch)),
-        "cells": sp(pipe["cells"]),
         # --- bug 2, the messages stored twice
         "cap": sp(CAP_A),
         "cap_seconds": str(REPORT_SECONDS),

@@ -5,7 +5,7 @@
 <title>A year under sail — Seafolk</title>
 <meta name="description" content="Eleven years of Danish ship radio, asked when small boats go out, which day of the week, how far, and what a race day looks like.">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500&family=Karla:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,600;1,8..60,600&family=Karla:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="css/site.css">
 
 <!-- Every number below is written by scripts/build_site_data.py from the store.
@@ -84,6 +84,38 @@
       one, the top of the hill moves without a single person changing their
       plans. What I can say is that the direction never reverses.</p>
 
+    <p>A season is also a place. Here is the same year as water rather than as
+      a calendar, and then the same July ten years apart.</p>
+  </div>
+
+  <figure id="s1-season">
+    <h3>In July the water is full of small boats. In January they are gone</h3>
+    <div class="chart" id="c-s1-season"></div>
+    <figcaption>Two months of one year, on one colour scale, so the pale map is
+      pale for a reason. A hexagon is a patch of sea about the size of a small
+      county — coarse on purpose, so that no single boat can be picked out of
+      one — and it is drawn only where at least five boats were heard that
+      month. The whole of January adds up to less boat-time than one busy July
+      afternoon in the Sound.</figcaption>
+    <p class="source">Danish Maritime Authority AIS archive, through the open
+      dataset · built by
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/build_map_figures.py"><code>scripts/build_map_figures.py</code></a></p>
+  </figure>
+
+  <figure id="s1-decade">
+    <h3>Ten years on, the same water holds several times the boats</h3>
+    <div class="chart" id="c-s1-decade"></div>
+    <figcaption>One July against another, ten years apart, on the same scale.
+      The fleet did not only grow, it spread: the new colour fills in the German
+      Baltic and the Kattegat. Counted the same way as everything else here —
+      boats carrying a radio, and patches of sea shared by at least five of
+      them.</figcaption>
+    <p class="source">Danish Maritime Authority AIS archive, through the open
+      dataset · built by
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/build_map_figures.py"><code>scripts/build_map_figures.py</code></a></p>
+  </figure>
+
+  <div class="prose">
     <p>The week is blunter than the year.</p>
   </div>
 
@@ -270,4 +302,19 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 <script src="js/kit.js"></script>
 <script src="js/season.js"></script>
+<script src="media/land.js"></script>
+<script src="media/maps.js"></script>
+<script src="js/minimap.js"></script>
+<script>
+  // The static map figures (site/js/minimap.js). Missing component, empty
+  // slot — the chapter still opens from file://.
+  if (window.SeafolkMap) try {
+    SeafolkMap.pair(document.getElementById("c-s1-season"),
+      [{ layer: "small_july_2025", colour: "accent" },
+       { layer: "small_january_2025" }]);
+    SeafolkMap.pair(document.getElementById("c-s1-decade"),
+      [{ layer: "small_july_2015" },
+       { layer: "small_july_2025", colour: "accent" }]);
+  } catch (e) { console.error("minimap season", e); }
+</script>
 </html>

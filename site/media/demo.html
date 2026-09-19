@@ -39,8 +39,10 @@
 <main>
   <h1>The sea empties</h1>
   <p class="lede">Test page for <code>site/js/storm-player.js</code>. Open
-     <code>?t=96</code> to land on a given hour of every clip, and
-     <code>?theme=dark</code> to force the dark tokens.</p>
+     <code>?t=96</code> to freeze every clip on a given hour, and
+     <code>?theme=dark</code> to force the dark tokens. Without
+     <code>?t=</code> the clips play by themselves when they scroll into
+     view; click one to pause it.</p>
 
   <section><h2>Storm Pia, 21–22 December 2023</h2><div id="pia"></div></section>
   <section><h2>Storm Malik, 29–30 January 2022</h2><div id="malik"></div></section>
@@ -55,9 +57,13 @@
 <script>
   var q = new URLSearchParams(location.search);
   if (q.get("theme")) document.documentElement.dataset.theme = q.get("theme");
+  // ?t= is how the screenshots land on a chosen hour, so it also switches the
+  // scroll-into-view autoplay off: a shot of a moving clip is a lottery.
+  var frozen = q.has("t");
   var hour = parseInt(q.get("t"), 10) || 0;
   ["pia", "malik", "amy"].forEach(function (k) {
-    SeafolkStorm.mount(document.getElementById(k), k, { hour: hour });
+    SeafolkStorm.mount(document.getElementById(k), k,
+      { hour: hour, autoplay: !frozen });
   });
 </script>
 </body>

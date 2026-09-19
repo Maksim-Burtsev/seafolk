@@ -82,19 +82,11 @@ EXEMPT = {
     # invented counts of 1 to 12 boats, so a reader can see which of them the
     # floor deletes. No fleet behind them; the figure's caption says so.
     r"picture\.rows\[\d+\]\[\d+\]": "invented boats in the drawing of the rule",
-    # index.html I4's sailing line is [day offset, share of the fleet, null] —
-    # the third slot is a head count and it is DELIBERATELY withheld for this
-    # one fleet. What trips the guard is the day offset, which runs -3 … +3.
-    r"storms\.panels\.[^.]+\.lines\.sailing\[\d+\]\[\d+\]":
-        "a day offset and a share; the count in this line is withheld",
     # storms, not boats: how many of the fourteen had a private fleet big
     # enough to draw at all (site_data.sailing_storms).
     r"n\.sailing_storms": "a count of storms",
     # hours, not boats: where the pooled sailing onset falls (site_data.onset).
     r"n\.sailing_hours": "a count of hours",
-    # per cent of the boats heard that covered a mile — a share, printed whole.
-    r"n\.storm_sailing_before": "a percentage",
-    r"n\.storm_sailing_day": "a percentage",
 }
 EXEMPT_RE = re.compile("|".join(f"(?:{p})" for p in EXEMPT)).fullmatch
 

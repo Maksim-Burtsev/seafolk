@@ -155,6 +155,37 @@ queries in `how.py`/`index.py` for `load_log` facts (no SQL file owns them).
 - I5's headline changed with finding 70; T2 leads `storms.html`.
 - No Lighthouse run, no Safari check (headless Chromium only).
 
+### Round 2 — after the owner's first read (2026-09-19, "3 of 5")
+
+His review, condensed into `docs/SITE.md` § Round 2: hairline headline face
+unreadable; a chart with fourteen buttons is a minus; the onset strip was
+incomprehensible; the animation must play by itself, use boat icons and look
+like a sea; the mirrored-grid story is not his to tell in the first person;
+too little material, more maps. Done in one pass (four Opus implementers, this
+session reviewed on screenshots): headlines in Source Serif 4 600 with the
+optical size pinned; I4 is one static chart of all 14 storms (fishing mean
+55 → 16 of every 100 on the storm day, cargo 84 → 82); I5 is five bars — of
+every 100 boats that go out on a usual day, how many stay in on a storm day:
+sailing 83 (3 storms), fishing 63, work boats 22, ferries 3, cargo 3; I7 is
+two bars to scale (43 200 vs 359 899, ×8.3) over a quiet timeline; I8 removed,
+`how.html` keeps one neutral paragraph; the storm player autoplays and loops,
+draws fishing boats as boat glyphs on a tinted sea that darkens with wind
+streaks during the storm, prints the phase and a counter, and ships a `.webm`
+loop per storm; `scripts/build_map_figures.py` + `site/js/minimap.js` +
+`site/media/maps.js` (459 KB, open dataset only, small-boat cells ≥ 5 asserted
+on the written file by `test_site.py`, geography oracle 1.2 km from Drogden)
+give static maps — small boats July vs January and 2015 vs 2025 on one scale,
+cargo lanes, ferry web, fishing grounds, three storm triptychs — placed on
+`index.html` (new section "Who else is out there"), `season.html`,
+`ferries.html`, `storms.html`. The story page's clip is now chosen by the
+whole arc (went in and came back): Amy, not Pia, whose "after" is Christmas.
+`shot.sh` fixed for macOS bash 3.2 (empty array under `set -u`).
+Validate after round 2: `test_build_guards.py` PASS, `test_site.py` PASS
+(`site/media/maps.js: 1448 small-boat cells, 0 of them under five boats`),
+no 9-digit integer under `site/`. No second punchcard pass was run on the
+round-2 diff — it is presentation code over the same guarded data paths; the
+new written-file check is the one design addition.
+
 ### Open questions
 
 Carried: publish + DOI (§ S11); `h3_land`; HSC absent; the hidden passenger

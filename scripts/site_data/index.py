@@ -1,33 +1,34 @@
-"""site/index.html — the story page. Eight charts, one dict.
+"""site/index.html — the story page. Seven charts, one dict.
 
 Every number the page shows is computed here from the store, through the query
-files the chapters already use. One constant is hand-typed; it is marked, and
-it is a line in a log that no query can reach.
+files the chapters already use. Nothing on this page is hand-typed.
 
     chart  what it says                        where the numbers come from
     I1     the season, one line per year       sql/10_season_daily.sql
     I2     small boats tripled, ships did not  sql/61_adoption.sql   block 1
     I3     whose boats these are               sql/80_site_flags.sql
-    I4     one storm, four fleets              sql/50_storm_window.sql
-    I5     who stops first                     sql/50_storm_window.sql + sql/52
-    I7     days that cannot have happened      sql/60_coverage_index.sql block 6
-    I8     Copenhagen in the Arabian Sea       geoToH3 + ne_10m_land.geojson
+    I4     every storm at once, two fleets     sql/52_who_stays.sql  block 1
+    I5     who stays in on a storm day         sql/52_who_stays.sql  block 1
+    I7     a day that cannot happen            sql/60_coverage_index.sql block 6
     I6     the sea empties                     site/media/, rendered by S14
     prose  the ferry nobody can see            sql/44_hidden_fleet.sql   block 3
     prose  what was loaded, and how big        vessel_day, load_log, du
 
-PRIVACY. The private fleet appears here at two grains and no others: a
-store-wide daily head count (I1 — minimum 12 boats, on a January day in 2015,
-measured in sql/20's header) and a store-wide yearly head count (I2 — minimum
-6 137). I4's and I5's sailing lines are one fleet's messages against the same
-fleet a fortnight earlier, never a count, and I4 draws that line only for the
-storms whose reference days had enough boats out to mean anything (S9's floor:
-250 boats that covered a mile, read off sql/52). No MMSI, name, callsign,
-position or track of a private boat is read or written here.
+ROUND 2 (docs/SITE.md § Round 2). The story page carries no buttons: I4 is one
+static chart over every usable storm, and I5's onset strip is gone, replaced by
+five bars. The Arabian-Sea sketch (I8) is off the story and survives as one
+paragraph on how.html.
+
+PRIVACY. The private fleet appears here at two head-count grains and no others:
+a store-wide daily count (I1 — minimum 12 boats, on a January day in 2015,
+measured in sql/20's header) and a store-wide yearly count (I2 — minimum
+6 137). I4 draws public fleets only. I5's sailing bar is a share divided by a
+share, pooled over the three storms whose reference days had enough boats out
+to mean anything (S9's floor: 250 boats that covered a mile, read off sql/52),
+and no count behind it reaches the page. No MMSI, name, callsign, position or
+track of a private boat is read or written here.
 """
 import datetime
-import json
-import math
 import os
 import statistics
 from collections import defaultdict
@@ -38,19 +39,12 @@ from . import (A1, A1_INT, A4, B6, B6_INT, CAP_A, D1, D1_INT, FLEET_KEY,
                hourly_series, media_key, onset, onset_words, private_count,
                sailing_storms, sp, typed)
 
-# THE ONE HAND-TYPED NUMBER ON THE PAGE. The S4-redo reload ran 2026-09-06
-# 14:56:59 -> 2026-09-08 01:50:30 UTC = 34 h 54 min, docs/STATUS.md § S4-redo.
-# It is a wall clock in a log, not a column in any table.
-RELOAD_HOURS = 35
-
-# Copenhagen, and the first store's idea of Copenhagen. ClickHouse changed
-# geoToH3's argument order in 25.5 — it takes (lat, lon) now and took
-# (lon, lat) before — and the swap does not error, it mirrors every position
-# across lat = lon. mirror() computes the mirrored point by handing the pinned
-# function its arguments the wrong way round, which is what the bug did.
-CPH = (55.6761, 12.5683)
-
 FL = "year flag share".split()
+
+# Chart I4's x axis: the three days before a storm's FIRST date, that date, and
+# the three days after. A storm that lasted two days has its second day inside
+# the window like any other day; the caption says the alignment is on the first.
+OFFSETS = list(range(-WINDOW_DAYS, WINDOW_DAYS + 1))
 
 
 def mean7(days, values):
@@ -177,13 +171,8 @@ def flags(ch):
 
 # ---------------------------------------------------------------- I4, I5 ----
 def storms(ch):
-    """sql/50 + sql/52 -> chart I5, the ferry timetable's cost, and the storms
-    whose sailing fleet is big enough to draw.
-
-    I5 pools the storms: per fleet, the median hour at which its movement
-    halves, and on how many of the storms it halved at all. That one is HOURLY,
-    because "who goes in first" is a question about hours; chart I4 next door
-    counts whole days, because "how many went out" is a question about days.
+    """sql/50 + sql/52 -> charts I4 and I5, the ferry timetable's cost, and the
+    hour each fleet goes in.
 
     The storm-day count is read off sql/50's window rather than off storms.csv:
     the window runs from 72 h before the first date to 72 h after the last, so
@@ -191,12 +180,11 @@ def storms(ch):
     store, so only its three run-up days survive and the storm itself was never
     observed. That is what drops it, rather than a name in a list.
     """
-    rows, off, start = [], defaultdict(set), {}
+    rows, off = [], defaultdict(set)
     for r in ch("50_storm_window.sql"):
         row = typed(W, r, W_INT)
         rows.append(row)
         off[row["storm"]].add(row["offset_h"])
-        start[row["storm"]] = row["start_day"]
     ndays = {}
     for storm, o in off.items():
         assert min(o) == -72 and len(o) == max(o) + 73, \
@@ -210,102 +198,124 @@ def storms(ch):
     # the hour each fleet halves — both from site_data, because site/storms.html
     # asks the same two questions and the two pages have to give one answer.
     sailing_ok = sailing_storms(day_rows, ndays)
-    series = hourly_series(rows)
-    onsets = onset(series, ndays, sailing_ok)
+    onsets = onset(hourly_series(rows), ndays, sailing_ok)
 
-    ferry = {}
-    for storm in observed:
-        n = ndays[storm]
-        rs = [r for r in rows if r["storm"] == storm and r["mobile"] == "Class A"
-              and r["ship_group"] == "passenger" and 0 <= r["offset_h"] < 24 * n]
-        ferry[storm] = (sum(r["ferry_crossings"] for r in rs),
-                        round(sum(r["ref_ferry_crossings"] or 0 for r in rs)))
+    # The ferry timetable, POOLED the way every other number in Act 2 now is:
+    # departures on the storms' own days against the same days a fortnight
+    # away, summed over every observed storm rather than read off one.
+    now = ref = 0
+    for r in rows:
+        if (r["mobile"] == "Class A" and r["ship_group"] == "passenger"
+                and 0 <= r["offset_h"] < 24 * ndays.get(r["storm"], 0)):
+            now += r["ferry_crossings"]
+            ref += r["ref_ferry_crossings"] or 0
 
-    # `of` is per fleet because the sailing fleet is measured over fewer storms
-    # than the rest, and a row reading "3 of 14" would lie about what was seen.
-    strip = {"of": len(observed), "rows": [
-        {"fleet": FLEET_KEY[g], "label": FLEET_NAME[g], "storms": len(onsets[g]),
-         "of": len(sailing_ok) if g == "leisure" else len(observed),
-         "hour": round(statistics.median(onsets[g])) if onsets[g] else None}
-        for g in STOP_ORDER]}
-    panels = daily_panels(day_rows, ndays, start, sailing_ok)
-    default = pick_default(panels)
-    return ({"default": default, "media": media_key(default),
-             "sailing_shown": sailing_ok, "panels": panels},
-            strip, ferry, onsets)
+    curves = storm_curves(day_rows, ndays)
+    return (curves, stayed_in(day_rows, ndays, sailing_ok),
+            (now, round(ref)), onsets, len(observed))
 
 
 # ------------------------------------------------------------------- I4 ----
-def daily_panels(day_rows, ndays, start, sailing_ok):
+def storm_curves(day_rows, ndays):
     """sql/52 block 1 -> chart I4: of every hundred boats the radio heard that
-    day, how many went somewhere.
+    day, how many went somewhere — every storm, and the mean of them.
 
     "Went somewhere" is sql/52's definition and it is an exact count, not a
     message rate: a vessel whose positions that day add up to at least one
     nautical mile. Both halves of the fraction are `uniqExact` over the same
     day's own fleet, so there is no reference fortnight in this chart at all —
-    the earlier version divided each hour by the same hour two weeks earlier,
+    an earlier version divided each hour by the same hour two weeks earlier,
     and a reader cannot read a baseline that is itself weather.
 
-    `usual` is kept per fleet for the same storm's reference days, and it is
-    used to CHOOSE the default panel, not drawn: a panel whose run-up already
-    sits far below the fleet's ordinary level has no fall left to show.
-
-    PRIVACY. The sailing line carries a SHARE AND NO COUNT, and only for the
-    storms that clear S9's floor. Every public fleet carries its head count too,
-    because a ferry and a coaster are public (CLAUDE.md) and the number makes
-    the readout useful.
+    A storm is in the chart only if BOTH fleets have all seven days of the
+    window, so the two means are drawn over one set of storms and a hole in
+    the calendar cannot make one of them step. Public fleets only.
     """
-    want = {"fishing": "Class A", "cargo": "Class A", "passenger": "Class A",
-            "other": "Class A", "leisure": "Class B"}
-    by = defaultdict(list)
+    by = defaultdict(dict)
     for r in day_rows:
         g = r["ship_group"]
-        if want.get(g) != r["mobile"] or r["storm"] not in ndays:
+        if (g in ("fishing", "cargo") and r["mobile"] == "Class A"
+                and ndays.get(r["storm"], 0) > 0 and r["offset_d"] in OFFSETS):
+            by[(g, r["storm"])][r["offset_d"]] = round(100 * r["share_moved"], 1)
+
+    whole = sorted({s for _g, s in by
+                    if all(len(by.get((g, s), {})) == len(OFFSETS)
+                           for g in ("fishing", "cargo"))})
+    assert len(whole) >= 5, \
+        f"only {len(whole)} storms have a whole window — a mean of that is one storm"
+
+    out = {"offsets": OFFSETS, "storms": whole,
+           "media": media_key(deepest(by, whole))}
+    for g in ("fishing", "cargo"):
+        out[FLEET_KEY[g]] = {
+            "mean": [[o, round(statistics.mean(by[(g, s)][o] for s in whole), 1)]
+                     for o in OFFSETS],
+            "each": [[[o, by[(g, s)][o]] for o in OFFSETS] for s in whole]}
+    return out
+
+
+def deepest(by, whole):
+    """Which storm chart I6 plays: among the storms S14 rendered a clip for,
+    the one whose fishing fleet shows the whole arc — went in AND came back:
+    the smaller of (day -1 minus the storm day) and (day +2 minus the storm
+    day), maximised. Depth alone picked Pia, whose "after" is Christmas, so the
+    sea on screen never filled again and the headline above it was false.
+    Chosen from the data, so a clip added later can win without an edit here."""
+    def arc(s):
+        d = by[("fishing", s)]
+        return min(d[-1] - d[0], d[2] - d[0])
+    return max(clips(whole).values(), key=arc)
+
+
+# ------------------------------------------------------------------- I5 ----
+def stayed_in(day_rows, ndays, sailing_ok):
+    """sql/52 block 1 -> chart I5: of every hundred boats of a fleet that go out
+    on a usual day, how many stayed in on a storm day.
+
+    One number per fleet, pooled over the storms: sum the boats that moved and
+    the boats heard across every storm's own dates, do the same for those days'
+    reference days a fortnight away, and the answer is
+
+        1 - (moved / heard on the storm days) / (the same on the usual days)
+
+    Pooled rather than averaged per storm, so a small storm does not weigh the
+    same as a large one. A row is dropped from both halves unless the day has a
+    reference day at all, which keeps numerator and denominator over one set of
+    days.
+
+    PRIVACY. The sailing fleet is measured over the three storms that clear
+    S9's floor and NOTHING BUT THE SHARE LEAVES THIS FUNCTION — the counts it
+    is divided from stay here, and go through private_count on the way past.
+    """
+    tot = defaultdict(lambda: [0, 0, 0.0, 0.0, set()])
+    for r in day_rows:
+        g = r["ship_group"]
+        if r["mobile"] != ("Class B" if g == "leisure" else "Class A"):
+            continue
+        if not 0 <= r["offset_d"] < ndays.get(r["storm"], 0):
             continue
         if g == "leisure" and r["storm"] not in sailing_ok:
             continue
-        by[(r["storm"], g)].append(r)
+        if r["ref_share_moved"] is None or not r["ref_heard"]:
+            continue
+        t = tot[g]
+        t[0] += r["moved"]
+        t[1] += r["heard"]
+        t[2] += r["ref_moved"]
+        t[3] += r["ref_heard"]
+        t[4].add(r["storm"])
 
-    panels = {}
-    for (storm, g), rs in by.items():
-        rs.sort(key=lambda r: r["offset_d"])
-        p = panels.setdefault(storm, {"days": ndays[storm], "start": start[storm],
-                                      "lines": {}, "usual": {}})
-        p["lines"][FLEET_KEY[g]] = [
-            [r["offset_d"], round(100 * r["share_moved"], 1),
-             None if g == "leisure" else r["heard"]] for r in rs]
-        ref = [r["ref_share_moved"] for r in rs if r["ref_share_moved"] is not None]
-        p["usual"][FLEET_KEY[g]] = round(100 * statistics.mean(ref), 1) if ref else None
-    return {s: p for s, p in sorted(panels.items()) if ndays[s] > 0}
-
-
-def drop(panel):
-    """How far the fishing fleet fell, and whether the days before the storm
-    were an ordinary week for it.
-
-    `pre` is the mean over the three days before; `usual` is the same fleet on
-    the reference days; `low` is the worst day of the storm itself.
-    """
-    pts = panel["lines"]["fishing"]
-    pre = statistics.mean(v for o, v, _h in pts if o < 0)
-    low = min(v for o, v, _h in pts if 0 <= o < panel["days"])
-    return {"pre": pre, "low": low, "usual": panel["usual"]["fishing"],
-            "fall": pre - low}
-
-
-def pick_default(panels):
-    """Which storm chart I4 opens on — chosen from the data, not by hand.
-
-    The candidates are the storms S14 rendered an animation for, because chart
-    I6 mounts that animation and Act 2 is written about the same storm. Among
-    them the best panel is the one with the LARGEST fall in the fishing fleet
-    whose run-up still sits near what that fleet ordinarily does, so that the
-    fall on screen is the storm and not a fortnight of December.
-    """
-    scored = {s: drop(panels[s]) for s in clips(panels).values()}
-    return max(scored, key=lambda s: scored[s]["fall"]
-               - abs(scored[s]["pre"] - scored[s]["usual"]))
+    rows = []
+    for g in STOP_ORDER:
+        moved, heard, ref_moved, ref_heard, seen = tot[g]
+        if g == "leisure":
+            private_count(moved, "sql/52 pooled: small boats that moved")
+            private_count(heard, "sql/52 pooled: small boats heard")
+        rows.append({"fleet": FLEET_KEY[g], "label": FLEET_NAME[g],
+                     "storms": len(seen),
+                     "value": round(100 * (1 - (moved / heard)
+                                           / (ref_moved / ref_heard)), 1)})
+    return sorted(rows, key=lambda r: -r["value"])
 
 
 # ------------------------------------------------------------------- I7 ----
@@ -323,56 +333,10 @@ def impossible(ch):
              "months": [[r["mon"][:7],
                          round(100 * r["vd_over_cap"] / r["vessel_days"], 3),
                          r["dup_month"]] for r in rows],
-             "worst": {"month": worst["mon"][:7],
+             # the two bars: what the radio can send in a day, and the most one
+             # ship's day in this archive actually holds.
+             "worst": {"month": worst["mon"][:7], "msgs": worst["max_msgs"],
                        "times": round(worst["max_msgs"] / CAP_A, 1)}}, rows, worst)
-
-
-# ------------------------------------------------------------------- I8 ----
-def mirror(ch):
-    """Where the first store put Copenhagen, computed rather than asserted.
-
-    scripts/ch.sh pins geoToH3 to (lat, lon). Handing it (lon, lat) IS the bug,
-    so the mirrored cell is produced by doing exactly that, and h3ToGeo gives
-    back its centre. Both points then go on a sketch of the world.
-    """
-    lat, lon = CPH
-    got = ch("-q", f"SELECT h3ToGeo(geoToH3({lon}, {lat}, 5)), "
-                   f"h3ToGeo(geoToH3({lat}, {lon}, 5))")[0]
-    wrong, right = ([round(float(v), 2) for v in g.strip("()").split(",")]
-                    for g in got)
-    assert abs(right[0] - lat) < 0.5 and abs(right[1] - lon) < 0.5, \
-        f"the pinned geoToH3 no longer round-trips Copenhagen: {right}"
-    return {"cph": right, "mirrored": wrong, "land": coastline()}
-
-
-def coastline(step=2):
-    """A world coastline small enough to inline: Natural Earth 1:10 m land,
-    10 MB on disk, snapped to a `step`-degree grid — 75 rings, 5 783 points,
-    53 KB of JSON.
-
-    Snapping, rather than Douglas-Peucker, is the whole simplification: round
-    every vertex to the grid, drop the ones that then repeat, drop a ring left
-    with fewer than four points or spanning less than six degrees in total.
-    Holes go with them. Chart I8's subject is two dots and the distance between
-    them; it needs the continents recognisable and nothing more.
-    """
-    src = json.loads((ROOT / "data" / "context" / "ne_10m_land.geojson").read_text())
-    out = []
-    for feature in src["features"]:
-        geom = feature["geometry"]
-        polys = (geom["coordinates"] if geom["type"] == "MultiPolygon"
-                 else [geom["coordinates"]])
-        for poly in polys:
-            ring, prev = [], None
-            for lon, lat in poly[0]:
-                p = [round(lon / step) * step, round(lat / step) * step]
-                if p != prev:
-                    ring.append(p)
-                    prev = p
-            xs, ys = [p[0] for p in ring], [p[1] for p in ring]
-            if len(ring) >= 4 and max(xs) - min(xs) + max(ys) - min(ys) >= 6:
-                out.append(ring)
-    return out
 
 
 # ----------------------------------------------------------------- prose ----
@@ -437,52 +401,39 @@ def hidden_ship(ch):
             "type": worst["type"]}
 
 
-def km_apart(a, b):
-    """Great-circle kilometres between two (lat, lon) points — how far the
-    mirrored grid moved Copenhagen, so the page does not have to say
-    "a few hundred miles" and mean six thousand kilometres."""
-    p1, p2 = math.radians(a[0]), math.radians(b[0])
-    d = math.radians(b[1] - a[1])
-    return round(6371 * math.acos(min(1, math.sin(p1) * math.sin(p2)
-                                      + math.cos(p1) * math.cos(p2) * math.cos(d))))
-
-
 # ------------------------------------------------------------------ page ----
 def build(ch):
     charts = {"season": season(ch)}
     charts["fleet"], win = fleet(ch)
     charts["flags"] = flags(ch)
-    charts["storms"], charts["onset"], ferry, onsets = storms(ch)
+    charts["storms"], charts["stayed"], ferry, onsets, observed = storms(ch)
     charts["impossible"], months, worst = impossible(ch)
-    charts["mirror"] = mirror(ch)
     hid, ship, size = hidden(ch), hidden_ship(ch), scale(ch)
 
     peak = max(charts["season"]["2026"], key=lambda p: p[1])[1]
     first = max(charts["season"]["2015"], key=lambda p: p[1])[1]
 
-    # Act 2 is written about whichever storm chart I4 opens on, so its numbers
-    # come out of that panel rather than being typed for a storm that may not
-    # be the one on screen.
-    name = charts["storms"]["default"]
-    panel = charts["storms"]["panels"][name]
-    shape = drop(panel)
-    day0 = {f: next(v for o, v, _h in pts if o == 0)
-            for f, pts in panel["lines"].items()}
-    before = {f: next(v for o, v, _h in pts if o == -1)
-              for f, pts in panel["lines"].items()}
-    now, ref = ferry[name]
-    start = datetime.date.fromisoformat(panel["start"])
-    end = start + datetime.timedelta(days=panel["days"] - 1)
-    when = (f"{start.day}\u2013{end:%-d %B %Y}" if panel["days"] > 1
-            else f"{start:%-d %B %Y}")
-    pia_low = drop(charts["storms"]["panels"]["Pia"])["low"]
+    # Act 2 is written about the POOLED chart, so its numbers are read off the
+    # two mean lines that are actually on screen rather than off one storm
+    # somebody chose. Pia is the one storm named in the prose and its own line
+    # is read out of the same block the chart draws.
+    S = charts["storms"]
+    mean = {f: dict(S[f]["mean"]) for f in ("fishing", "cargo")}
+    pia = dict(S["fishing"]["each"][S["storms"].index("Pia")])
+    now, ref = ferry
+    bar = {r["fleet"]: r for r in charts["stayed"]}
+    # Act 2 says "every one of them" about the storms in chart I4. That is true
+    # only while every observed storm has a whole seven-day window; if one ever
+    # loses a day, the sentence has to change and this stops the build first.
+    assert len(S["storms"]) == observed, (
+        f'chart I4 draws {len(S["storms"])} of {observed} observed storms — the '
+        f'page says "every one of them"; give the count a data-n span again')
 
     # `dup_month` flags 2015-08 and 2015-09, the other duplication event, which
     # this same ceiling test finds unaided — that is what validates the test
     # (finding 59) and it is why those two months are not part of "before".
     clean = [r for r in months if r["mon"] < "2023-01-01" and not r["dup_month"]]
     recent = [r for r in months if r["mon"] >= "2023-12-01"]
-    row = {r["fleet"]: r for r in charts["onset"]["rows"]}
     sailing_hours, sailing_when = onset_words(onsets["leisure"])
     flag = charts["flags"]["shares"]
 
@@ -514,41 +465,29 @@ def build(ch):
         "norwegian_2026": f"{flag['Norwegian'][-1]:.0f}",
         "dutch_2026": f"{flag['Dutch'][-1]:.0f}",
         # I4, I5, I6 — the storms
-        "storm_count": str(charts["onset"]["of"]),
-        "storm_window_days": str(WINDOW_DAYS),
-        "storm_name": name,
-        "storm_when": when,
-        "storm_fishing_first": f"{panel['lines']['fishing'][0][1]:.0f}",
-        "storm_fishing_low": f"{shape['low']:.0f}",
-        "storm_cargo_day": f"{day0['cargo']:.0f}",
-        "storm_cargo_usual": f"{panel['usual']['cargo']:.0f}",
-        "storm_sailing_before": f"{before['sailing']:.0f}",
-        "storm_sailing_day": f"{day0['sailing']:.0f}",
+        "storm_count": str(observed),
+        "storm_fishing_before": f"{mean['fishing'][-WINDOW_DAYS]:.0f}",
+        "storm_fishing_day": f"{mean['fishing'][0]:.0f}",
+        "storm_cargo_before": f"{mean['cargo'][-WINDOW_DAYS]:.0f}",
+        "storm_cargo_day": f"{mean['cargo'][0]:.0f}",
+        "pia_fishing_low": f"{min(pia.values()):.0f}",
+        "stayed_fishing": f"{bar['fishing']['value']:.0f}",
+        "stayed_cargo": f"{bar['cargo']['value']:.0f}",
         "storm_ferry_now": sp(now),
         "storm_ferry_ref": sp(ref),
         "storm_ferry_share": f"{100 * now / ref:.0f}",
-        "pia_fishing_low": f"{pia_low:.0f}",
-        "cargo_storms": str(row["cargo"]["storms"]),
-        "ferry_hours": str(row["ferries"]["hour"]),
-        "ferry_storms": str(row["ferries"]["storms"]),
-        "sailing_storms": str(len(charts["storms"]["sailing_shown"])),
         # how many hours, and which side of the storm's first midnight — both
         # from site_data.onset_words, so this page and site/storms.html cannot
         # say "three hours before" and "about six hours in" about one fleet.
         "sailing_hours": sailing_hours,
         "sailing_when": sailing_when,
-        # I7 — the impossible days
+        # I7 — a day that cannot happen
         "cap": sp(CAP_A),
         "cap_seconds": str(REPORT_SECONDS),
         "over_cap_before": f"{100 * max(r['vd_over_cap'] / r['vessel_days'] for r in clean):.2f}",
         "over_cap_now": f"{100 * max(r['vd_over_cap'] / r['vessel_days'] for r in recent):.1f}",
+        "worst_msgs": sp(worst["max_msgs"]),
         "worst_times": f"{worst['max_msgs'] / CAP_A:.1f}",
-        # I8 — the mirrored grid
-        "reload_hours": str(RELOAD_HOURS),
-        "mirror_lat": f"{charts['mirror']['mirrored'][0]:.0f}",
-        "mirror_lon": f"{charts['mirror']['mirrored'][1]:.0f}",
-        "mirror_km": sp(km_apart(charts["mirror"]["cph"],
-                                 charts["mirror"]["mirrored"])),
         # the ferries nobody can see
         "hidden_share": f"{100 * hid['hidden_share']:.0f}",
         "hidden_fleet": sp(hid["fleet"]),

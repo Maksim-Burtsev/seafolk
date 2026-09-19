@@ -5,7 +5,7 @@
 <title>Lifelines — island ferries in the Danish archive</title>
 <meta name="description" content="Thirty-five Danish island ferry lines, heard through ship radio: winter timetables, storms, and the crossing a battery ferry made shorter.">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500&family=Karla:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,600;1,8..60,600&family=Karla:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="css/site.css">
 
 <!-- Every number below is written by scripts/build_site_data.py from the store.
@@ -40,6 +40,25 @@
 
     <p>Nobody archives an old timetable, so a day is never judged against a schedule. It is judged against the same line on the same weekday in the same half of the year, which turns the Wednesday the Anholt ferry never sails into an ordinary day instead of a cancellation.</p>
 
+    <p>Drawn on a map, the whole chapter is one picture.</p>
+  </div>
+
+  <figure id="f0">
+    <h3>The ferries draw lines nobody else sails</h3>
+    <div class="chart" id="c-f0"></div>
+    <figcaption>One July of passenger ships under way, added up on patches of
+      sea. Every other fleet in this archive makes clouds; this one makes
+      threads, because a ferry runs the same crossing all day and never
+      anywhere else. The long threads are the international routes — Rødby to
+      Puttgarden, Rønne to Ystad, Frederikshavn to Gothenburg, Hirtshals north
+      to Norway. Everything short and stubby is an island line, and the rest of
+      this chapter is about those.</figcaption>
+    <p class="source">Danish Maritime Authority AIS archive, through the open
+      dataset · built by
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/build_map_figures.py"><code>scripts/build_map_figures.py</code></a></p>
+  </figure>
+
+  <div class="prose">
     <p>Start with one island. Læsø lies out in the Kattegat,
       <span data-n="laeso_min">90</span> minutes from Frederikshavn by ship, and
       the boat is how you get there.</p>
@@ -175,4 +194,14 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 <script src="js/kit.js"></script>
 <script src="js/ferries.js"></script>
+<script src="media/land.js"></script>
+<script src="media/maps.js"></script>
+<script src="js/minimap.js"></script>
+<script>
+  // The map figure is a component of its own (site/js/minimap.js). If it is
+  // not there the slot stays empty and the chapter still opens from file://.
+  if (window.SeafolkMap) try {
+    SeafolkMap.draw(document.getElementById("c-f0"), { layer: "ferries_2025" });
+  } catch (e) { console.error("minimap c-f0", e); }
+</script>
 </html>

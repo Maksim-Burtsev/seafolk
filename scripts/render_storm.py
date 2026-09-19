@@ -11,6 +11,7 @@
 
 Writes, per storm:
     site/media/storm-<key>.mp4   1280x720 H.264, ~24 s, the clip for the page
+    site/media/storm-<key>.webm  the same clip at 640 px, for posting
     site/media/storm-<key>.js    the same frames for site/js/storm-player.js
 and once:
     site/media/land.js           the coastline, clipped to the box
@@ -22,7 +23,7 @@ fleets (cargo, ferries, fishing), already privacy-tested by
 is no small-boat data in this piece at all, so nothing here can leak a private
 vessel; the export's k >= 5 floor is upstream of everything below.
 
-WHAT A DOT MEANS.  One dot is one hexagon of sea about seven kilometres across
+WHAT A BOAT MEANS.  One mark is one hexagon of sea about seven kilometres across
 (H3 resolution 6, the published resolution-7 cells folded up one level) in which
 that kind of boat sent at least one message while under way during that hour.
 So the counter counts PLACES, not boats: the dataset has no distinct-vessel
@@ -60,6 +61,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.collections import PolyCollection
+from matplotlib.colors import LinearSegmentedColormap
+import matplotlib.patheffects as pe
+from matplotlib.path import Path as MPath
 
 ROOT = Path(__file__).resolve().parent.parent
 MEDIA = ROOT / "site" / "media"
@@ -78,26 +82,41 @@ MAP_ASPECT = (BBOX[2] - BBOX[0]) * math.cos(math.radians(LAT0)) / (BBOX[3] - BBO
 GROUND, SURFACE, HAIRLINE = "#e9eeef", "#f7f9f9", "#cfdadc"
 INK, LABEL, ACCENT, ACCENT_TX = "#0f1a1d", "#55676c", "#eb6834", "#b8441a"
 WORKING, REF = "#7d8f94", "#a8b8bc"
+# --surface is a card colour, not a sea. These four are the map's own, and the
+# same four are in site/js/storm-player.js.
+SEA_TOP, SEA_BOT, LAND_FILL, COAST = "#dceaef", "#b4cdd8", "#f1f4f3", "#9fb3ba"
 
-# ship_group -> (reader's word, dot colour, draw order, dot size).
-# Cargo is the palest of the three because there are five times as many of its
-# dots; --ref is too faint to carry a dot in the dark theme, so the ferries
-# take --label, which reads in both. The same three in site/js/storm-player.js.
+# ship_group -> (reader's word, colour, draw order, marker size).
+# Fishing carries the story, so it is the accent and the only fleet drawn as a
+# boat; cargo and the ferries are faint marks that keep the lanes visible
+# without competing. The same three in site/js/storm-player.js.
 FLEETS = {
-    "cargo": ("Cargo ships", WORKING, 0, 15),
-    "passenger": ("Ferries", LABEL, 1, 15),
-    "fishing": ("Fishing boats", ACCENT, 2, 19),
+    "cargo": ("Cargo ships", WORKING, 0, 6),
+    "passenger": ("Ferries", LABEL, 1, 7),
+    "fishing": ("Fishing boats", ACCENT, 2, 118),
 }
 DRAW_ORDER = sorted(FLEETS, key=lambda g: FLEETS[g][2])
+ALPHAS = {"cargo": 0.34, "passenger": 0.45, "fishing": 0.95}
 
 CLAIM = "Fishing boats go in. Cargo ships carry on."
 
-# Enough of a map for a stranger to know which sea this is. Quiet, on land
-# where there are no dots, and never on the point of the picture.
+# A hull with a cabin, bow to the right, in units of the icon's length.
+# matplotlib's y is up, so the deck is positive where the canvas player's is
+# negative; the shape is the same one.
+BOAT = MPath(
+    [(-0.52, -0.06), (0.55, -0.06), (0.30, -0.34), (-0.40, -0.34), (0, 0),
+     (-0.16, 0.30), (0.14, 0.30), (0.19, -0.06), (-0.21, -0.06), (0, 0)],
+    [MPath.MOVETO, MPath.LINETO, MPath.LINETO, MPath.LINETO, MPath.CLOSEPOLY,
+     MPath.MOVETO, MPath.LINETO, MPath.LINETO, MPath.LINETO, MPath.CLOSEPOLY],
+)
+
+# Enough of a map for a stranger to know which sea this is, and which coast.
+# (lon, lat, name, is a town). Quiet, and never on the point of the picture.
 PLACES = [
-    (4.3, 54.6, "NORTH SEA"), (8.6, 58.45, "SKAGERRAK"),
-    (15.3, 54.3, "BALTIC SEA"), (9.2, 56.3, "DENMARK"),
-    (14.6, 57.9, "SWEDEN"), (10.2, 53.5, "GERMANY"),
+    (10.58, 57.72, "Skagen", 1), (8.62, 57.12, "Hanstholm", 1),
+    (8.45, 55.47, "Esbjerg", 1), (12.57, 55.68, "Copenhagen", 1),
+    (14.92, 55.13, "Bornholm", 0),
+    (11.5, 56.75, "KATTEGAT", 0), (4.9, 55.4, "NORTH SEA", 0),
 ]
 
 # Windows are the storm's DMI dates plus three days on each side, except Pia,
@@ -399,7 +418,7 @@ def build_figure(storm: dict, data: dict, land):
     ax = fig.add_axes(
         [px(W - 44 - mw, W), px(720 - 638, H), px(mw, W), px(mh, H)]
     )
-    ax.set_facecolor(SURFACE)
+    ax.set_facecolor(SEA_BOT)
     ax.set_xlim(BBOX[0], BBOX[2])
     ax.set_ylim(BBOX[1], BBOX[3])
     ax.set_aspect(1 / math.cos(math.radians(LAT0)))
@@ -407,51 +426,80 @@ def build_figure(storm: dict, data: dict, land):
         s.set_visible(False)
     ax.set_xticks([])
     ax.set_yticks([])
-    # --ground against --surface is a four-per-cent difference: on a page that
-    # is a card edge, on a map it is an invisible coastline. Land takes the
-    # next token up so the sea is legibly the sea.
+    # Water, as a soft vertical gradient. A 64-row image stretched over the
+    # box; no numpy import needed for a list of lists.
+    water = LinearSegmentedColormap.from_list("sea", [SEA_BOT, SEA_TOP])
+    ax.imshow([[i / 63] for i in range(64)], cmap=water, vmin=0, vmax=1,
+              extent=(BBOX[0], BBOX[2], BBOX[1], BBOX[3]), aspect="auto",
+              interpolation="bilinear", zorder=0)
     ax.add_collection(
-        PolyCollection(land, facecolors=HAIRLINE, edgecolors=REF, linewidths=0.6)
+        PolyCollection(land, facecolors=LAND_FILL, edgecolors=COAST,
+                       linewidths=0.9, zorder=1)
     )
-    for lon, lat, text in PLACES:
-        ax.text(lon, lat, text, color=LABEL, fontsize=8.5, alpha=0.8,
-                ha="center", va="center", zorder=2)
+    # Above the boats, with a soft halo: a place name a trawler sits on top of
+    # is not a place name.
+    halo = [pe.withStroke(linewidth=2.6, foreground=SURFACE, alpha=0.85)]
+    for lon, lat, text, town in PLACES:
+        if town:
+            ax.plot([lon], [lat], "o", ms=3, color=LABEL, alpha=0.9, zorder=7,
+                    path_effects=halo)
+            ax.text(lon, lat + 0.13, text, color=LABEL, fontsize=9,
+                    ha="center", va="bottom", zorder=7, path_effects=halo)
+        else:
+            ax.text(lon, lat, " ".join(text), color=LABEL, fontsize=8.5,
+                    alpha=0.7, ha="center", va="center", zorder=7,
+                    path_effects=halo)
+
+    # The storm itself: the whole sea one shade darker while it blows.
+    gale = ax.add_patch(plt.Rectangle(
+        (BBOX[0], BBOX[1]), BBOX[2] - BBOX[0], BBOX[3] - BBOX[1],
+        facecolor="#1b333f", alpha=0.0, lw=0, zorder=2.5))
 
     dots = {}
     for g in DRAW_ORDER:
         _, colour, _, size = FLEETS[g]
         dots[g] = ax.scatter(
             [], [], s=size, c=colour, linewidths=0, zorder=3 + FLEETS[g][2],
-            alpha=0.55 if g == "cargo" else 0.8 if g == "passenger" else 0.95,
+            alpha=ALPHAS[g], marker=BOAT if g == "fishing" else "o",
         )
+    # A hairline of sea around every boat, so a crowded fishing ground reads as
+    # a crowd of boats instead of as one orange blob.
+    dots["fishing"].set_edgecolors("#ffffff")
+    dots["fishing"].set_linewidths(0.45)
 
-    # --- left column
+    # --- left column: the point, in words, in the picture
     x = px(44, W)
-    fig.text(x, px(720 - 70, H), f"Storm {storm['name']}", color=INK,
-             fontsize=31, fontweight="bold", va="baseline")
-    fig.text(x, px(720 - 104, H), storm["dates"], color=LABEL, fontsize=17,
-             va="baseline")
-    fig.add_artist(plt.Line2D([x, px(420, W)], [px(720 - 130, H)] * 2,
-                              color=HAIRLINE, lw=1))
-    clock = fig.text(x, px(720 - 176, H), "", color=INK, fontsize=22,
+    fig.text(x, px(720 - 52, H), f"Storm {storm['name']} · {storm['dates']}",
+             color=LABEL, fontsize=12.5, va="baseline")
+    phase = fig.text(x, px(720 - 96, H), "", color=INK, fontsize=30,
+                     fontweight="bold", va="baseline")
+    clock = fig.text(x, px(720 - 128, H), "", color=LABEL, fontsize=16,
                      family="monospace", va="baseline")
-    fig.text(x, px(720 - 212, H), CLAIM, color=LABEL, fontsize=14, va="baseline")
+    fig.add_artist(plt.Line2D([x, px(420, W)], [px(720 - 152, H)] * 2,
+                              color=HAIRLINE, lw=1))
 
     nums = {}
-    rows = {"fishing": (300, 18, 34), "passenger": (368, 16, 24),
-            "cargo": (424, 16, 24)}
-    for g, (y, lsz, nsz) in rows.items():
+    nums["fishing"] = fig.text(x, px(720 - 238, H), "", color=ACCENT,
+                               fontsize=58, fontweight="bold",
+                               family="monospace", va="baseline")
+    fig.text(x, px(720 - 268, H),
+             "patches of sea with\nfishing boats moving",
+             color=LABEL, fontsize=13.5, va="top", linespacing=1.5)
+    fig.text(x, px(720 - 358, H), CLAIM, color=INK, fontsize=15,
+             va="baseline")
+
+    for g, y in (("passenger", 402), ("cargo", 440)):
         name, colour, _, _ = FLEETS[g]
-        fig.text(x, px(720 - y, H), "●", color=colour, fontsize=13,
+        fig.text(x, px(720 - y, H), "●", color=colour, fontsize=12,
                  va="baseline")
-        fig.text(x + px(22, W), px(720 - y, H), name, color=INK, fontsize=lsz,
-                 va="baseline")
-        nums[g] = fig.text(px(420, W), px(720 - y, H), "", color=INK,
-                           fontsize=nsz, family="monospace", ha="right",
+        fig.text(x + px(22, W), px(720 - y, H), name, color=LABEL,
+                 fontsize=14, va="baseline")
+        nums[g] = fig.text(px(420, W), px(720 - y, H), "", color=LABEL,
+                           fontsize=18, family="monospace", ha="right",
                            va="baseline")
 
-    fig.text(x, px(720 - 480, H),
-             "Each dot is a patch of sea about seven kilometres\n"
+    fig.text(x, px(720 - 490, H),
+             "Each boat is a patch of sea about seven kilometres\n"
              "across where that kind of boat was under way\n"
              "in that hour. The number counts the patches.",
              color=LABEL, fontsize=11.5, va="top", linespacing=1.6)
@@ -495,7 +543,7 @@ def build_figure(storm: dict, data: dict, land):
     cursor = tl.axvline(0, color=INK, lw=1.3, zorder=5)
     head, = tl.plot([0], [ys[0]], "o", ms=4.5, color=INK, zorder=6)
 
-    return fig, dots, clock, nums, cursor, head, ys
+    return fig, dots, phase, clock, nums, gale, cursor, head, ys
 
 
 def render(storm: dict, data: dict, land, video: bool) -> None:
@@ -507,10 +555,15 @@ def render(storm: dict, data: dict, land, video: bool) -> None:
                       [(c[1], c[0]) for c in cells]],
                      f"{storm['key']} matplotlib offsets")
 
-    fig, dots, clock, nums, cursor, head, ys = build_figure(storm, data, land)
+    fig, dots, phase, clock, nums, gale, cursor, head, ys = build_figure(
+        storm, data, land)
     n = data["hours"]
     fps = max(6, round(n / 24))
     out = MEDIA / f"storm-{storm['key']}.mp4"
+
+    t0 = data["t0"]
+    lo = int((day(storm["storm"][0]) - t0).total_seconds() // 3600)
+    hi = int((day(storm["storm"][1]) - t0).total_seconds() // 3600) + 24
 
     proc = None
     if video:
@@ -531,6 +584,18 @@ def render(storm: dict, data: dict, land, video: bool) -> None:
                 [(cells[i][1], cells[i][0]) for i in f["frames"][t]] or [(0, 0)]
             )
             nums[g].set_text(f"{f['counts'][t]}")
+        # the phase label, and the sea darkening over six hours at each edge
+        if t < lo:
+            phase.set_text("Before the storm")
+            phase.set_color(INK)
+        elif t < hi:
+            phase.set_text(f"Storm {storm['name']}")
+            phase.set_color(ACCENT_TX)
+        else:
+            phase.set_text("After the storm")
+            phase.set_color(INK)
+        gale.set_alpha(0.26 * max(0.0, min(1.0, (t - lo + 6) / 6,
+                                           (hi + 6 - t) / 6)))
         clock.set_text(label_hour(data["t0"] + timedelta(hours=t)))
         cursor.set_xdata([t, t])
         head.set_data([t], [ys[t]])
@@ -544,7 +609,26 @@ def render(storm: dict, data: dict, land, video: bool) -> None:
             sys.exit("ffmpeg failed")
         print(f"  {out.relative_to(ROOT)}  {out.stat().st_size / 1e6:.2f} MB, "
               f"{n} frames at {fps} fps = {n / fps:.0f} s")
+        loop_clip(out)
     plt.close(fig)
+
+
+def loop_clip(mp4: Path) -> None:
+    """A small looping clip to post — the owner asked for "a GIF". A real GIF
+    of 240 frames at 640 px is 30 MB of dithered mush; VP9 is a twentieth of
+    that and loops the same way in a browser and in every chat app that
+    matters."""
+    out = mp4.with_suffix(".webm")
+    subprocess.run(
+        [FFMPEG, "-y", "-loglevel", "error", "-i", str(mp4),
+         "-vf", "scale=640:-2", "-an", "-c:v", "libvpx-vp9", "-b:v", "0",
+         "-crf", "40", "-row-mt", "1", "-deadline", "good", str(out)],
+        check=True,
+    )
+    mb = out.stat().st_size / 1e6
+    if mb > 5:
+        sys.exit(f"{out}: {mb:.1f} MB — over the 5 MB budget for the loop")
+    print(f"  {out.relative_to(ROOT)}  {mb:.2f} MB, 640 px loop")
 
 
 # ---------------------------------------------------------------- the player
