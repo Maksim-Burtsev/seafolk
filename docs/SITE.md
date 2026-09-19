@@ -219,3 +219,38 @@ tippecanoe (DECISIONS 2026-09-18).
 the blind read; every page opened from `file://` in light and dark at both
 widths with no console error; punchcard review judged; `docs/STATUS.md`
 written; pushed.
+
+## Round 2 — the owner's review, 2026-09-19 (binding; overrides the storyboard above where they differ)
+
+The owner rated round 1 "3 of 5": too little material, presentation so-so.
+
+- **Headline face.** Bodoni Moda's hairlines read badly. Every headline (h1, h2,
+  figure h3, posters' next render) moves to **Source Serif 4, weight 600**
+  (Google Fonts), one change in `site/css/site.css`.
+- **Interactivity is a minus on the story page.** Nobody clicks through fourteen
+  buttons. A figure on `index.html` shows everything it has to say at once;
+  selectors live only on chapter pages.
+- **I4 → one static chart of all storms together**: days −3…+3, "of every 100
+  boats heard, how many went out"; the mean of all storms for fishing (accent,
+  thick) and cargo (ink, thick), each storm as a thin pale line behind its
+  fleet's mean. No buttons.
+- **I5 (the onset strip) is removed** — unreadable. In its place five horizontal
+  bars: on a storm day, how many of every 100 boats of each fleet stay in
+  compared with a usual day (fishing, sailing boats, work boats, ferries, cargo).
+- **I6, the animation**: autoplays and loops like a GIF (muted, no Play needed;
+  pause on click, `prefers-reduced-motion` shows the triptych instead); boats are
+  small boat **icons**, not dots; the sea looks like sea (tinted water, soft
+  land); a big phase label — "before the storm" / "the storm" / "after" — and a
+  large fishing-boat counter. Beside it a static **triptych** of three small maps
+  (the day before, the storm day, two days after) so the point is readable
+  without watching anything.
+- **I7** is redrawn as a picture: two bars — the most a ship's radio can send in
+  a day vs what the archive holds for the worst ship-day — above a quiet
+  timeline.
+- **I8 (Copenhagen in the Arabian Sea) is removed from the story.** On
+  `how.html` the episode shrinks to one neutral paragraph with no "my".
+- **More material, more maps.** New static map figures from `dist/dataset` only
+  (small boats at the published coarse grain, every cell ≥ 5, asserted on the
+  written file): small boats in July vs January; small boats July 2015 vs July
+  2025; where the fishing happens; the web of ferry lanes; used on `index.html`
+  and in the chapters where they fit.
