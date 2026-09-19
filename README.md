@@ -12,20 +12,24 @@ every AIS pipeline. This project keeps exactly that part and tells its story.
 
 ## What comes out
 
-1. **Data essay "A year under sail"** — the shape of a Danish summer: when the
-   season opens and closes, the Friday effect, regattas as spikes, ten years of
-   season drift. Russian and English.
-2. **Explorer** — a static map (MapLibre + deck.gl over pre-computed tiles) with a
-   year/month slider, vessel-class toggle, and a page per island.
+1. **The essay site** (`site/`, English, static, opens from `file://` by
+   double-click): [`site/index.html`](site/index.html) — the story in three acts
+   (the fleet of small boats that tripled, who stops when a storm comes, and
+   where the archive lies) — and four chapters: *A year under sail*
+   (`season.html`), *The sea by the hour* (`pulse.html`), *Lifelines*
+   (`ferries.html`), *When the storm comes* (`storms.html`), plus *How it was
+   made* (`how.html`): the pipeline, the privacy rule, the bugs.
+2. **The map** (`site/explore/`) — deck.gl hexagons by month and fleet, built only
+   from the open dataset below.
 3. **Open dataset** — H3 aggregates for 2015, 2018, 2021, two storm months each
-   of 2022 and 2023, and 2024-03 → today, as Parquet on GitHub Releases and
-   Hugging Face, plus the loader and notebooks that reproduce every chart.
-4. **Posters and a short animation** — season rings, daily fingerprints, "the sea
-   empties before a storm".
+   of 2022 and 2023, and 2024-03 → today, as Parquet, plus the loader and the
+   queries that reproduce every chart.
+4. **Animation and posters** (`site/media/`, `site/posters/`) — three storms hour
+   by hour ("the sea empties"), the four day clocks, two A3 posters.
 
-Four chapters share one engine: *01 A year under sail* · *02 Pulse* (the sea by
-hour and weekday) · *03 Lifelines* (island ferries) · *04 When the storm comes*
-(named Danish storms since 2013).
+Every number in the site's prose is written into the page by
+`scripts/build_site_data.sh` from the store (`<span data-n>`), never typed; the
+brief the site was built to is [`docs/SITE.md`](docs/SITE.md).
 
 ## Privacy rule
 
@@ -65,6 +69,7 @@ docs/DECISIONS.md  decisions and why
 scripts/           shell entry points (fetch, load, run)
 sql/               ClickHouse DDL and aggregation queries
 notes/             analysis notebooks and scratch findings (curated)
+site/              the essay, the map, media and posters (static; docs/SITE.md is its brief)
 data/raw           downloaded archive files — deleted after processing (gitignored)
 data/ch            clickhouse-local storage (gitignored)
 ```
@@ -78,6 +83,9 @@ clickhouse --version
 # Fetch a minimal working set: a summer Saturday, a summer Wednesday, a winter
 # Wednesday and the Sjælland Rundt weekend of 2025 (≈0.75 GB each)
 scripts/fetch.sh 2025-07-12 2025-07-16 2025-01-15 2025-06-14
+
+# Rebuild the site's numbers from the store and check the pages
+scripts/build_site_data.sh && uv run scripts/test_site.py
 ```
 
 Everything else is in `docs/PLAN.md`.

@@ -784,7 +784,7 @@ The DOI is filled in only after the owner's publish step.
 
 ---
 
-## S12 — The essay site *(re-planned 2026-09-18 — brief: `docs/SITE.md`)*
+## S12 — The essay site *(done 2026-09-19 — brief: `docs/SITE.md`)*
 
 **Goal:** the story page, four chapter pages and the method page, in English,
 first person, with newspaper-readable D3 charts. Opens from `file://`; no
@@ -792,22 +792,22 @@ GitHub Pages until the owner says so. The RU version, the Danish summary and
 the Lighthouse gate of the earlier plan are dropped (DECISIONS 2026-09-18).
 
 **Order:**
-- [ ] **S12a — foundation + `site/index.html`.** `site/css/site.css`,
+- [x] **S12a — foundation + `site/index.html`.** `site/css/site.css`,
       `site/js/kit.js` (shared chart helpers), `scripts/build_site_data.py` +
       `scripts/site_data/index.py`, `scripts/test_site.py`, `scripts/shot.sh`,
       the story page with charts I1–I5, I7, I8 (I6 is a placeholder until S14).
       Reviewed hard — it sets the bar for every other page.
-- [ ] **S12b — chapters, in parallel, one implementer per page**, each owning
+- [x] **S12b — chapters, in parallel, one implementer per page**, each owning
       only `site/<page>.html`, `site/js/<page>.js`, `scripts/site_data/<page>.py`
       and reading its own store clone: `season`, `pulse`, `ferries`, `storms`,
       `how`.
-- [ ] Blind read of every chart (SITE.md § Acceptance), prose edit by the
+- [x] Blind read of every chart (SITE.md § Acceptance), prose edit by the
       reviewing session, punchcard on the diff.
 
 **Validate:**
 ```bash
 scripts/build_site_data.sh          # ledger of every number, guards green
-uv run scripts/test_site.py         # PASS
+uv run scripts/test_build_guards.py && uv run scripts/test_site.py   # PASS
 scripts/shot.sh site/index.html     # screenshots to the scratch dir
 grep -rEn '\b[0-9]{9}\b' site/ | wc -l   # 0
 ```
@@ -820,7 +820,7 @@ yours — what would you never say?
 
 ---
 
-## S13 — The map *(re-planned 2026-09-18)*
+## S13 — The map *(done 2026-09-19)*
 
 `site/explore/` per `docs/SITE.md`: deck.gl hexagons over Natural Earth land,
 month slider, fleet toggles, fed **only** by `dist/dataset/*.parquet`
@@ -835,7 +835,7 @@ plays through every month from `file://` without a console error.
 
 ---
 
-## S14 — Animation and posters *(re-planned 2026-09-18)*
+## S14 — Animation and posters *(done 2026-09-19)*
 
 `scripts/render_storm.py` (matplotlib → ffmpeg, both already here) →
 `site/media/storm-*.mp4` + GIF, the same frames' data embedded for the

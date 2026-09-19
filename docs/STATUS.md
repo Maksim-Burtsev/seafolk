@@ -3,13 +3,171 @@
 Newest session on top. Each entry: what was done, findings with numbers, open
 questions, and the exact next session. Write it for someone with zero context.
 
-**Next session: S12 — the essay**, `docs/PLAN.md` § S12. The dataset is built
-and verified in `dist/dataset/` (gitignored, 2.6 GB) but **not published**:
-publishing is the owner's step (`scripts/publish.sh`, order in its header) and
-the DOI is still `pending` in the card, `CITATION.cff` and `README.md`. The
-store is unchanged since S8. Chapters 01–04 are in `notes/ch0[1234]-findings.md`,
-the honesty layer in `notes/honesty.md`; S10's user note stands: the essay
-opens with prose, not with the number wall.
+**Next: the owner reads the site.** S12–S14 are built (2026-09-18 → 09-19):
+open `site/index.html` by double-click. Nothing is deployed (no GitHub Pages),
+nothing is published (dataset + DOI are still the owner's step, § S11), S15 is
+postponed. The text is a first-person English draft written for the owner to
+edit; the brief it was built to is `docs/SITE.md`. The store is unchanged since
+S8.
+
+---
+
+## S12–S14 — The essay site, the map, the animation — 2026-09-18 → 09-19 *(done)*
+
+**What was done.** Re-planned with the owner first (DECISIONS 2026-09-18 ×5):
+English only, first person; reader-facing charts redrawn to a "newspaper test"
+(`docs/SITE.md`), not reused from `notes/img`; the site is an export and obeys
+k ≥ 5; the map is deck.gl alone; no Pages, no launch. Built: `site/index.html`
+(three acts, eight figures), `season.html`, `pulse.html`, `ferries.html`,
+`storms.html`, `how.html` (22 charts + 3 diagrams on a 180-line D3 kit,
+`site/js/kit.js`, tokens in `site/css/site.css`); `site/explore/` (70 months ×
+5 fleets, 16.8 MB, from `dist/dataset/*.parquet` only); `site/media/` (three
+storm clips + a canvas player, `day-clocks.mp4`); `site/posters/` (two A3).
+Build: `scripts/build_site_data.py` + one module per page under
+`scripts/site_data/`, which write each page's JSON block and every
+`<span data-n>` in the prose from the store and print a ledger;
+`scripts/test_build_guards.py`, `scripts/test_site.py`, `scripts/shot.sh`
+(headless screenshots, no new dependency), `scripts/build_explore_data.py`,
+`scripts/render_storm.py`, `scripts/render_clocks.py`,
+`scripts/render_posters.py`; `sql/80_site_flags.sql`, `sql/81_site_season.sql`.
+`site/day-clocks.html` (the S3 prototype) is deleted — `pulse.html` P1 replaced
+it. Roles: Opus 5 subagents implemented (foundation + story page; map; storm
+animation; five page implementers in parallel on APFS clones; one fix pass;
+posters); this session planned, wrote the brief, reviewed every figure on
+screenshots, recounted reference numbers on the store, ran the blind reads,
+judged the design review, edited prose facts, ran Validate and committed.
+
+**What the review of the charts changed** (each by looking, then by a blind
+read — a small model given only the PNG and asked for one sentence): the story
+page's storm chart was rejected twice — the hourly "share of a normal day"
+never sits at 100 % because the comparison fortnight has its own weather — and
+is now `sql/52`'s daily head count ("of every 100 boats heard, how many went
+out": Amy, fishing 69 → 8, cargo 87 → 79); the hourly view lives on
+`storms.html` as the detail. Implementers overturned four storyboard sentences
+of mine with data: a marina does not "empty in the morning and fill in the
+evening" (arrivals and departures both peak at noon, and 87 % of morning
+"appearances" are radios switching on); "in every storm fishing loses the most"
+fails under Floriane; ELLEN is six minutes off an hour (66 → 60 over six
+years), not "13 % faster"; Malik hit the big ferry lines harder than the
+islands. Final blind read: 19 of 22 charts returned the intended sentence at
+once; F3's label was reworded after it was read inverted.
+
+**Prose facts this session corrected in its subagents' drafts:** "eleven years
+of ship radio" (2 122 days ≈ six years spread over twelve calendar years); an
+inverted ratio (0.6 small boats per ship in 2015, not three ships per five
+boats); "the rest is Swedish, Dutch and Norwegian" with no query behind it
+(now `sql/80`: 14 / 10 / 7 %); "2.3 TB" in the pipeline diagram (2.3 TB is the
+archive from 2014; 1.2 TB came down the wire — the brief's own error);
+`dist_nm` described as "furthest from the start" (it is distance under way).
+
+### Validate — real output
+
+```
+$ CH_PATH=<clone> scripts/build_site_data.sh     (measured by this session, twice)
+  exit 0 · 1 min 45 s and 3 min 00 s wall (sql/60 and sql/51 dominate) · six pages, ledger printed
+$ uv run scripts/test_build_guards.py            → PASS (29 cases)
+$ uv run scripts/test_site.py                    → PASS
+  index 8 figures / 57 numbers · season 4/45 · pulse 3/51 · ferries 4/56 · storms 4/43 · how 3/54
+  site/explore/data: 23069 small-boat cell-months across 70 months, 0 of them under five boats · 16.8 MB of 40
+$ grep -rEn '\b[0-9]{9}\b' site/ scripts/site_data sql/8* | wc -l   → 0
+$ grep -rli mmsi site | wc -l                                        → 0
+$ du -sh site ; du -sh data/ch ; df -h .         → 24M · 11G · 187 Gi free; all store clones removed
+```
+Reviewer recounts on the store: `sum(rows_read)` 31 881 515 268 over 949 files;
+leisure Class B on the common window 6 137 / 10 426 / 14 615 / 19 006 /
+21 024 / 22 773 (= `sql/61`); Pia's emptiest hour (2023-12-22 05:00) fishing
+under way in 8 res-6 places (= the clip's counter).
+
+### Findings (site-side; the analysis findings 1–68 stand)
+
+69. **Flags of the small-boat fleet, 2026 window** (`sql/80`): Germany 35 %,
+    Denmark 24, Sweden 14, Norway 10, Netherlands 7.
+70. **Sailing boats stop with the fishing fleet, not after it**, once the
+    fleet is restricted to the three storms where it can be measured
+    (Johanne, Knud, Amy): −3 h against fishing's +0 h; finding 40's "+6 h"
+    pooled winter gales where 10–20 boats move a day.
+71. **The day clocks barely move when years are pooled by covered days instead
+    of message counts** (0.5–0.9 pp; ferries' night share 22 → 21 %) — but the
+    message-weighted pool gave the post-2023 years double weight (finding 59).
+72. **Finding 17's headline was refuted by its own table** (ferries and cargo
+    both peak on a Friday in May–Sep); corrected in `notes/ch02-findings.md`
+    and § S7.
+
+### Design review
+
+`punchcard:punchcard` on `git diff 0e8d341..HEAD -- scripts/ sql/ site/js
+site/css` (≈ 7 700 lines), three finder passes on APFS clones (Opus — the
+Fable subagent limit was exhausted mid-run and the first three finders died
+with nothing returned), this session judged, one Opus fix pass, each fix shown
+red by its mutation. About forty candidates; **fourteen accepted and fixed**:
+
+1. 🔴 *The privacy floor was keyed on key names, and the modules had renamed
+   the private fleet to `sailing`* — `{"sailing_boats": 3}` built green, and
+   `winter_sailing_lo` (a quartile of a list that goes down to 0 boats) and
+   `marina_boats` were unguarded head counts. Now `private_count()` at the
+   point every private head count is read, a wider integer-only name net with
+   a commented allow-list, and `scripts/test_build_guards.py`.
+2. 🔴 *`None` in the `n` map rendered as the word "None" in a sentence.* Refused.
+3. 🟡 *`test_site.py` passed a stale or hand-edited page* (span text never
+   compared with the page's own data block), saw only `<p>/<h*>/<figcaption>`,
+   and nothing checked k ≥ 5 on the WRITTEN explorer files (a mutation that
+   wrote 3 into every cell was green). All three fixed.
+4. 🟡 *The driver skipped a module with no page* (scaffolding for the parallel
+   sessions) — aborts again; a page with spans and no module fails too.
+5. 🟡 *index said sailing boats halve "3 hours before", storms said "6 hours
+   in"* — one onset rule in `site_data/__init__.py`, direction word computed.
+6. 🟡 *Day clocks pooled years by `moving_msgs`* — finding 71.
+7. 🟡 *The S3 prototype page still shipped "Class B" and a Russian table,
+   invisible to the prose test* — deleted.
+8. 🟡 *`render_storm.py`'s geography oracle covered the query, not the emit
+   layer* (a swap at `set_offsets` shipped a mirrored clip green) — now
+   asserted on the written file and the plotted offsets (mutation: 6 611 km);
+   clip dates asserted against `storms.csv`.
+9. 🟡 *`build_explore_data.py` had no geography oracle* — busiest written cargo
+   cells must include Drogden (1.3 km) and the Great Belt.
+10. 🟡 *`blocks()` returned `[]` for a missing width; column lists and
+    constants were copied across three modules* — raises with the file name;
+    shared in `__init__.py`.
+11. 🟡 *The clip list lived in four places with a broken inverse mapping* —
+    one discovery; `storms_named` counted from the CSV.
+12. 🟡 *A failed animation hid its figure under a paragraph that still
+    pointed at it* — a visible one-line message, same on both pages.
+13. 🟡 *`shot.sh` wrote blank PNGs for an unknown figure id and exited 0.* Fails.
+14. 🟡 *`how.html` cited `sql/70` for numbers `how.py` computes inline* —
+    source lines corrected; the floor cost asserted against
+    `test_export.py`'s pins.
+
+Accepted as is, with the reason: `render_clocks.py` and `render_posters.py`
+read the built page rather than the store (so film, poster and page cannot
+disagree; freshness is the build's job, and `test_site` now catches a stale
+page); `PEAK = 13` lives in `pulse.js` and `render_clocks.py` (two languages,
+cross-referenced in comments); I5's empty-`kept` NaN path is unreachable while
+any fleet halves in most storms and its table degrades correctly; inline `-q`
+queries in `how.py`/`index.py` for `load_log` facts (no SQL file owns them).
+
+### Deviations from `docs/PLAN.md` § S12–S14 (as re-planned 2026-09-18)
+
+- The map's public fleets are **ship-hours** (hourly `vessels` summed where
+  `moving_msgs > 0`), not message counts — immune to both duplication events.
+- The storm animation counts **places** (res-6 cells with movement), not
+  boats: the open dataset has no distinct-vessel state for the moving subset.
+  Pia's clip runs to 27 December with a labelled Christmas band.
+- I5's headline changed with finding 70; T2 leads `storms.html`.
+- No Lighthouse run, no Safari check (headless Chromium only).
+
+### Open questions
+
+Carried: publish + DOI (§ S11); `h3_land`; HSC absent; the hidden passenger
+fleet; the 2023 duplication onset. New:
+
+- **The prose is a draft in the owner's voice, not yet the owner's.**
+- **Safari/Firefox and a real phone were not tested**; D3, deck.gl and the
+  fonts load from CDNs, so the pages need a network on first open.
+- `site/explore/data` (16.8 MB) and the clips are committed generated files;
+  regenerate with `scripts/export.sh` → `scripts/build_explore_data.py` /
+  `scripts/render_storm.py` after any new load.
+
+**Next: the owner's read-through, then either an edit session on the text or S15.**
 
 ---
 
