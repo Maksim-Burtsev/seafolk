@@ -56,7 +56,7 @@ five distinct vessels** — the privacy rule above, enforced by
 `ferry_daily.parquet` (crossings per named ferry line per day, with the coverage
 columns that say whether a zero means "cancelled" or "not heard"). Build them
 with `scripts/export.sh`, publish with `scripts/publish.sh`. Licence CC BY 4.0.
-**DOI: pending.**
+**Download: <https://huggingface.co/datasets/mburtsev/seafolk-danish-ais>.**
 
 ## Layout
 

@@ -10,10 +10,10 @@ authors:
   - family-names: Burtsev
     given-names: Maksim
 version: 0.1.0
-date-released: '2026-09-12'
+date-released: '2026-09-30'
 license: MIT
 repository-code: https://github.com/Maksim-Burtsev/seafolk
-url: https://github.com/Maksim-Burtsev/seafolk
+url: https://huggingface.co/datasets/mburtsev/seafolk-danish-ais
 keywords:
   - AIS
   - maritime
@@ -21,9 +21,3 @@ keywords:
   - leisure boating
   - ferries
   - H3
-# identifiers: a Zenodo concept DOI is minted by hand at first publish
-# (scripts/publish.sh zenodo stops before publishing). Add it here, in
-# docs/dataset-card.md and in README.md at the same time:
-#   identifiers:
-#     - type: doi
-#       value: 10.5281/zenodo.<id>

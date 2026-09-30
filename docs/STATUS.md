@@ -3,12 +3,57 @@
 Newest session on top. Each entry: what was done, findings with numbers, open
 questions, and the exact next session. Write it for someone with zero context.
 
-**Next: the owner reads the site.** S12–S14 are built (2026-09-18 → 09-19):
-open `site/index.html` by double-click. Nothing is deployed (no GitHub Pages),
-nothing is published (dataset + DOI are still the owner's step, § S11), S15 is
-postponed. The text is a first-person English draft written for the owner to
-edit; the brief it was built to is `docs/SITE.md`. The store is unchanged since
-S8.
+**Next: the owner reads the rewritten prose, then GitHub Pages goes on.**
+The dataset is public on Hugging Face (2026-09-30). The site's text was
+rewritten in the owner's voice; `.github/workflows/pages.yml` is written but
+not committed, and Pages is not enabled on the repo — both wait for the
+owner's read. S15 (outreach) stays postponed. The store is unchanged since S8.
+
+---
+
+## Finish — dataset published, prose in the owner's voice — 2026-09-30
+
+**What was done.** Re-read the store (tables and coverage below), the plan and
+the site, and gave the owner a verdict: the analysis is sound, the dataset is
+niche but worth the near-zero cost of publishing (`ferry_daily` is the part
+with no open equivalent; EMODnet's density maps are monthly and in hours, not
+distinct vessels). Owner's calls: Hugging Face yes, Zenodo no; the essay is
+told by a curious engineer and opens with the ais-lake backstory.
+
+- **Dataset:** `scripts/publish.sh hf mburtsev/seafolk-danish-ais` (private),
+  sizes checked against `dist/dataset/` byte for byte, then made public; the
+  HF viewer reports `"viewer":true` and serves `ferry_daily` rows. The card,
+  `README.md` and `CITATION.cff` now point at
+  <https://huggingface.co/datasets/mburtsev/seafolk-danish-ais>; "DOI: pending"
+  is gone. `scripts/export.sh` re-run after the card edit (below), and the new
+  card uploaded as `README.md`.
+- **Prose:** Kimi Code rewrote all six pages from a brief (backstory, the
+  owner's own dictated drafts as voice samples, the `data-n` and banned-word
+  rules); every span stayed byte-identical. This session then rewrote the
+  story page's opening (Kimi's still had a triple list and a "not X" clause),
+  fixed "two winter months" to four (2022-01/02, 2023-02/12), removed an
+  invented "under my desk", linked ais-lake, and cut two writerly lines. The
+  chapters got only Kimi's light pass: filler sentences, "not X but Y" and
+  em-dash cleanup.
+
+### Validate — real output
+
+```
+$ /usr/bin/time -p scripts/export.sh      → PASS — 147 checks, 257.2 M rows in 10 files; real 828.50
+                                            (parquet sizes identical to the 2026-09-12 export)
+$ uv run scripts/test_site.py             → PASS (spans equal their data blocks, no bare digits, no banned words)
+$ curl datasets-server …/is-valid         → {"preview":true,"viewer":true,…}
+$ scripts/ch.sh: h3_hourly by year        → 2015/2018/2021 365 d · 2022 59 · 2023 59 · 2024 306 · 2025 365 · 2026 238 (to 08-26)
+```
+
+No design review: no code changed (prose, docs and a workflow file only).
+
+### Open questions
+
+- The owner reads `site/index.html` and says what he would never say; then
+  commit `.github/workflows/pages.yml` and enable Pages
+  (`gh api -X POST repos/Maksim-Burtsev/seafolk/pages -f build_type=workflow`).
+- The chapters still carry the S12 draft voice under Kimi's light pass.
 
 ---
 

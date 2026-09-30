@@ -276,7 +276,7 @@ test is part of `scripts/export.sh`, not an optional step.
 
 ```
 Burtsev, M. (2026). Seafolk — Danish AIS aggregates (version 0.1.0) [Data set].
-Zenodo. DOI: pending
+Hugging Face. https://huggingface.co/datasets/mburtsev/seafolk-danish-ais
 Source data: Danish Maritime Authority (aisdata.ais.dk).
 ```
 
@@ -286,9 +286,8 @@ Source data: Danish Maritime Authority (aisdata.ais.dk).
   title     = {Seafolk --- Danish AIS aggregates},
   year      = {2026},
   version   = {0.1.0},
-  publisher = {Zenodo},
-  doi       = {pending},
-  url       = {https://github.com/Maksim-Burtsev/seafolk},
+  publisher = {Hugging Face},
+  url       = {https://huggingface.co/datasets/mburtsev/seafolk-danish-ais},
   note      = {Aggregated from the Danish Maritime Authority AIS archive,
                aisdata.ais.dk}
 }
@@ -296,7 +295,8 @@ Source data: Danish Maritime Authority (aisdata.ais.dk).
 
 ## Versioning
 
-The **Zenodo concept DOI is the canonical address** — it always resolves to the
-newest version, and it is the only address a paper can cite. The GitHub Release
-and the Hugging Face dataset are mirrors: they are where people download, and
-both point back at the DOI. Version here is 0.1.0.
+The Hugging Face dataset,
+<https://huggingface.co/datasets/mburtsev/seafolk-danish-ais>, is the canonical
+address; a new version replaces the files there and bumps the version here. The
+code that builds every file is <https://github.com/Maksim-Burtsev/seafolk>.
+There is no DOI. Version here is 0.1.0.

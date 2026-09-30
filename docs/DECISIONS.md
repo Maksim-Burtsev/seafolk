@@ -585,3 +585,12 @@ what it rules out.
 - 2026-09-18 (S12 planning) — **No GitHub Pages, no launch, no dataset
   publishing in S12–S14.** Owner's call; S15 is postponed.
 
+- 2026-09-30 — **The dataset is published on Hugging Face only, with no
+  Zenodo DOI.** Owner's call: a DOI costs web-UI steps for citations that are
+  unlikely to come; <https://huggingface.co/datasets/mburtsev/seafolk-danish-ais>
+  is the canonical address. `scripts/publish.sh zenodo` stays, unused.
+- 2026-09-30 — **The essay is told by a curious engineer, not a data
+  scientist**, and opens with the real backstory: the failed ais-lake live map
+  (partial, late open feeds) led to the Danish archive. Prose drafted by Kimi
+  Code at the owner's request, edited by Claude; the owner reviews it before
+  GitHub Pages is switched on.
