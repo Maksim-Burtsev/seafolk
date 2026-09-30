@@ -594,3 +594,20 @@ what it rules out.
   (partial, late open feeds) led to the Danish archive. Prose drafted by Kimi
   Code at the owner's request, edited by Claude; the owner reviews it before
   GitHub Pages is switched on.
+- 2026-09-30 (round 3) — **The site is a nautical chart; light only.** Owner's
+  choice between two sketches (night-sea light vs chart paper). Maps are WebP
+  sheets drawn by `scripts/chartkit.py`; the vector furniture is
+  `site/js/chart.js`. The dark palette is dropped: a chart is paper. Rules out
+  hexagon maps and colour ramps on cells anywhere on the site.
+- 2026-09-30 (round 3) — **New data source: EMODnet Bathymetry** (mean depth,
+  0.005°, `scripts/fetch_bathymetry.py` → `data/context/bathy_emodnet_0005.npz`,
+  gitignored), for depth tints, contours and soundings. Open data; same
+  provider family as the S10 EMODnet cross-check. No new Python dependency for
+  the site build (numpy, matplotlib and pillow are already in `notes/`);
+  rasterio runs only inside the fetch script's own `uv` environment.
+- 2026-09-30 (round 3) — **Ferry tracks on the site come from `public_track`**,
+  the store's Class A passenger table, not from the open dataset: a track is
+  the whole point of "the ferry web" and ferries are public. Every radio ID in
+  a drawn track is checked against `vessel_day` (Class A, never leisure) by the
+  builder before drawing, and no radio ID reaches a written file. Small boats
+  still come only from the floored `leisure_daily` export.

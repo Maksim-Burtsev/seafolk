@@ -132,7 +132,7 @@ function week() {
         .attr("stroke", ink("ink")).attr("stroke-dasharray", "5 4");
       kit.halo(g.append("text").attr("x", 2).attr("y", y(W.weekday) - 8)
         .attr("fill", ink("ink"))
-        .style("font", `500 ${narrow ? 11 : 12.5}px Karla, ui-sans-serif, sans-serif`)
+        .style("font", `500 ${narrow ? 11 : 12.5}px "Source Serif 4", Georgia, serif`)
         .text(narrow ? "a weekday" : "an ordinary weekday"));
 
       // at 380 px two four-figure numbers over two neighbouring bars run into
@@ -223,7 +223,7 @@ function hundred() {
             .attr("fill", ink(SHADE[s.grp.key]));
           rows.append("text").attr("x", 2 * r + 8).attr("y", yy)
             .attr("fill", s.grp.key === "stayed" ? ink("accent-tx") : ink("label"))
-            .style("font", `${s.grp.key === "stayed" ? 600 : 500} 13px Karla, ui-sans-serif, sans-serif`)
+            .style("font", `${s.grp.key === "stayed" ? 600 : 500} 13px "Source Serif 4", Georgia, serif`)
             .text(`${s.grp.share} — ${s.grp.label}`);
         });
       }

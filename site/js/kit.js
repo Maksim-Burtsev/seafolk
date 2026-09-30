@@ -86,7 +86,7 @@ kit.axis = function (g, scale, o) {
       .attr("y", o.side === "left" ? -10 : o.at + 32)
       .attr("text-anchor", o.side === "left" ? "start" : "end")
       .attr("fill", kit.ink("label"))
-      .style("font", '400 12.5px Karla, ui-sans-serif, sans-serif')
+      .style("font", 'italic 400 14px "Source Serif 4", Georgia, serif')
       .text(o.title);
   }
   return sel;
@@ -107,7 +107,7 @@ kit.endLabels = function (g, x, items, gap) {
   kit.halo(g.selectAll(null).data(s).join("text")
     .attr("x", x + 7).attr("y", d => d.y).attr("dy", "0.34em")
     .attr("fill", d => d.color)
-    .style("font", d => `${d.weight || 500} 13px Karla, ui-sans-serif, sans-serif`)
+    .style("font", d => `${d.weight || 500} 14.5px "Source Serif 4", Georgia, serif`)
     .text(d => d.text));
 };
 
@@ -125,7 +125,7 @@ kit.note = function (g, o) {
   const t = g.append("text").attr("x", x).attr("y", y)
     .attr("text-anchor", o.anchor || "start")
     .attr("fill", o.color || kit.ink("label"))
-    .style("font", `400 ${o.size || 13}px Karla, ui-sans-serif, sans-serif`);
+    .style("font", `italic 400 ${(o.size || 13) + 1.5}px "Source Serif 4", Georgia, serif`);
   (Array.isArray(o.text) ? o.text : [o.text]).forEach((line, i) =>
     t.append("tspan").attr("x", x).attr("dy", i ? "1.25em" : 0).text(line));
   return kit.halo(t);

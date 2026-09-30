@@ -254,3 +254,64 @@ The owner rated round 1 "3 of 5": too little material, presentation so-so.
   written file): small boats in July vs January; small boats July 2015 vs July
   2025; where the fishing happens; the web of ferry lanes; used on `index.html`
   and in the chapters where they fit.
+
+## Round 3 — a nautical chart (owner's review 2026-09-30; binding, overrides everything above where they differ)
+
+**The verdict on rounds 1–2.** "A Claude artifact": a title and six paragraphs
+of plain text, default styling, nothing that belongs to this project. The
+honeycomb maps with a colour gradient are ugly; the grey line maps look drawn
+with charcoal, "a horror film"; the flags chart is generic infographics; the
+storm bars are "creepy"; the storm animation and the honesty charts are
+boring. Only the season line chart (I1) passed. He wants a unique piece of art
+that a Danish teenager would scroll through, and he chose the direction:
+**a Danish nautical chart (søkort)**, the whole site at once.
+
+**The design system (built, use it — do not restyle it per page):**
+
+- `site/css/site.css` — paper palette and tokens (`--paper --land --shoal --ink
+  --label --sea-ink --accent`(small boats, sail orange) `--cargo`(magenta)
+  `--ferry`(red ink) `--fishing`(green) `--working --ref --pale`), Source Serif 4
+  body and headlines, IBM Plex Mono for chart furniture, figures as chart
+  sheets (double neatline), `.sheet`, `.sheets`, `.key`, `.hero`, `.cartouche`,
+  `.log` (entries in a ship's log), `.spread` (figure + sticky note beside it),
+  `.big` (a number set like a sounding), `.act`. **Light only**: a chart is
+  paper.
+- `scripts/chartkit.py` — draws a map sheet as a WebP: `Sheet(box, width)`,
+  `.base()` (depth tints, contours, soundings, land), `.wash(lon, lat, w,
+  colour)` (density as ink wash — cargo lanes), `.stipple(lon, lat, dots,
+  radius_km, colour)` (dots scattered at random over sea inside a cell — fishing,
+  small boats), `.tracks(segments, colour)` (ferries' real tracks), `.save(id)`,
+  `write_manifest(charts, page)`. Bathymetry: `uv run scripts/fetch_bathymetry.py`.
+- `site/js/chart.js` — `chart.sheet(el, id, {names, tag, ticks, scale})` puts the
+  image on the page with the vector furniture over it: neatline with the
+  alternating ten-minute bar, degree labels, water names in italic, places with
+  a dot, a scale bar in nautical miles, a corner tag. `chart.NAMES` is the one
+  list of names; add to it rather than typing coordinates in a page.
+- `site/js/kit.js` — the D3 kit for non-map charts, now in the chart palette and
+  fonts. Charts that are not maps still belong on the chart: ink lines, italic
+  direct labels, dotted graticule, no boxes.
+- Reference implementation: `site/index.html` hero (a Saturday of ferries drawn
+  by a pen, `site/js/hero.js`), the log, and the sheets I1-maps, I2-maps,
+  I3-cargo/ferries/fishing (`scripts/charts_index.py`).
+
+**Rules for every page:**
+
+1. **No walls of text.** Prose comes in short blocks next to or between
+   figures; use `.spread` (a figure with its note beside it), `.log`, `.big`
+   numbers, a cartouche. The words and every `data-n` span stay (you may
+   split, move and trim paragraphs; not add facts).
+2. **Maps are chart sheets** from `chartkit` + `chart.sheet`, never hexagons,
+   never a colour ramp on cells. Cargo = magenta wash; ferries = red ink tracks
+   (from `public_track`, whose radio IDs are checked against `vessel_day` as in
+   `charts_index.py`); fishing = green stipple; small boats = sail-orange
+   stipple **only from `dist/dataset/leisure_daily.parquet`**, min ≥ 5 asserted
+   on the rows read, captioned "dots placed at random inside their patch".
+3. **Charts that are not maps get redesigned, not recoloured**, where the owner
+   called them out: think in chart language (a unit chart of boat glyphs, a
+   tide-table, a harbour plan, a compass/clock rose) and in "what would a
+   teenager get in one look". Keep the newspaper test (one sentence per chart).
+4. **Animations autoplay, loop, pause off-screen, and respect reduced motion**
+   (the static end state instead).
+5. Numbers in prose only through `data-n`; `uv run scripts/test_site.py` must
+   pass; no radio ID or 9-digit integer anywhere under `site/`.
+6. Page weight: images WebP; one page's media under ~12 MB.

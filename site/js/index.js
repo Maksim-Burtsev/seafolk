@@ -83,7 +83,7 @@ function season() {
       kit.halo(g.selectAll(null).data(ends).join("text")
         .attr("x", d => d.x + 8).attr("y", d => d.y).attr("dy", "0.34em")
         .attr("fill", d => d.color)
-        .style("font", d => `${d.weight} ${d.size}px Karla, ui-sans-serif, sans-serif`)
+        .style("font", d => `${d.weight} ${d.size}px "Source Serif 4", Georgia, serif`)
         .text(d => d.text));
 
       // inside the shaded winter band, clear of every line
@@ -150,10 +150,10 @@ function fleet() {
       else {
         kit.halo(g.append("text").attr("x", 2).attr("y", y(F.big_ships[0]) - 12)
           .attr("fill", ink("working"))
-          .style("font", '500 12px Karla, ui-sans-serif, sans-serif').text("big ships"));
+          .style("font", '500 12px "Source Serif 4", Georgia, serif').text("big ships"));
         kit.halo(g.append("text").attr("x", 2).attr("y", 12)
           .attr("fill", ink("accent-tx"))
-          .style("font", '600 12px Karla, ui-sans-serif, sans-serif').text("small boats"));
+          .style("font", '600 12px "Source Serif 4", Georgia, serif').text("small boats"));
       }
       // the empty band above the first bars and below the last two is the only
       // place a two-line note fits without sitting on an orange bar.
@@ -328,7 +328,7 @@ function stayedIn() {
         g.append("text").attr("x", -14).attr("y", y(r.fleet) + y.bandwidth() / 2)
           .attr("dy", "0.34em").attr("text-anchor", "end").attr("fill", ink("ink"))
           .style("font", `${own ? 600 : 500} ${narrow ? 12 : 13.5}px `
-                 + "Karla, ui-sans-serif, sans-serif")
+                 + '"Source Serif 4", Georgia, serif')
           .text(r.label);
         kit.halo(g.append("text").attr("x", x(r.value) + 9)
           .attr("y", y(r.fleet) + y.bandwidth() / 2).attr("dy", "0.34em")
@@ -340,7 +340,7 @@ function stayedIn() {
         // row says so; the rest would say the same thing five times.
         if (r.storms !== pooled) kit.halo(g.append("text")
           .attr("x", 4).attr("y", y(r.fleet) - 5).attr("fill", ink("label"))
-          .style("font", '400 11.5px Karla, ui-sans-serif, sans-serif')
+          .style("font", '400 11.5px "Source Serif 4", Georgia, serif')
           .text(`${r.storms} storms`));
       });
     });
@@ -386,6 +386,22 @@ function maps(id, method, list) {
 
 
 /* ======================= I7 — a day that cannot happen =================== */
+/* A figure of chart sheets, side by side on a wide screen. `key` is the one
+ * line under them that says what a mark is; the dot scale comes from the
+ * build's manifest, never from this file. */
+function sheets(id, list, names, key) {
+  const el = document.getElementById(id);
+  const row = el.appendChild(document.createElement("div"));
+  row.className = list.length > 1 ? "sheets" : "";
+  list.forEach(([cid, tag]) => chart.sheet(row, cid, { names, tag, ticks: list.length === 1 }));
+  if (key) {
+    const k = el.appendChild(document.createElement("ul"));
+    k.className = "key";
+    k.innerHTML = key.map(([cls, colour, text]) =>
+      `<li style="color:var(--${colour})"><i class="${cls}"></i><span style="color:var(--label)">${text}</span></li>`).join("");
+  }
+}
+
 function impossible() {
   const I = D.impossible;
   const months = I.months.map(([m, v, dup]) => [d3.utcParse("%Y-%m")(m), v, dup, m]);
@@ -410,7 +426,7 @@ function impossible() {
         b.label.forEach((t, k) => g.append("text").attr("x", 0)
           .attr("y", top + 12 + k * 15).attr("fill", ink(b.tx))
           .style("font", `${i ? 600 : 500} ${narrow ? 12.5 : 14}px `
-                 + "Karla, ui-sans-serif, sans-serif").text(t));
+                 + '"Source Serif 4", Georgia, serif').text(t));
         const by = top + 12 + b.label.length * 15;
         g.append("rect").attr("x", 0).attr("y", by)
           .attr("width", Math.max(x(b.v), 2)).attr("height", bh)
@@ -456,7 +472,7 @@ function impossible() {
         .text(`${d[1].toFixed(1)} %`)));
       kit.halo(g.append("text").attr("x", x(new Date(Date.UTC(2023, 11, 1))) + 6)
         .attr("y", 11).attr("fill", ink("accent-tx"))
-        .style("font", '400 12px Karla, ui-sans-serif, sans-serif')
+        .style("font", '400 12px "Source Serif 4", Georgia, serif')
         .text(narrow ? "from 2024 on" : "every month from December 2023 on"));
 
       kit.hover(g, w, h, px => {
@@ -473,17 +489,29 @@ function impossible() {
 }
 
 
+hero(document.getElementById("c-hero"), document.getElementById("hero-clock"),
+     document.getElementById("hero-count"));
+document.getElementById("hero-day").textContent = window.SEAFOLK_FERRY_DAY
+  ? d3.utcFormat("%A %-d %B %Y")(new Date(SEAFOLK_FERRY_DAY.day)) : "";
 season();
-maps("c-i1-maps", "pair", [{ layer: "small_july_2025", colour: "accent" },
-                           { layer: "small_january_2025" }]);
+const perDot = ((window.SEAFOLK_CHARTS || {})["i1-jul"] || {}).per_dot;
+const smallKey = [["dots", "accent", `one dot: ${perDot} boat-days, placed at random inside its patch of sea`]];
+sheets("c-i1-maps", [["i1-jul", "July 2025"], ["i1-jan", "January 2025"]],
+       ["Kattegat", "Øresund", "Storebælt"], smallKey);
 fleet();
-maps("c-i2-maps", "pair", [{ layer: "small_july_2015" },
-                           { layer: "small_july_2025", colour: "accent" }]);
+sheets("c-i2-maps", [["i2-2015", "July 2015"], ["i2-2025", "July 2025"]],
+       ["Kattegat", "Øresund", "Storebælt"], smallKey);
 flags();
-// Who else is out there — the three public fleets, each on its own scale.
-maps("c-i3-cargo", "draw", [{ layer: "cargo_2025", colour: "ink" }]);
-maps("c-i3-ferries", "draw", [{ layer: "ferries_2025" }]);
-maps("c-i3-fishing", "draw", [{ layer: "fishing_2025" }]);
+// Who else is out there: the three public fleets, each on its own sheet.
+sheets("c-i3-cargo", [["i3-cargo", "July 2025"]],
+       ["Skagerrak", "Kattegat", "Nordsøen", "Østersøen", "Storebælt", "Øresund", "Femern Bælt", "Skagen", "København", "Kiel"],
+       [["wash", "cargo", "cargo ships and tankers under way, darker where more of them pass"]]);
+sheets("c-i3-ferries", [["i3-ferries", "July 2025"]],
+       ["Kattegat", "Storebælt", "Øresund", "Rødby", "Rønne", "Frederikshavn", "Göteborg", "Hirtshals", "Samsø", "Læsø", "Ærø", "Anholt"],
+       [["", "ferry", "every passenger ship's own track, one thin line per crossing"]]);
+sheets("c-i3-fishing", [["i3-fishing", "2025"]],
+       ["Skagerrak", "Nordsøen", "Kattegat", "Østersøen", "Skagen", "Hirtshals", "Hanstholm", "Thyborøn", "Hvide Sande"],
+       [["dots", "fishing", "fishing boats under way; the denser the stipple, the more hours of fishing"]]);
 storms();
 stayedIn();
 seaEmpties();

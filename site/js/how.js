@@ -16,7 +16,7 @@
 
 const D = JSON.parse(document.getElementById("data").textContent);
 const ink = kit.ink;
-const FONT = 'Karla, ui-sans-serif, sans-serif';
+const FONT = '"Source Serif 4", Georgia, serif';
 const MONO = '"IBM Plex Mono", ui-monospace, monospace';
 
 /* A pointy-top hexagon of radius r, centred on the origin. */

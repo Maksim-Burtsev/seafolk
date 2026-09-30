@@ -124,7 +124,7 @@ function clocks() {
         d.append("text").attr("x", cx).attr("y", top + band - 11)
           .attr("text-anchor", "middle")
           .attr("fill", ink(subject ? "accent-tx" : "ink"))
-          .style("font", `${subject ? 600 : 500} ${narrow ? 12 : 15}px Karla, ui-sans-serif, sans-serif`)
+          .style("font", `${subject ? 600 : 500} ${narrow ? 12 : 15}px "Source Serif 4", Georgia, serif`)
           .text(label);
         d.append("circle").attr("cx", cx).attr("cy", cy).attr("r", rv(FLAT_DAY))
           .attr("fill", "none").attr("stroke", ink("ref"))
@@ -223,11 +223,11 @@ function week() {
       // sailing name above the Thursday bell, the cargo name over Monday night.
       kit.halo(g.append("text").attr("x", x(84)).attr("y", y(W.sailing[84]) - 12)
         .attr("text-anchor", "middle").attr("fill", ink("accent-tx"))
-        .style("font", `600 ${narrow ? 12 : 13.5}px Karla, ui-sans-serif, sans-serif`)
+        .style("font", `600 ${narrow ? 12 : 13.5}px "Source Serif 4", Georgia, serif`)
         .text("sailing boats"));
       kit.halo(g.append("text").attr("x", x(2)).attr("y", y(W.cargo[2]) - 15)
         .attr("fill", ink("working"))
-        .style("font", `500 ${narrow ? 12 : 13.5}px Karla, ui-sans-serif, sans-serif`)
+        .style("font", `500 ${narrow ? 12 : 13.5}px "Source Serif 4", Georgia, serif`)
         .text("cargo ships"));
 
       // the one annotation, anchored at its END so that the leader leaves the
@@ -300,7 +300,7 @@ function harbour() {
       [[span * 0.92, "boats appearing"], [-span * 0.92, "boats disappearing"]]
         .forEach(([v, text]) => kit.halo(g.append("text").attr("x", w).attr("y", y(v))
           .attr("dy", "0.34em").attr("text-anchor", "end").attr("fill", ink("label"))
-          .style("font", `500 ${narrow ? 11 : 13}px Karla, ui-sans-serif, sans-serif`)
+          .style("font", `500 ${narrow ? 11 : 13}px "Source Serif 4", Georgia, serif`)
           .text(text)));
 
       // the point of the chart, pointing into the pale half of the noon bar.

@@ -234,7 +234,7 @@ function stayed() {
         });
         g.append("text").attr("x", -12).attr("y", y(r.storm)).attr("dy", "0.34em")
           .attr("text-anchor", "end").attr("fill", ink("ink"))
-          .style("font", `500 ${narrow ? 12 : 13}px Karla, ui-sans-serif, sans-serif`)
+          .style("font", `500 ${narrow ? 12 : 13}px "Source Serif 4", Georgia, serif`)
           .text(narrow ? r.storm : `${r.storm} · ${year(r.start)}`);
       });
 
@@ -246,14 +246,14 @@ function stayed() {
         kit.halo(g.append("text")
           .attr("x", x(100 * (v[0] + v[1]) / 2)).attr("y", y(top.storm) - 42)
           .attr("text-anchor", "middle").attr("fill", ink(tx))
-          .style("font", `600 ${narrow ? 11 : 13}px Karla, ui-sans-serif, sans-serif`)
+          .style("font", `600 ${narrow ? 11 : 13}px "Source Serif 4", Georgia, serif`)
           .text(narrow ? label.split(" ")[0] : label));
       });
       const sail = rows.find(r => r.sailing);
       if (sail && !narrow) kit.halo(g.append("text")
         .attr("x", x(100 * sail.sailing[0]) + 10).attr("y", y(sail.storm) + 7)
         .attr("dy", "0.34em").attr("fill", ink("accent-tx"))
-        .style("font", '500 12px Karla, ui-sans-serif, sans-serif')
+        .style("font", '500 12px "Source Serif 4", Georgia, serif')
         .text("sailing boats"));
 
       // The point of the chart a reader does not already expect, written under
@@ -315,7 +315,7 @@ function anchorages() {
         .attr("stroke", ink("accent")).attr("stroke-width", 2);
       kit.halo(g.append("text").attr("x", x(1)).attr("y", -24)
         .attr("text-anchor", "middle").attr("fill", ink("accent-tx"))
-        .style("font", '600 13px Karla, ui-sans-serif, sans-serif')
+        .style("font", '600 13px "Source Serif 4", Georgia, serif')
         .text("no change"));
 
       A.names.forEach(name => {
@@ -323,7 +323,7 @@ function anchorages() {
           .attr("y1", y(name)).attr("y2", y(name)).attr("stroke", ink("hairline"));
         g.append("text").attr("x", -12).attr("y", y(name)).attr("dy", "0.34em")
           .attr("text-anchor", "end").attr("fill", ink("ink"))
-          .style("font", `500 ${narrow ? 11.5 : 13}px Karla, ui-sans-serif, sans-serif`)
+          .style("font", `500 ${narrow ? 11.5 : 13}px "Source Serif 4", Georgia, serif`)
           .text(name);
         // filled and half-transparent, so that a pile of storms on one spot
         // reads as a pile rather than as a moiré of rings

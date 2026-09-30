@@ -18,7 +18,7 @@ const MONTH = ["January", "February", "March", "April", "May", "June", "July",
 const DAY = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
              "Saturday"];
 const MONO = '"IBM Plex Mono", ui-monospace, monospace';
-const SANS = "Karla, ui-sans-serif, sans-serif";
+const SANS = '"Source Serif 4", Georgia, serif';
 
 /* A typical-day count is a median of whole crossings, so it is either a whole
  * number or a half. */
