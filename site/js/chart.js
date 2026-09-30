@@ -53,6 +53,12 @@ chart.NAMES = NAMES;
 
 const pct = (v, a, b) => (100 * (v - a) / (b - a)).toFixed(3) + "%";
 
+/* Pixel [x, y] of a lon/lat on a w x h sheet of box [lon0, lon1, lat0, lat1],
+ * y down. The same two lines are project() in scripts/chartkit.py;
+ * scripts/test_charts.py holds both to known places. */
+chart.project = (box, w, h, lon, lat) =>
+  [(lon - box[0]) / (box[1] - box[0]) * w, (box[3] - lat) / (box[3] - box[2]) * h];
+
 chart.sheet = function (el, id, o) {
   o = o || {};
   const m = (window.SEAFOLK_CHARTS || {})[id];
@@ -64,7 +70,10 @@ chart.sheet = function (el, id, o) {
     return null;
   }
   const [x0, x1, y0, y1] = m.box;
-  const at = (lon, lat) => ({ left: pct(lon, x0, x1), top: pct(y1 - lat + y0, y0, y1) });
+  const at = (lon, lat) => {
+    const [x, y] = chart.project(m.box, 100, 100, lon, lat);
+    return { left: x.toFixed(3) + "%", top: y.toFixed(3) + "%" };
+  };
   const img = box.appendChild(new Image());
   img.src = m.src; img.alt = o.alt || ""; img.width = m.w; img.height = m.h;
   img.loading = o.eager ? "eager" : "lazy"; img.decoding = "async";
@@ -82,7 +91,8 @@ chart.sheet = function (el, id, o) {
       "stroke-width": w, "vector-effect": "non-scaling-stroke" })
       .forEach(([k, v]) => l.setAttribute(k, v));
   };
-  const X = lon => (lon - x0) / (x1 - x0) * m.w, Y = lat => (y1 - lat) / (y1 - y0) * m.h;
+  const X = lon => chart.project(m.box, m.w, m.h, lon, y0)[0];
+  const Y = lat => chart.project(m.box, m.w, m.h, x0, lat)[1];
   if (o.ticks !== false) {
     const step = 1 / 6;
     for (let lon = Math.ceil(x0 / step) * step, k = 0; lon < x1; lon += step, k++) {
@@ -132,6 +142,6 @@ chart.sheet = function (el, id, o) {
     const t = label(o.tag, "tag", { left: "auto", right: "2.2%", top: "3.2%" });
     t.style.transform = "none";
   }
-  return { box, img, meta: m, at, xy: (lon, lat) => [X(lon), Y(lat)] };
+  return { box, img, meta: m, at, xy: (lon, lat) => chart.project(m.box, m.w, m.h, lon, lat) };
 };
 })();

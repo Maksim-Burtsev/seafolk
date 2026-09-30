@@ -173,7 +173,9 @@ is not Denmark, transmitters ≠ boats); how to reproduce; dataset + licence.
 JSON-LD `Dataset` block lives here (DOI `pending`).
 
 ### `site/explore/index.html` — The map
-deck.gl `H3HexagonLayer` + Natural Earth land as a `GeoJsonLayer`; month
+*(Round 3: now an `OrthographicView` over a chartkit base sheet
+(`scripts/charts_explore.py` → `site/explore/data/sheet.js`), every fleet as
+stipple in its chart ink; the text below is the round-1 build.)* deck.gl `H3HexagonLayer` + Natural Earth land as a `GeoJsonLayer`; month
 slider with play; fleet toggles (cargo, ferries, fishing, work boats at
 hexagon res 6 from `class_a_hourly_*`; small boats at res 5 from
 `leisure_daily`, already ≥ 5). Data as `site/explore/data/YYYY-MM.js`
@@ -185,7 +187,9 @@ tippecanoe (DECISIONS 2026-09-18).
 - `scripts/render_storm.py` → `site/media/storm-<name>.mp4` (+ a short GIF):
   matplotlib frames → ffmpeg, same data as I6.
 - `site/media/day-clocks.mp4`: the four clocks with a sweeping hand.
-- `site/posters/*.pdf|svg`: season hills; four clocks; A3. Lowest priority.
+- `site/posters/*.pdf|png`: *(round 3)* `danish-waters` (one July of traffic
+  on the chart) and `year-of-boats` (2025's twelve months of small boats), A3,
+  from `scripts/render_posters.py` on chartkit.
 
 ## Build
 

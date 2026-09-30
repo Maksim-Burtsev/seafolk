@@ -32,8 +32,9 @@ Eight checks, each of them something a reviewer would otherwise have to read for
      scripts/build_explore_data.py asserts it on what it read; this asserts it
      on what is committed, the way scripts/test_export.py tests the parquet
      files rather than the query that made them
- (8) the same floor on the WRITTEN site/media/maps.js, the other file that
-     carries small-boat counts to a reader
+ The map sheets under site/media/charts are raster images and carry no
+ per-cell count to check; every scripts/charts_*.py asserts the floor on the
+ floored export rows it reads before it draws a dot (round 3).
 
 WHAT THIS DOES NOT CHECK, so that nobody reads it as a full gate: whether a
 chart says what its headline claims. That is the blind read in docs/SITE.md
@@ -195,39 +196,6 @@ def explorer_floor(data, fails):
                      f"{v} boats — the k >= 5 floor is broken (CLAUDE.md)")
 
 
-def maps_floor(path, fails):
-    """Check (8): every small-boat cell in the committed site/media/maps.js
-    counts at least five boats.
-
-    scripts/build_map_figures.py asserts the floor on the rows it read and on
-    the file it wrote; this asserts it on the file that is committed, for the
-    same reason check (7) exists. The file is
-    `window.SEAFOLK_MAPS = {..., "layers": {key: {"cells": [lon, lat, v, …]}}}`,
-    and a small-boat layer is one whose key the build names `small_*`.
-    """
-    body = path.read_text().strip().rstrip(";")
-    try:
-        layers = json.loads(body[body.index("=") + 1:])["layers"]
-    except (ValueError, KeyError) as e:
-        fails.append(f"{path.relative_to(ROOT)}: not the shape "
-                     f"scripts/build_map_figures.py writes ({e})")
-        return
-    low, seen = [], 0
-    for key, layer in layers.items():
-        if not key.startswith("small_"):
-            continue
-        values = layer["cells"][2::3]
-        seen += len(values)
-        low += [(key, v) for v in values if v < 5]
-    print(f"  site/media/maps.js: {seen} small-boat cells, "
-          f"{len(low)} of them under five boats")
-    if not seen:
-        fails.append("site/media/maps.js holds no small-boat layer")
-    for key, v in low[:5]:
-        fails.append(f"site/media/maps.js: a cell of {key} counts {v} boats — "
-                     f"the k >= 5 floor is broken (CLAUDE.md)")
-
-
 def main():
     fails, pages = [], sorted(SITE.glob("*.html")) + sorted(SITE.glob("*/*.html"))
     if not pages:
@@ -255,10 +223,6 @@ def main():
         if mb > 40:
             fails.append(f"site/explore/data is {mb:.0f} MB, over the 40 MB budget")
         explorer_floor(data, fails)
-
-    maps = SITE / "media" / "maps.js"
-    if maps.exists():
-        maps_floor(maps, fails)
 
     if fails:
         print("\nFAIL")

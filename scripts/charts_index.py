@@ -45,14 +45,30 @@ def ch(sql, store=False):
     return [line.split("\t") for line in out.stdout.splitlines() if line]
 
 
+# The dataset card's box. A cell centre outside it means the H3 pin is gone and
+# the grid is mirrored (lat for lon lands in the Arabian Sea) — refused, not drawn.
+DATA_BOX = (3.0, 17.0, 53.0, 59.0)
+
+
+def in_data_box(lon, lat, what):
+    x0, x1, y0, y1 = DATA_BOX
+    bad = [(a, b) for a, b in zip(lon, lat) if not (x0 - .5 <= a <= x1 + .5 and y0 - .5 <= b <= y1 + .5)]
+    assert not bad, f"{what}: cell centre {bad[0]} is outside the dataset box — the grid is mirrored"
+
+
 def small_boats(month):
-    """(lon, lat, boat-days) per res-5 cell for one month, from the floored export."""
+    """(lon, lat, boat-days) per res-5 cell for one month, from the floored export.
+    Leisure rows only: leisure_daily also carries the private fleet's Class B
+    fishing, work and passenger boats, and a "small boat" on this site is a
+    pleasure craft, as in the explorer and the essay's counts."""
     rows = ch(f"""SELECT h3ToGeo(h3).2, h3ToGeo(h3).1, sum(vessels), min(vessels)
                   FROM file('{DS}/leisure_daily.parquet')
-                  WHERE toStartOfMonth(day) = '{month}-01' GROUP BY h3""")
+                  WHERE toStartOfMonth(day) = '{month}-01' AND ship_group = 'leisure' GROUP BY h3""")
     assert rows, month
     assert min(int(r[3]) for r in rows) >= K_FLOOR, f"{month}: a small-boat row under the floor"
-    return [(float(a), float(b), int(c)) for a, b, c, _ in rows]
+    out = [(float(a), float(b), int(c)) for a, b, c, _ in rows]
+    in_data_box([r[0] for r in out], [r[1] for r in out], f"small boats {month}")
+    return out
 
 
 def public(year, groups, month=None):
@@ -64,17 +80,43 @@ def public(year, groups, month=None):
     rows = ch(f"""SELECT h3ToGeo(h3).2, h3ToGeo(h3).1, sumIf(vessels, moving_msgs > 0) v
                   FROM file('{DS}/class_a_hourly_{year}.parquet') WHERE {where}
                   GROUP BY h3 HAVING v > 0""")
-    return [float(r[0]) for r in rows], [float(r[1]) for r in rows], [int(r[2]) for r in rows]
+    lon, lat, v = [float(r[0]) for r in rows], [float(r[1]) for r in rows], [int(r[2]) for r in rows]
+    assert v, f"{year} {groups}: no cells"
+    in_data_box(lon, lat, f"{year} {groups}")
+    return lon, lat, v
+
+
+# Where the busiest cargo cell must be: a strait or the big port every chart of
+# these waters shows. An external fact, not a rerun of the query. (July 2025:
+# the approach to Göteborg, 11.862 E 57.688 N.)
+CHOKEPOINTS = {"Drogden": (12.712, 55.536), "Storebælt bridge": (11.03, 55.34),
+               "Göteborg approach": (11.85, 57.68), "Kiel Canal mouth": (10.15, 54.37)}
+
+
+def cargo_oracle(lon, lat, v, km=15):
+    i = max(range(len(v)), key=v.__getitem__)
+    near = {k: math.hypot((lon[i] - a) * 62.2, (lat[i] - b) * 111.2) for k, (a, b) in CHOKEPOINTS.items()}
+    assert min(near.values()) < km, f"busiest cargo cell {lon[i]:.3f},{lat[i]:.3f} is near no strait: {near}"
+
+
+def public_only(day_from, day_to):
+    """Every (day, radio ID) drawn from public_track was, THAT day, a Class A
+    passenger ship in vessel_day — the rule that fills public_track
+    (sql/03_aggregate.sql), checked again on the rows about to be drawn. A ship
+    that was a private boat on any of its days fails the whole run."""
+    bad = ch(f"""SELECT count() FROM (
+                   SELECT DISTINCT toDate(ts) AS d, mmsi FROM public_track
+                   WHERE toDate(ts) BETWEEN '{day_from}' AND '{day_to}') t
+                 LEFT ANTI JOIN (
+                   SELECT day AS d, mmsi FROM vessel_day FINAL
+                   WHERE day BETWEEN '{day_from}' AND '{day_to}'
+                     AND mobile = 'Class A' AND ship_group = 'passenger') v USING (d, mmsi)""", store=True)
+    assert bad[0][0] == "0", f"{bad[0][0]} ship-days in public_track are not public passenger ships"
 
 
 def ferry_tracks(day_from, day_to, step_min):
     """Segments of every passenger ship's track, radio IDs checked and then dropped."""
-    bad = ch(f"""SELECT count() FROM (SELECT DISTINCT mmsi FROM public_track
-                 WHERE toDate(ts) BETWEEN '{day_from}' AND '{day_to}') t
-                 WHERE mmsi NOT IN (SELECT mmsi FROM vessel_day
-                   WHERE day BETWEEN '{day_from}' AND '{day_to}'
-                   AND mobile = 'Class A' AND ship_group != 'leisure')""", store=True)
-    assert bad[0][0] == "0", f"{bad[0][0]} radio IDs in public_track are not public ships"
+    public_only(day_from, day_to)
     rows = ch(f"""SELECT mmsi, toUnixTimestamp(ts), round(lon, 4), round(lat, 4), sog
                   FROM public_track WHERE toDate(ts) BETWEEN '{day_from}' AND '{day_to}'
                   AND toMinute(ts) % {step_min} = 0 ORDER BY mmsi, ts""", store=True)
@@ -102,13 +144,15 @@ def main():
                        ("i2-2015", "2015-07"), ("i2-2025", "2025-07")]:
         s = ck.Sheet("denmark", 1200).base()
         lon, lat, v = zip(*small_boats(month))
-        n = s.stipple(lon, lat, [round(x / BOATS_PER_DOT) for x in v], 9, "small", size=2.2, alpha=.75)
+        n = s.stipple(lon, lat, [round(x / BOATS_PER_DOT) for x in v], 9, "small", size=5, alpha=.8)   # half-width sheets: a dot must survive the downscale
         charts[cid] = {**s.save(cid), "dots": n, "per_dot": BOATS_PER_DOT}
         print(f"{cid}: {n} dots from {len(v)} cells")
 
     # Cargo lanes, July 2025.
     s = ck.Sheet("denmark", 1600).base()
-    s.wash(*public(2025, ["cargo"], 7), "cargo", pct=99.3, sigma_km=1.8)
+    cargo = public(2025, ["cargo"], 7)
+    cargo_oracle(*cargo)
+    s.wash(*cargo, "cargo", pct=99.3, sigma_km=1.8)
     charts["i3-cargo"] = s.save("i3-cargo")
 
     # Fishing, all of 2025, as stipple: one dot per 40 ship-hours in a cell.

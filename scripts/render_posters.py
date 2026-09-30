@@ -1,319 +1,374 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.12"
-# dependencies = ["matplotlib>=3.9"]
-# ///
-"""Two A3 posters, portrait, 297 x 420 mm.
+"""Two A3 posters in the nautical-chart style of the site (docs/SITE.md § Round 3).
 
-    uv run scripts/render_posters.py
+    CH_PATH=data/ch_<clone> uv run --project notes scripts/render_posters.py
 
-Writes into site/posters/:
+Writes into site/posters/ a PDF to print and a 300-dpi PNG of each:
 
-    season-hills.pdf  .svg  .png     chart I1 from site/index.html
-    four-clocks.pdf   .svg  .png     chart P1 from site/pulse.html
+  danish-waters   one July of traffic on one chart: cargo as a magenta wash,
+                  ferries as red ink tracks, fishing as green stipple, small
+                  boats as sail-orange stipple, over depths, contours and
+                  soundings; neatline, compass rose, scale bar, cartouche.
+  year-of-boats   the twelve months of 2025, one small sheet each, small boats
+                  only: the Danish summer as it fills the water and drains away.
 
-PDF and SVG are vector and are the files to print; the PNG is a 1600-px-wide
-preview so the poster can be looked at inside the repo.
+The maps are scripts/chartkit.py sheets; the data comes from the same helpers
+as the essay's sheets (scripts/charts_index.py), so a poster and the page it
+belongs to cannot disagree.
 
-WHAT IT READS. The built pages' own <script type="application/json" id="data">
-blocks, exactly like scripts/render_clocks.py and for the same two reasons: the
-`clickhouse local` lock is exclusive, and a second query would be a second
-chance for the poster and the page to disagree. Run scripts/build_site_data.sh
-first; this script reads whatever that left behind and dies loudly if the block
-or a key it needs is missing.
+PRIVACY. Small boats come only from dist/dataset/leisure_daily.parquet, and
+charts_index.small_boats() asserts every row it reads counts at least five
+boats. They are drawn as stipple scattered at random inside their ~9 km cell:
+no dot is a boat. Ferry tracks come from the store's public_track, and
+charts_index.ferry_tracks() checks every radio ID in them against vessel_day
+(Class A, never leisure) before anything is drawn; the IDs never reach a file.
+The store is read, so run it on a clone (`cp -Rc data/ch data/ch_x`,
+CH_PATH=data/ch_x): the clickhouse-local lock is exclusive.
 
-PRIVACY. The season poster prints small-boat head counts. They are store-wide
-daily counts, already floored by the build, and load() asserts every value it
-draws counts at least five boats. The clocks are shares of each fleet's own
-day — no count at all.
-
-TYPOGRAPHY. The site sets Bodoni Moda for headlines, Karla for text and IBM
-Plex Mono for labels; none of the three is installed on this machine (checked
-with fc-list). The closest already on macOS: Bodoni 72 for the headlines,
-Avenir Next for everything else. No new dependency, no font to download.
+FONTS. The site's Source Serif 4 and IBM Plex Mono, fetched once into
+data/context/fonts (not committed) from the Adobe and Google font repositories.
 """
-from __future__ import annotations
-
-import json
+import io
 import math
 import re
 import sys
+import urllib.request
 from pathlib import Path
 
-import matplotlib
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import charts_index as ci  # noqa: E402
+import chartkit as ck      # noqa: E402
 
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
+import numpy as np                                                  # noqa: E402
+import matplotlib                                                   # noqa: E402
+import matplotlib.patheffects as pe                                 # noqa: E402
+import matplotlib.pyplot as plt                                     # noqa: E402
+from matplotlib import font_manager as fm                           # noqa: E402
+from matplotlib.patches import Rectangle, Circle, Polygon           # noqa: E402
+from PIL import Image                                               # noqa: E402
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = ck.ROOT
 OUT = ROOT / "site" / "posters"
+C = ck.C
+LABEL, SEA_INK = "#5a5446", "#3b5b6b"     # site/css/site.css --label, --sea-ink
+W_MM, H_MM = 297.0, 420.0          # A3 portrait
+DPI = 300
+SOURCE = ("Danish Maritime Authority AIS archive · depths EMODnet Bathymetry · "
+          "coast Natural Earth · github.com/Maksim-Burtsev/seafolk")
 
-W_MM, H_MM = 297.0, 420.0            # A3 portrait
-MM = 1 / 25.4
-PNG_W = 1600                         # the preview's width, in pixels
+# ---------------------------------------------------------------- fonts ----
+FONT_DIR = ROOT / "data" / "context" / "fonts"
+FONTS = {
+    "serif": "https://github.com/adobe-fonts/source-serif/raw/release/TTF/SourceSerif4-Regular.ttf",
+    "it": "https://github.com/adobe-fonts/source-serif/raw/release/TTF/SourceSerif4-It.ttf",
+    "semi": "https://github.com/adobe-fonts/source-serif/raw/release/TTF/SourceSerif4Display-Semibold.ttf",
+    "semi_it": "https://github.com/adobe-fonts/source-serif/raw/release/TTF/SourceSerif4Display-SemiboldIt.ttf",
+    "mono": "https://github.com/google/fonts/raw/main/ofl/ibmplexmono/IBMPlexMono-Regular.ttf",
+    "mono_med": "https://github.com/google/fonts/raw/main/ofl/ibmplexmono/IBMPlexMono-Medium.ttf",
+}
 
-# site/css/site.css, light theme. A poster is printed on paper: light only.
-GROUND, SURFACE, HAIRLINE = "#e9eeef", "#f7f9f9", "#cfdadc"
-INK, LABEL, ACCENT = "#0f1a1d", "#55676c", "#eb6834"
-ACCENT_TX, WORKING, REF, PALE = "#b8441a", "#7d8f94", "#a8b8bc", "#c6d2d5"
 
-HEAD = ["Bodoni 72", "Didot", "Baskerville", "serif"]
-TEXT = ["Avenir Next", "Helvetica Neue", "Avenir", "sans-serif"]
-# Avenir Next's bold cut is a family of its own to fontconfig; naming it
-# outright is what keeps matplotlib from falling back and warning.
-BOLD = ["Avenir Next Demi Bold", "Helvetica Neue", "sans-serif"]
+def fonts():
+    FONT_DIR.mkdir(parents=True, exist_ok=True)
+    fp = {}
+    for key, url in FONTS.items():
+        f = FONT_DIR / url.rsplit("/", 1)[1]
+        if not f.exists():
+            print(f"  fetching {f.name}")
+            urllib.request.urlretrieve(url, f)
+        fm.fontManager.addfont(str(f))
+        fp[key] = fm.FontProperties(fname=str(f))
+    # chartkit letters its soundings in the generic "serif": make that the site's.
+    matplotlib.rcParams["font.serif"] = ["Source Serif 4"]
+    return fp
 
-SOURCE = "Danish Maritime Authority AIS archive · github.com/Maksim-Burtsev/seafolk"
-K_FLOOR = 5                          # CLAUDE.md: no published cell under five boats
 
+F = fonts()
+
+
+def names():
+    """site/js/chart.js's NAMES: the one list of names every sheet letters."""
+    js = (ROOT / "site" / "js" / "chart.js").read_text()
+    out = {}
+    for m in re.finditer(r'"([^"]+)":\s*\{([^}]*)\}', js):
+        d = dict(re.findall(r'(\w+):\s*("?[^,"]+"?)', m.group(2)))
+        out[m.group(1)] = {k: v.strip('"') if v.startswith('"') else float(v) for k, v in d.items()}
+    assert "Kattegat" in out and "København" in out, "chart.js NAMES did not parse"
+    return out
+
+
+NAMES = names()
+
+
+# ---------------------------------------------------------------- page -----
+class Page:
+    """An A3 figure with a full-page axes in millimetres (y down) for the furniture."""
+
+    def __init__(self, fig=None):
+        self.fig = fig or plt.figure()
+        self.fig.set_size_inches(W_MM / 25.4, H_MM / 25.4)
+        self.fig.patch.set_facecolor(C["paper"])
+        self.p = self.fig.add_axes([0, 0, 1, 1], zorder=10)
+        self.p.set_xlim(0, W_MM)
+        self.p.set_ylim(H_MM, 0)
+        self.p.axis("off")
+        self.p.patch.set_alpha(0)
+
+    def rect(self, x, y, w, h):
+        return [x / W_MM, 1 - (y + h) / H_MM, w / W_MM, h / H_MM]
+
+    def text(self, x, y, s, font, size, color=None, **kw):
+        kw.setdefault("va", "baseline")
+        kw.setdefault("zorder", 8)
+        return self.p.text(x, y, s, fontproperties=font, fontsize=size,
+                           color=color or C["ink"], **kw)
+
+    def line(self, xs, ys, lw=.6, color=None, **kw):
+        self.p.plot(xs, ys, lw=lw, color=color or C["ink"], solid_capstyle="butt", **kw)
+
+    def box(self, x, y, w, h, lw=.6, fill="none", color=None, z=1):
+        self.p.add_patch(Rectangle((x, y), w, h, fill=fill != "none", facecolor=fill,
+                                   edgecolor=color or C["ink"], lw=lw, zorder=z))
+
+    def neatline(self, x, y, w, h, box, bar=1.6, gap=2.6, labels=True):
+        """The chart border: an inner rule, a bar alternating ink and paper
+        every ten minutes of arc, an outer rule, degrees lettered outside."""
+        lon0, lon1, lat0, lat1 = box
+        self.box(x, y, w, h, lw=.5)
+        self.box(x - bar, y - bar, w + 2 * bar, h + 2 * bar, lw=.5)
+        self.box(x - bar - gap, y - bar - gap, w + 2 * (bar + gap), h + 2 * (bar + gap), lw=1.3)
+        step = 1 / 6
+        X = lambda lon: x + (lon - lon0) / (lon1 - lon0) * w          # noqa: E731
+        Y = lambda lat: y + (lat1 - lat) / (lat1 - lat0) * h          # noqa: E731
+        k0 = math.floor(lon0 / step)
+        for k in range(k0, math.ceil(lon1 / step)):
+            if k % 2:
+                continue
+            a, b = X(max(k * step, lon0)), X(min((k + 1) * step, lon1))
+            for yy in (y - bar, y + h):
+                self.p.add_patch(Rectangle((a, yy), b - a, bar, color=C["ink"], lw=0))
+        for k in range(math.floor(lat0 / step), math.ceil(lat1 / step)):
+            if k % 2:
+                continue
+            a, b = Y(min((k + 1) * step, lat1)), Y(max(k * step, lat0))
+            for xx in (x - bar, x + w):
+                self.p.add_patch(Rectangle((xx, a), bar, b - a, color=C["ink"], lw=0))
+        if not labels:
+            return
+        for lon in range(math.ceil(lon0), math.floor(lon1) + 1):
+            self.text(X(lon), y + h + bar + gap + 4.2, f"{lon}°E", F["mono"], 7.5, ha="center")
+        for lat in range(math.ceil(lat0), math.floor(lat1) + 1):
+            self.text(x - bar - gap - 1.4, Y(lat), f"{lat}°N", F["mono"], 7.5, ha="right", va="center")
+            self.text(x + w + bar + gap + 1.4, Y(lat), f"{lat}°N", F["mono"], 7.5, ha="left", va="center")
+
+    def lettering(self, x, y, w, h, box, which, scale=1.0, moved=None):
+        """Names from chart.js; `moved` shifts one for this sheet, {name: (lon, lat)}."""
+        lon0, lon1, lat0, lat1 = box
+        for n in which:
+            d = dict(NAMES[n])
+            if moved and n in moved:
+                d["lon"], d["lat"] = moved[n]
+            if not (lon0 < d["lon"] < lon1 and lat0 < d["lat"] < lat1):
+                continue
+            px = x + (d["lon"] - lon0) / (lon1 - lon0) * w
+            py = y + (lat1 - d["lat"]) / (lat1 - lat0) * h
+            halo = [pe.withStroke(linewidth=2.2 * scale, foreground=C["paper"])]
+            if d.get("kind") == "water":
+                s = " ".join(n.upper()) if d.get("big") else n
+                self.text(px, py, s, F["it"], (12 if d.get("big") else 9) * scale, SEA_INK,
+                          ha="center", va="center", rotation=-d.get("rot", 0), path_effects=halo)
+            else:
+                left = bool(d.get("left"))
+                self.p.add_patch(Circle((px, py), .75 * scale, color=C["ink"], zorder=3))
+                self.text(px + (-1.8 if left else 1.8) * scale, py, n.upper(), F["mono_med"], 6.6 * scale,
+                          ha="right" if left else "left", va="center", path_effects=halo)
+
+    def scalebar(self, x, y, mm_per_nm, nm=40, parts=4):
+        seg = nm / parts * mm_per_nm
+        for i in range(parts):
+            self.p.add_patch(Rectangle((x + i * seg, y), seg, 1.4, facecolor=C["ink"] if i % 2 == 0 else C["paper"],
+                                       edgecolor=C["ink"], lw=.5))
+        for i in range(parts + 1):
+            self.text(x + i * seg, y - 1.2, f"{round(i * nm / parts)}", F["mono"], 6.5, ha="center")
+        self.text(x + nm * mm_per_nm / 2, y + 5.2, "nautical miles", F["it"], 8, ha="center")
+
+    def rose(self, cx, cy, r, color):
+        """A compass rose as charts print it: a degree ring, the true north star."""
+        p = self.p
+        for rr, lw in ((r, .6), (r * .86, .4), (r * .5, .35)):
+            p.add_patch(Circle((cx, cy), rr, fill=False, edgecolor=color, lw=lw, zorder=5))
+        for deg in range(0, 360, 5):
+            a = math.radians(deg)
+            ln = .14 if deg % 30 == 0 else .08 if deg % 10 == 0 else .045
+            s, c = math.sin(a), -math.cos(a)
+            p.plot([cx + s * r, cx + s * r * (1 - ln)], [cy + c * r, cy + c * r * (1 - ln)],
+                   color=color, lw=.45, zorder=5)
+            if deg % 30 == 0 and deg:
+                self.text(cx + s * r * .74, cy + c * r * .74, f"{deg:03d}", F["mono"], 4.6, color,
+                          ha="center", va="center", rotation=-deg, zorder=6)
+        for k in range(8):                                # the star
+            a = math.radians(45 * k)
+            ln = r * (.84 if k % 2 == 0 else .42)
+            w = r * .09
+            tip = (cx + math.sin(a) * ln, cy - math.cos(a) * ln)
+            l = (cx + math.sin(a - math.pi / 2) * w, cy - math.cos(a - math.pi / 2) * w)
+            rt = (cx + math.sin(a + math.pi / 2) * w, cy - math.cos(a + math.pi / 2) * w)
+            p.add_patch(Polygon([(cx, cy), l, tip], closed=True, facecolor=color, edgecolor=color, lw=.3, zorder=6))
+            p.add_patch(Polygon([(cx, cy), rt, tip], closed=True, facecolor=C["paper"], edgecolor=color, lw=.3, zorder=6))
+        self.text(cx, cy - r - 2.2, "N", F["semi"], 9, color, ha="center")
+
+    def save(self, name):
+        OUT.mkdir(parents=True, exist_ok=True)
+        for ext in ("pdf", "png"):
+            path = OUT / f"{name}.{ext}"
+            self.fig.savefig(path, facecolor=C["paper"], dpi=DPI)
+            print(f"  {path.relative_to(ROOT)}  {path.stat().st_size / 1e6:.1f} MB")
+        plt.close(self.fig)
+
+
+def key_swatch(pg, x, y, kind, color):
+    if kind == "wash":
+        pg.p.add_patch(Rectangle((x, y - 2.2), 9, 3, color=color, alpha=.55, lw=0, zorder=8))
+    elif kind == "line":
+        for dy in (-1.4, -.6, .2):
+            pg.line([x, x + 9], [y + dy - .3, y + dy - .3 + .4 * dy], lw=.5, color=color, zorder=8)
+    else:
+        rng = np.random.default_rng(sum(map(ord, color)))
+        pg.p.scatter(x + rng.random(14) * 9, y - 2.3 + rng.random(14) * 3, s=1.6, color=color, lw=0, zorder=8)
+
+
+# ---------------------------------------------------- poster 1: one July ----
+def danish_waters():
+    box = (7.5, 14.0, 53.5, 58.5)            # the whole EMODnet grid north to south
+    mx, my, mw = 20.0, 24.0, 257.0
+    mh = mw * (box[3] - box[2]) * ck.ASPECT / (box[1] - box[0])
+
+    s = ck.Sheet(box, width=round(mw / 25.4 * 100)).base()
+    s.wash(*ci.public(2025, ["cargo"], 7), "cargo", pct=99.3, sigma_km=1.8, alpha=.75)
+    lon, lat, v = ci.public(2025, ["fishing"], 7)
+    fish = s.stipple(lon, lat, [min(round(x / 8), 14) for x in v], 1.3, "fishing", size=.9, alpha=.75)
+    lon, lat, v = zip(*ci.small_boats("2025-07"))
+    small = s.stipple(lon, lat, [round(x / ci.BOATS_PER_DOT) for x in v], 9, "small", size=1.5, alpha=.85)
+    segs = ci.segments(ci.ferry_tracks("2025-07-01", "2025-07-31", 2), 600)
+    s.tracks(segs, "ferry", lw=.25, alpha=.07)
+    s.ax.collections[-1].set_rasterized(True)
+    s._soundings_draw()
+    print(f"danish-waters: {fish} fishing dots, {small} small-boat dots, {len(segs)} ferry segments")
+
+    pg = Page(s.fig)
+    s.ax.set_position(pg.rect(mx, my, mw, mh))
+    pg.neatline(mx, my, mw, mh, box)
+    pg.lettering(mx, my, mw, mh, box, [
+        "Skagerrak", "Kattegat", "Nordsøen", "Østersøen", "Storebælt", "Lillebælt", "Øresund",
+        "Femern Bælt", "Limfjorden", "Skagen", "Hirtshals", "Hanstholm", "Thyborøn", "Hvide Sande",
+        "Esbjerg", "Frederikshavn", "Aarhus", "Odense", "København", "Helsingør", "Kiel", "Rødby",
+        "Anholt", "Læsø", "Samsø", "Ærø", "Göteborg"], moved={"Østersøen": (13.2, 54.62)})
+
+    X = lambda lon: mx + (lon - box[0]) / (box[1] - box[0]) * mw     # noqa: E731
+    Y = lambda lat: my + (box[3] - lat) / (box[3] - box[2]) * mh     # noqa: E731
+    pg.rose(X(7.98), Y(54.42), 14, C["cargo"])
+
+    # the cartouche, on the Swedish shore where a chart letters its title
+    cx, cy = X(12.5), Y(58.42)
+    cw, ch = X(13.93) - cx, 118
+    pg.box(cx, cy, cw, ch, lw=1.1, fill="#f8f3e6", z=4)
+    pg.box(cx + 1.8, cy + 1.8, cw - 3.6, ch - 3.6, lw=.45, z=5)
+    t, r = cx + 6.5, cx + cw - 6.5
+    pg.text(t, cy + 11, "SEAFOLK · CHART 1", F["mono_med"], 6.8, LABEL)
+    pg.text(t, cy + 22.5, "Danish", F["semi"], 25)
+    pg.text(t, cy + 32.5, "Waters", F["semi"], 25)
+    pg.text(t, cy + 40.5, "One July of traffic,", F["it"], 10, LABEL)
+    pg.text(t, cy + 45.2, "as the ships' own radios", F["it"], 10, LABEL)
+    pg.text(t, cy + 49.9, "told it", F["it"], 10, LABEL)
+    pg.line([t, r], [cy + 54.5] * 2, lw=.5)
+    rows = [("wash", C["cargo"], "Cargo ships", "darkest in the lanes"),
+            ("line", C["ferry"], "Ferries", "and other passenger ships"),
+            ("dots", C["fishing"], "Fishing boats", "a dot for 8 hours out"),
+            ("dots", C["small"], "Small boats", f"a dot for {ci.BOATS_PER_DOT} boat-days")]
+    for i, (kind, col, a, b) in enumerate(rows):
+        yy = cy + 62.5 + i * 9.6
+        key_swatch(pg, t, yy, kind, col)
+        pg.text(t + 11.5, yy - .7, a, F["serif"], 9)
+        pg.text(t + 11.5, yy + 3.3, b, F["it"], 7.4, LABEL)
+    pg.text(t, cy + 101, "No dot is a boat: small-boat", F["it"], 7, LABEL)
+    pg.text(t, cy + 104.4, "dots fall at random in their patch.", F["it"], 7, LABEL)
+    pg.line([t, r], [cy + 108] * 2, lw=.5)
+    km_per_mm = (box[1] - box[0]) * ck.KM_PER_DEG_LAT / ck.ASPECT / mw
+    scale = round(km_per_mm * 1e6 / 1e4) * 1e4
+    pg.text(t, cy + 113, f"JULY 2025 · 1 : {scale:,.0f}".replace(",", " "), F["mono_med"], 6.3)
+    pg.scalebar(mx + 30, my + mh - 14, 1.852 / km_per_mm, nm=40)
+
+    pg.text(mx - 4.2, 12.5, "SEAFOLK", F["mono_med"], 7.5, ha="left")
+    pg.text(mx + mw + 4.2, 12.5, "DEPTHS IN METRES · WATER UNDER 5, 10 AND 20 M TINTED",
+            F["mono"], 7, ha="right")
+    pg.text(W_MM / 2, H_MM - 20, SOURCE, F["mono"], 6.8, LABEL, ha="center")
+    pg.save("danish-waters")
+
+
+# ------------------------------------------------ poster 2: twelve months ----
 MONTHS = ["January", "February", "March", "April", "May", "June", "July",
           "August", "September", "October", "November", "December"]
-# first day of the year of each month, on a common year.
-FIRST = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
-
-FLEETS = [("sailing", "Sailing boats", True), ("ferries", "Ferries", False),
-          ("cargo", "Cargo ships", False), ("fishing", "Fishing boats", False)]
-MARKS = [(0, "midnight"), (6, "6 am"), (12, "noon"), (18, "6 pm")]
-PEAK = 13.0                          # the share that reaches the rim
-R_IN, R_MAX = 20, 92                 # site/js/pulse.js's hole, as a fraction
-R_ORIGIN = -PEAK * R_IN / (R_MAX - R_IN)
-FLAT = 100 / 24                      # 4.2 % — a day with no rhythm
 
 
-# ------------------------------------------------------------------ data ----
-def block(page: Path) -> dict:
-    m = re.search(r'<script type="application/json" id="data">(.*?)</script>',
-                  page.read_text(), re.S)
-    if not m:
-        sys.exit(f"{page}: no data block — run scripts/build_site_data.sh first")
-    return json.loads(m.group(1))
+def year_of_boats(year=2025):
+    box = ck.BOXES["denmark"]
+    pg = Page()
+    gx, gut = 20.0, 6.0
+    pw = (W_MM - 2 * gx - 2 * gut) / 3
+    ph = pw * (box[3] - box[2]) * ck.ASPECT / (box[1] - box[0])
+    top, pitch = 64.0, ph + 12.0
+
+    pg.text(gx, 17, "SEAFOLK  ·  CHART  2", F["mono_med"], 7.5, LABEL)
+    pg.text(gx, 33, "A year of small boats", F["semi"], 34)
+    pg.text(gx, 43, f"Every small boat heard in Danish waters in {year}, month by month.",
+            F["it"], 12.5, LABEL)
+    pg.text(gx, 49.5, f"One dot for {ci.BOATS_PER_DOT} boat-days, placed at random inside its patch; "
+            "no dot is a boat.", F["it"], 12.5, LABEL)
+    pg.line([gx, W_MM - gx], [55, 55], lw=.5)
+
+    totals = []
+    for i, name in enumerate(MONTHS):
+        rows = ci.small_boats(f"{year}-{i + 1:02d}")
+        total = sum(r[2] for r in rows)
+        totals.append(total)
+        s = ck.Sheet(box, width=round(pw / 25.4 * 100)).base()
+        lon, lat, v = zip(*rows)
+        s.stipple(lon, lat, [round(x / ci.BOATS_PER_DOT) for x in v], 9, "small", size=1.0, alpha=.9)
+        s._soundings_draw()
+        buf = io.BytesIO()
+        s.fig.savefig(buf, format="png", dpi=DPI, facecolor=C["paper"])
+        plt.close(s.fig)
+        img = np.asarray(Image.open(buf).convert("RGB"))
+
+        x = gx + (i % 3) * (pw + gut)
+        y = top + (i // 3) * pitch
+        ax = pg.fig.add_axes(pg.rect(x, y, pw, ph), zorder=1)
+        ax.imshow(img, interpolation="lanczos")
+        ax.axis("off")
+        pg.neatline(x, y, pw, ph, box, bar=.7, gap=1.2, labels=False)
+        pg.text(x + 3.5, y + 7.5, name.upper(), F["mono_med"], 8.5,
+                path_effects=[pe.withStroke(linewidth=2.5, foreground=C["paper"])])
+        pg.text(x + pw, y + ph + 6.8, f"{round(total, -2):,.0f} boat-days".replace(",", " "),
+                F["it"], 8.5, LABEL, ha="right")
+        print(f"  {name}: {total} boat-days, {len(rows)} patches")
+
+    peak = max(range(12), key=lambda k: totals[k])
+    x = gx + (peak % 3) * (pw + gut)
+    y = top + (peak // 3) * pitch
+    pg.text(x, y + ph + 6.8, "the busiest month", F["semi_it"], 8.5, C["small"])
+    pg.text(W_MM / 2, H_MM - 6, SOURCE, F["mono"], 6.8,
+            LABEL, ha="center")
+    pg.save("year-of-boats")
 
 
-def load_season() -> dict[str, list[tuple[int, float]]]:
-    page = ROOT / "site" / "index.html"
-    season = block(page).get("season")
-    if not season:
-        sys.exit(f"{page}: the data block holds no season — has the page been built?")
-    out = {y: [(int(d), float(v)) for d, v in pts] for y, pts in season.items()}
-    if len(out) < 2:
-        sys.exit(f"{page}: season has {len(out)} years, and the poster is about the years")
-    low = min(v for pts in out.values() for _, v in pts)
-    assert low >= K_FLOOR, f"season holds a cell of {low} boats, under the floor of {K_FLOOR}"
-    return out
-
-
-def load_clocks() -> dict[str, list[float]]:
-    page = ROOT / "site" / "pulse.html"
-    clocks = block(page).get("clocks")
-    if not clocks:
-        sys.exit(f"{page}: the data block holds no clocks — has the page been built?")
-    for key, _, _ in FLEETS:
-        if key not in clocks:
-            sys.exit(f"{page}: clocks has no '{key}' — the poster needs all four fleets")
-        curve = clocks[key]
-        assert len(curve) == 24 and abs(sum(curve) - 100) < 0.5, \
-            f"{key}: {len(curve)} hours summing to {sum(curve)}, not 24 and 100"
-        assert max(curve) < PEAK, f"{key}: {max(curve)} % would run off the rim"
-    return clocks
-
-
-# ------------------------------------------------------------------ page ----
-def fx(mm: float) -> float:
-    return mm / W_MM
-
-
-def fy(mm: float) -> float:
-    """Millimetres down from the top edge, as a figure fraction."""
-    return 1 - mm / H_MM
-
-
-def sheet():
-    fig = plt.figure(figsize=(W_MM * MM, H_MM * MM), facecolor=GROUND)
-    fig.patches.append(Rectangle((0, 0), 1, 1, transform=fig.transFigure,
-                                 facecolor=GROUND, zorder=-10))
-    return fig
-
-
-def head(fig, kicker: str, lines: list[str], standfirst: list[str]) -> None:
-    """The top of both posters: kicker, headline, a short plain-English deck."""
-    fig.text(fx(22), fy(26), kicker, color=ACCENT_TX, family=BOLD, fontsize=13,
-             va="baseline")
-    fig.add_artist(plt.Line2D([fx(22), fx(275)], [fy(32)] * 2, color=INK, lw=1.2))
-    for i, line in enumerate(lines):
-        fig.text(fx(22), fy(56 + 22 * i), line, color=INK, family=HEAD,
-                 fontsize=60, va="baseline")
-    top = 56 + 22 * (len(lines) - 1)
-    for i, line in enumerate(standfirst):
-        fig.text(fx(22), fy(top + 20 + 8.2 * i), line, color=LABEL, family=TEXT,
-                 fontsize=16, va="baseline")
-
-
-def foot(fig) -> None:
-    fig.add_artist(plt.Line2D([fx(22), fx(275)], [fy(398)] * 2, color=HAIRLINE, lw=1))
-    fig.text(fx(22), fy(406), SOURCE, color=LABEL, family=TEXT, fontsize=11.5,
-             va="baseline")
-
-
-def save(fig, name: str) -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
-    for ext, kw in (("pdf", {}), ("svg", {}),
-                    ("png", {"dpi": PNG_W / (W_MM * MM)})):
-        path = OUT / f"{name}.{ext}"
-        fig.savefig(path, facecolor=GROUND, **kw)
-        print(f"  {path.relative_to(ROOT)}  {path.stat().st_size / 1e3:.0f} kB")
-    plt.close(fig)
-
-
-# --------------------------------------------------------- season hills ----
-def runs(points):
-    """Break a year over the stretches of calendar that were never loaded."""
-    out = [[points[0]]]
-    for prev, cur in zip(points, points[1:]):
-        if cur[0] - prev[0] > 1:
-            out.append([])
-        out[-1].append(cur)
-    return out
-
-
-def season_poster(season) -> None:
-    years = sorted(season)
-    first, last = years[0], years[-1]
-    top = max(v for pts in season.values() for _, v in pts)
-
-    fig = sheet()
-    head(fig, "SEAFOLK · A YEAR AT SEA",
-         ["Every summer", "more small boats go out", "than the summer before"],
-         ["Every small boat that moved in Danish waters, day by day, smoothed over a week.",
-          "One line per year. The sea is empty from November until the end of March."])
-
-    ax = fig.add_axes([fx(30), fy(356), fx(245), 208 / H_MM])
-    ax.set_facecolor(SURFACE)
-    ax.set_xlim(1, 366)
-    ax.set_ylim(0, top * 1.16)
-    for a, b in ((1, FIRST[3]), (FIRST[10], 366)):     # the empty half, shaded
-        ax.axvspan(a, b, color=HAIRLINE, alpha=0.45, lw=0)
-    ax.grid(axis="y", color=HAIRLINE, lw=0.8, zorder=0)
-    ax.set_axisbelow(True)
-
-    for year in years:
-        strong = year in (first, last)
-        colour = ACCENT if year == last else INK if year == first else PALE
-        width = 3.2 if year == last else 2.2 if year == first else 1.0
-        for run in runs(season[year]):
-            ax.plot([d for d, _ in run], [v for _, v in run], color=colour,
-                    lw=width, solid_capstyle="round", zorder=3 if strong else 2)
-
-    # two quiet annotations: the first year's peak and the last one's.
-    for year, dy, ha, dx in ((last, 16, "center", 0), (first, 12, "left", 6)):
-        day, value = max(season[year], key=lambda p: p[1])
-        colour = ACCENT_TX if year == last else INK
-        ax.plot([day], [value], "o", ms=7, color=ACCENT if year == last else INK,
-                zorder=4)
-        ax.annotate(f"{year} · {value:,.0f} boats".replace(",", " "),
-                    (day, value), textcoords="offset points", xytext=(dx, dy),
-                    ha=ha, va="bottom", color=colour, family=BOLD, fontsize=15,
-                    bbox=dict(facecolor=GROUND, edgecolor="none", pad=1.5))
-
-    for year in years[1:-1]:                            # the pale years, named once
-        day, value = max(season[year], key=lambda p: p[1])
-        ax.annotate(year, (day, value), textcoords="offset points", xytext=(7, -2),
-                    ha="left", va="center", color=WORKING, family=TEXT, fontsize=12,
-                    bbox=dict(facecolor=GROUND, edgecolor="none", pad=1.2))
-
-    ax.set_xticks(FIRST)
-    ax.set_xticklabels([m[:3] if i % 2 else m for i, m in enumerate(MONTHS)])
-    ax.tick_params(axis="x", colors=LABEL, labelsize=12, length=4, pad=5)
-    ax.tick_params(axis="y", colors=LABEL, labelsize=12, length=0, pad=5)
-    ax.yaxis.set_major_formatter(
-        lambda t, _: f"{t:,.0f}".replace(",", " "))
-    for side in ("top", "right", "left"):
-        ax.spines[side].set_visible(False)
-    ax.spines["bottom"].set_color(HAIRLINE)
-    for label in ax.get_xticklabels() + ax.get_yticklabels():
-        label.set_family(TEXT)
-
-    fig.text(fx(30), fy(142), "boats out that day", color=LABEL, family=TEXT,
-             fontsize=13, va="baseline")
-    fig.text(fx(30), fy(376),
-             "Winter is shaded. A line stops where the archive was never pulled "
-             f"down: {first} to {last} is six loaded years, not twelve.",
-             color=LABEL, family=TEXT, fontsize=13, va="baseline")
-    foot(fig)
-    save(fig, "season-hills")
-
-
-# ----------------------------------------------------------- four clocks ----
-def hour_word(hour: int) -> str:
-    if hour == 0:
-        return "midnight"
-    if hour == 12:
-        return "noon"
-    return f"{hour % 12} {'am' if hour < 12 else 'pm'}"
-
-
-def clocks_poster(clocks) -> None:
-    fig = sheet()
-    head(fig, "SEAFOLK · THE SEA BY THE HOUR",
-         ["Sailing boats go out at noon.", "The rest of the sea",
-          "runs all night"],
-         ["Where each fleet's movement falls across the day — Danish waters, "
-          "six summers, local time."])
-
-    fig.text(fx(22), fy(126),
-             "How to read a dial: midnight is at the top and the hours run "
-             "clockwise; the bar reaches further out\nthe busier that hour is. "
-             "The dashed circle is a day with no rhythm — 4.2 % of the movement "
-             "in every hour.\nEach fleet is measured against its own day — "
-             "compare the shapes, never the sizes.",
-             color=LABEL, family=TEXT, fontsize=14, va="top", linespacing=1.55)
-
-    width = math.radians(15 - 1.8)                      # the page's gapped wedge
-    ring = [math.radians(a) for a in range(0, 361, 3)]
-    theta = [math.radians(15 * h) for h in range(24)]
-    size = 80                                           # the dial's box, in mm
-
-    for i, (key, name, subject) in enumerate(FLEETS):
-        curve = clocks[key]
-        cx = 22 + 63 + 127 * (i % 2)
-        cy = 186 + 118 * (i // 2)                        # the box's top edge
-        peak = max(range(24), key=lambda h: curve[h])
-
-        fig.text(fx(cx), fy(cy - 22), name,
-                 color=ACCENT_TX if subject else INK,
-                 family=BOLD if subject else TEXT, fontsize=20, ha="center",
-                 va="baseline")
-        fig.text(fx(cx), fy(cy - 13),
-                 f"busiest at {hour_word(peak)} · {curve[peak]:.1f} % of its day",
-                 color=LABEL, family=TEXT, fontsize=13, ha="center", va="baseline")
-
-        ax = fig.add_axes([fx(cx - size / 2), fy(cy + size), fx(size), size / H_MM],
-                          projection="polar")
-        ax.set_facecolor(GROUND)
-        ax.bar(theta, curve, width=width, linewidth=0,
-               color=ACCENT if subject else WORKING, zorder=2)
-        ax.plot(ring, [FLAT] * len(ring), color=REF, lw=1.1,
-                linestyle=(0, (2, 3)), zorder=1)
-        ax.set_theta_zero_location("N")
-        ax.set_theta_direction(-1)
-        ax.set_rorigin(R_ORIGIN)
-        ax.set_ylim(0, PEAK)
-        ax.set_xticks([math.radians(15 * h) for h, _ in MARKS])
-        ax.set_xticklabels([t for _, t in MARKS])
-        ax.tick_params(colors=LABEL, labelsize=12, pad=4)
-        for label in ax.get_xticklabels():
-            label.set_family(TEXT)
-        ax.set_yticks([])
-        ax.grid(False)
-        ax.spines["polar"].set_visible(False)
-
-    foot(fig)
-    save(fig, "four-clocks")
-
-
-def main() -> None:
-    season_poster(load_season())
-    clocks_poster(load_clocks())
+def main():
+    for old in ("season-hills", "four-clocks"):
+        for ext in ("pdf", "svg", "png"):
+            (OUT / f"{old}.{ext}").unlink(missing_ok=True)
+    which = sys.argv[1:] or ["danish-waters", "year-of-boats"]
+    if "danish-waters" in which:
+        danish_waters()
+    if "year-of-boats" in which:
+        year_of_boats()
 
 
 if __name__ == "__main__":

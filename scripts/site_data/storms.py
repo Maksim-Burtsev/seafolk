@@ -173,6 +173,20 @@ def panels(ch, rows, ndays, start, overlap, no_dip):
     return out, series
 
 
+def arc(panel):
+    """How much of the whole story a panel's fishing line tells: the smaller of
+    the fall into the storm and the climb back out of it. The clip that opens
+    T4 is the one with the biggest arc, not the deepest fall — the deepest is
+    Pia, whose "after" is Christmas, and a clip whose sea never fills again
+    makes its own headline false. The same rule index.py uses for I6."""
+    fish, n = panel["lines"]["fishing"], panel["days"]
+    pre, post = level(fish, -72, -25), level(fish, 24 * n + 24, 24 * n + 71)
+    dip = min((y for x, y in fish if 0 <= x < 24 * n), default=None)
+    if None in (pre, post, dip):
+        return float("-inf")
+    return min(pre - dip, post - dip)
+
+
 def pick_default(panels_, borrowed):
     """T1's opening panel, chosen by the data.
 
@@ -314,6 +328,14 @@ def build(ch):
         t2.append(row)
     t2.sort(key=lambda r: r["fishing"][1] - r["fishing"][0])
 
+    # T2's picture: of every hundred boats heard, how many covered a mile —
+    # every storm pooled as one ratio of sums, public fleets only. Two fleets,
+    # the two ends of the range; the rest are in the table.
+    pooled = {}
+    for g in ("fishing", "cargo"):
+        s_ = [sum(pool[(st, "Class A", g)][i] for st in observed) for i in range(4)]
+        pooled[FLEET_KEY[g]] = [round(100 * s_[2] / s_[3]), round(100 * s_[0] / s_[1])]
+
     anch = anchorages(ch, ndays)
     ratios = sorted(a["ratio"] for a in anch)
 
@@ -360,17 +382,16 @@ def build(ch):
 
     data = {
         "t1": {"default": default, "panels": pans},
-        "t2": {"rows": t2, "sailing": sailing_ok},
+        "t2": {"rows": t2, "sailing": sailing_ok, "pooled": pooled},
         "t3": {"names": [ANCHOR_SHORT[n] for n in ANCHORAGES], "rows": anch},
-        # the clip that opens: the deepest of the three on T2's exact
-        # instrument, so a screenshot of this figure is the strongest case
-        # the clips that exist, discovered once in site_data.clips — not a
+        # the clip that opens: the one whose fishing line tells the whole arc
+        # (see `arc`). The clips that exist, discovered once in site_data.clips — not a
         # literal here, a glob there and three <script> tags in the page. The
         # key comes back with the storm it belongs to, so the default is chosen
         # by looking a storm up rather than by k.capitalize(), which turns
         # "dagmaregon" into "Dagmaregon" and finds nothing.
-        "t4": {"clips": list(have),
-               "default": min(have, key=lambda k: fish[have[k]])},
+        "t4": {"clips": list(have), "names": dict(have),
+               "default": max(have, key=lambda k: arc(pans[have[k]]))},
     }
     data["n"] = {
         # the shape of the chapter

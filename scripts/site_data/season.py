@@ -5,6 +5,7 @@ query files chapter 01 already runs (notes/ch01-findings.md, findings 1-10).
 
     chart  what it says                            where the numbers come from
     S1     the peak has walked three weeks early   sql/20_season_bounds.sql
+                                                   + sql/10_season_daily.sql (the profiles)
     S2     the summer week, day by day             sql/81_site_season.sql
     S3     a hundred days of a switched-on radio   sql/23_radius.sql
     S4     Silverrudder against a usual day        sql/22_regatta_spikes.sql
@@ -21,8 +22,9 @@ PRIVACY. The fleet on this page is private (small boats), so every published
 number is either a SHARE of tens of thousands of days, or a head count of
 hundreds of boats:
 
-  * S1 draws dates and one head count per year (the smallest is the busiest
-    week of 2015, over a thousand boats);
+  * S1 draws dates, one head count per year (the smallest is the busiest
+    week of 2015, over a thousand boats) and each year's season as a SHARE of
+    its own busiest week; the daily counts behind those shares are floored;
   * S2 draws a mean over 21-22 occurrences of a weekday; the smallest single
     day behind any bar is asserted below and runs in the hundreds;
   * S3 draws shares of a year's days, scaled to a hundred;
@@ -130,7 +132,48 @@ def season(ch):
             "cut_start": r["start_25"] == r["first_day"],
             "cut_end": r["end_25"] == r["last_day"],
         })
-    return {"rows": out, "guide": out[0]["peak"]}, {r["year"]: r for r in rows}
+    by_year = {r["year"]: r for r in rows}
+    return {"rows": out, "guide": out[0]["peak"],
+            "profile": profiles(ch, by_year)}, by_year
+
+
+# The stretch of the calendar S1's profiles draw: 1 April to 31 October.
+PROFILE = (91, 304)
+
+
+def profiles(ch, bounds):
+    """sql/10 -> each year's season as a coastline: the trailing 7-day mean of
+    boats out, as a per cent of that year's own busiest week.
+
+    The mean is sql/20's own (trailing, seven calendar days, per year), so the
+    profile's summit IS sql/20's peak_day and it crosses a quarter of the
+    summit on sql/20's start_25 and end_25 — both asserted, because the chart
+    draws the season as the land above that quarter and the prose quotes
+    sql/20's lengths for it.
+    """
+    per_year = {}
+    for day, mobile, _present, active, _m7 in ch("10_season_daily.sql"):
+        if mobile == "Class B" and int(day[:4]) in YEARS:
+            per_year.setdefault(int(day[:4]), []).append((day, int(active)))
+    out = {}
+    for year in YEARS:
+        rows = sorted(per_year[year])
+        days = [datetime.date.fromisoformat(d) for d, _ in rows]
+        assert all((b - a).days == 1 for a, b in zip(days, days[1:])), \
+            f"sql/10 {year}: a hole in the loaded days, the 7-day mean would span it"
+        vals = [private_count(v, f"sql/10 {d}: small boats that moved") for d, v in rows]
+        b = bounds[year]
+        rows_d = [d for d, _ in rows]
+        m7 = {d: sum(vals[i - 6:i + 1]) / 7 for i, d in enumerate(rows_d) if i >= 6}
+        top = max(m7, key=m7.get)
+        assert top == b["peak_day"] and abs(m7[top] - b["peak_7d"]) < .1, \
+            f"sql/10 {year}: summit {top} is not sql/20's {b['peak_day']}"
+        above = [d for d in rows_d if d in m7 and m7[d] >= .25 * m7[top]]
+        assert (above[0], above[-1]) == (b["start_25"], b["end_25"]), \
+            f"sql/10 {year}: the quarter-line crossings disagree with sql/20"
+        out[str(year)] = [[doy(d), round(100 * m7[d] / m7[top], 1)] for d in rows_d
+                          if d in m7 and PROFILE[0] <= doy(d) <= PROFILE[1]]
+    return out
 
 
 # ------------------------------------------------------------------- S2 ----

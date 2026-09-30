@@ -572,6 +572,7 @@ def build(ch):
         "ellen_before": f"{before:.0f}",
         "ellen_after": f"{after:.0f}",
         "ellen_cut": word(round(before - after)),
+        "ellen_cut_n": str(round(before - after)),     # the same, set as a big number
         "ellen_nm": f"{charts['f4']['nm']:.0f}",
         "livo_low": f"{min(livo):.0f}",
         "livo_high": f"{max(livo):.0f}",

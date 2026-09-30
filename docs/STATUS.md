@@ -3,11 +3,109 @@
 Newest session on top. Each entry: what was done, findings with numbers, open
 questions, and the exact next session. Write it for someone with zero context.
 
-**Next: the owner reads the rewritten prose, then GitHub Pages goes on.**
-The dataset is public on Hugging Face (2026-09-30). The site's text was
-rewritten in the owner's voice; `.github/workflows/pages.yml` is written but
-not committed, and Pages is not enabled on the repo — both wait for the
-owner's read. S15 (outreach) stays postponed. The store is unchanged since S8.
+**Next: the owner reviews round 3 (the site as a nautical chart), then GitHub
+Pages goes on.** Open `site/index.html` by double-click (and the chapters from
+its footer, `site/explore/`, `site/posters/*.png`). The dataset is public on
+Hugging Face. `.github/workflows/pages.yml` is written but NOT committed — a
+push with it would try to deploy while Pages is off; commit it and enable
+Pages (`gh api -X POST repos/Maksim-Burtsev/seafolk/pages -f build_type=workflow`)
+after the owner's yes. The store is unchanged since S8.
+
+---
+
+## Round 3 — the site as a nautical chart — 2026-09-30 → 10-01
+
+**Why.** The owner's review of the round-2 site: "a Claude artifact" — walls of
+text, default styling, honeycomb maps with gradients, charcoal line maps, generic
+bars; only I1 passed. He chose between two sketches on real data (the sea at
+night lit by radios; a paper nautical chart) — **the chart** — and "the whole
+site at once" (`docs/SITE.md` § Round 3, DECISIONS 2026-09-30 ×4).
+
+**What was done.** Foundation by this session: `scripts/chartkit.py` (a chart
+sheet: EMODnet depth tints, contours, soundings, land; cargo as magenta wash,
+stipple, real tracks; `project()`), `scripts/fetch_bathymetry.py`,
+`site/js/chart.js` (neatline, degree bar, water/place names, scale bar,
+`chart.project`), `site/css/site.css` (paper palette, Source Serif 4 + Plex
+Mono, sheets, cartouche, log, spread), the hero (`site/js/hero.js`: a Saturday
+of ferries drawn by a pen), the index log and five map sheets
+(`scripts/charts_index.py`). Seven Opus implementers in parallel, one per page
+(index figures, season, pulse, ferries, storms + the storm player, how, explorer
++ posters + clocks film), each on its own store clone at low priority; this
+session reviewed every figure on screenshots at 1280 and 380 px. New:
+`scripts/charts_{season,pulse,ferries,storms,how,explore}.py`,
+`scripts/build_charts.sh`, `scripts/test_charts.py`; posters `danish-waters`
+and `year-of-boats` replace season-hills and four-clocks. Deleted: the hexagon
+map stack (`scripts/build_map_figures.py`, `site/js/minimap.js`,
+`site/media/{maps,land}.js`, `maps-demo.html`, `demo.html`) and test_site's
+check on `maps.js`. Kimi Code was asked for a second-opinion version of the
+index and ran out of quota before drawing anything.
+
+### Validate — real output
+
+```
+$ scripts/build_site_data.sh                     exit 0, 11 min 45 s (at nice 20 / background QoS)
+$ scripts/build_charts.sh                        exit 0, 2 min 42 s
+  i1-jul 14 547 dots from 773 cells · i1-jan 273 from 60 · hero 236 ferries under way on 2025-07-12
+  season-race 2 047 dots, Svendborg's patch 224 (usual 48) · ferries-web 21 041 island crossings
+  race SKJOLDNAES 66 min / ELLEN 60 min · storms-amy-1 703 dots from 471 cells
+$ uv run scripts/test_build_guards.py            PASS
+$ uv run scripts/test_site.py                    PASS  (explorer 17.5 MB of 40; 23 069 small-boat
+                                                  cell-months, 0 under five)
+$ uv run --project notes scripts/test_charts.py  PASS  (Drogden ink at 255,220; chart.js agrees on 4 places)
+  mutations, each red: y-flip in chart.project; dropping the raster flip in wash; lat/lon swap in project()
+$ grep -rEn '\b[0-9]{9}\b' site/ | wc -l       0
+$ du -sh site                                    78M (posters 36M, media 25M, explorer 17M)
+```
+
+### Design review
+
+`punchcard:punchcard` on `git diff 8f8684b` (code only, ≈ 9 200 changed lines
++ new builders), three finder passes (values, removed guarantees, tests), this
+session judged. **Fixed:**
+
+1. 🔴 *Small-boat sheets summed every `ship_group` in `leisure_daily`* — Class B
+   fishing, work and passenger boats were drawn as "small boats" (January 2025:
+   25 % of the dots). `small_boats()` and `charts_season.cells()` now read
+   `ship_group = 'leisure'`, as the explorer and the essay's counts do.
+   Posters re-rendered.
+2. 🔴 *No geography oracle for the new maps* — a flipped or transposed image or
+   overlay passed every gate (the finder showed five mutations green). One
+   projection function per language, `scripts/test_charts.py` holds both to
+   Drogden, Skagen, Kiel, Rønne and the bathymetry to sea/land places; builders
+   refuse cell centres outside the dataset box, and the busiest cargo cell must
+   sit at a known strait or port (July 2025: the Göteborg approach).
+3. 🟡 *The public-ship check on ferry tracks was copied twice and looser than its
+   docstring* (a radio ID public on any one day passed). One `public_only()` in
+   `charts_index.py`, per ship-day, against the rule that fills
+   `public_track` (Class A passenger), used by every builder that reads tracks.
+4. 🟡 *`season.js` carried per-patch small-boat counts no page reads* — dropped
+   from the manifest, which makes test_site's "sheets carry no per-cell count"
+   true.
+5. 🟡 *The Pages workflow would deploy without the gates* — it runs
+   `scripts/test_site.py` first.
+6. `chartkit` ink aligned to the site's `--ink`; soundings sampled inside the
+   sheet; `?only=` screenshots reach figures inside `.spread`.
+
+Accepted as is, with the reason: the explorer, render_storm and the posters
+filter to the chart box (7–16 E, 53.5–58.5 N) and drop the dataset's outer
+strip (≈ 12 % of cargo ship-hours, 2 % of July small boats) — the chart is the
+frame, and the dataset keeps everything; the explorer's own projection has no
+test (inline in its page; its data files keep the Drogden check);
+`render_clocks.py` draws the round-2 clock geometry while `pulse.html` now shows
+compass roses — the film is linked, not embedded, and is the owner's call to
+keep or drop; four nine-digit regexes (test_site's over every written file is
+the gate); page-local place coordinates next to `chart.NAMES`; `LOCAL = 120`
+in the two pens (both days are July); the build order (site data → charts →
+render_storm/posters) is documented in `scripts/build_charts.sh`, not enforced;
+the storm triptych keys are literal in three files (the three clips are fixed).
+
+### Open questions
+
+- **The owner's review of round 3** — look, wording, what to cut.
+- The chapters' prose is still the S12 draft voice under Kimi's light pass.
+- Safari/Firefox and a real phone are untested; `shot.sh`'s headless shell
+  reports reduced motion, so screenshots show the animations' still frames.
+- Issue #1 (good first issue): load the rest of 2026 when the year is over.
 
 ---
 

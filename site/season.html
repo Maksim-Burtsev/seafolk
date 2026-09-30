@@ -3,16 +3,61 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>A year under sail — Seafolk</title>
-<meta name="description" content="Eleven years of Danish ship radio, asked when small boats go out, which day of the week, how far, and what a race day looks like.">
+<meta name="description" content="Danish ship radio, asked when small boats go out, which day of the week, how far, and what a race day looks like.">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="css/site.css">
+<style>
+/* This page only. The design system is site/css/site.css; nothing here restyles it. */
+
+/* ?only=<id> (scripts/shot.sh) hides every child of .wrap but the figure; a
+   figure that sits inside a .spread needs its row shown and its note hidden. */
+body.only > .wrap > :has(> .shot) { display: block; }
+body.only :has(> .shot) > :not(.shot) { display: none; }
+
+/* the title block, lettered like a chart's cartouche */
+.title { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 25em); gap: 18px 44px; align-items: start; }
+.title .cartouche { position: static; width: auto; outline-offset: -6px; }
+.title .log { grid-template-columns: 7em 1fr; }
+@media (max-width: 900px) { .title { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .title .log { grid-template-columns: 1fr; } }
+
+/* a note beside a figure: a sounding, then two or three lines */
+.spread > .prose { gap: 12px; padding-top: 6px; }
+.spread > .prose .big { margin: 0 0 -4px; }
+.big small { font: 500 13px/1 var(--mono); font-style: normal; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--label); margin-left: 8px; }
+.spread > .prose .caps { color: var(--ferry); }
+.spread-wide { grid-template-columns: minmax(0, 1fr) 17em; }
+@media (max-width: 900px) { .spread-wide { grid-template-columns: 1fr; } }
+
+/* short blocks set in two columns, the way an almanac sets its notes */
+.cols { columns: 2 24em; column-gap: 44px; max-width: 64em; }
+.cols p { break-inside: avoid; margin-bottom: 16px; }
+.cols p:last-child { margin-bottom: 0; }
+
+/* one fact set as a sounding with its note */
+.fact { display: grid; grid-template-columns: 11em minmax(0, 58ch); gap: 8px 32px; align-items: start;
+  border-top: 1.5px solid var(--ink); padding-top: 22px; }
+.fact .big { color: var(--ink); }
+.fact .big small { display: block; margin: 10px 0 0; line-height: 1.4; }
+@media (max-width: 640px) { .fact { grid-template-columns: 1fr; } }
+
+/* land names on the archipelago sheets: upright spaced capitals, no dot */
+.sheet .landname {
+  font: 600 clamp(8px, 1vw, 12px) var(--serif); letter-spacing: .3em; text-transform: uppercase;
+  color: var(--label); opacity: .85;
+}
+.sheet .place.race { color: var(--accent-tx); font-weight: 600; }
+.sheet .place.race::before { background: var(--accent-tx); }
+@media (max-width: 640px) { .sheet .landname { font-size: 7.5px; letter-spacing: .18em; } }
+</style>
 
 <!-- Every number below is written by scripts/build_site_data.py from the store.
      Nothing here is typed by hand: the JSON block feeds the charts, and each
      empty span carrying a data-n attribute is filled from that block's "n" map.
      scripts/test_site.py fails if one of them is left empty. -->
-<script type="application/json" id="data">{"season":{"rows":[{"year":2015,"start":134,"start_label":"14 May","end":278,"end_label":"5 October","len":145,"core":60,"peak":219,"peak_label":"7 August","small_boats_peak":1165,"cut_start":false,"cut_end":false},{"year":2018,"start":124,"start_label":"4 May","end":263,"end_label":"20 September","len":140,"core":89,"peak":208,"peak_label":"27 July","small_boats_peak":2177,"cut_start":false,"cut_end":false},{"year":2021,"start":134,"start_label":"14 May","end":267,"end_label":"24 September","len":134,"core":94,"peak":208,"peak_label":"27 July","small_boats_peak":3035,"cut_start":false,"cut_end":false},{"year":2024,"start":128,"start_label":"8 May","end":270,"end_label":"27 September","len":143,"core":77,"peak":206,"peak_label":"25 July","small_boats_peak":3784,"cut_start":false,"cut_end":false},{"year":2025,"start":121,"start_label":"1 May","end":268,"end_label":"25 September","len":148,"core":69,"peak":201,"peak_label":"20 July","small_boats_peak":4220,"cut_start":false,"cut_end":false},{"year":2026,"start":134,"start_label":"14 May","end":238,"end_label":"26 August","len":105,"core":58,"peak":198,"peak_label":"17 July","small_boats_peak":5178,"cut_start":false,"cut_end":true}],"guide":219},"week":{"year":2025,"weekday":1801.5,"more":29,"days":[{"name":"Monday","short":"Mon","small_boats":1707,"ratio":0.948,"days":22},{"name":"Tuesday","short":"Tue","small_boats":1552,"ratio":0.862,"days":22},{"name":"Wednesday","short":"Wed","small_boats":1753,"ratio":0.973,"days":21},{"name":"Thursday","short":"Thu","small_boats":1980,"ratio":1.099,"days":22},{"name":"Friday","short":"Fri","small_boats":2013,"ratio":1.117,"days":22},{"name":"Saturday","short":"Sat","small_boats":2340,"ratio":1.299,"days":22},{"name":"Sunday","short":"Sun","small_boats":2316,"ratio":1.286,"days":22}]},"hundred":{"year":2025,"groups":[{"key":"stayed","label":"never left the berth","share":46},{"key":"short","label":"went out, under five miles","share":14},{"key":"mid","label":"five to thirty miles","share":29},{"key":"long","label":"more than thirty miles","share":11}]},"race":{"place":"Svendborg","rows":[{"year":2015,"date":"18 September","weekday":"Friday","small_boats_race":47,"small_boats_usual":15,"usual_low":12,"usual_high":17,"times":3.1},{"year":2018,"date":"22 September","weekday":"Saturday","small_boats_race":64,"small_boats_usual":21,"usual_low":14,"usual_high":28,"times":3.1},{"year":2021,"date":"17 September","weekday":"Friday","small_boats_race":174,"small_boats_usual":39,"usual_low":20,"usual_high":55,"times":4.5},{"year":2024,"date":"20 September","weekday":"Friday","small_boats_race":226,"small_boats_usual":40,"usual_low":21,"usual_high":57,"times":5.7},{"year":2025,"date":"19 September","weekday":"Friday","small_boats_race":206,"small_boats_usual":41,"usual_low":31,"usual_high":63,"times":5.0}]},"n":{"season_len_lo":"134","season_len_hi":"148","core_len_lo":"60","core_len_hi":"94","peak_first":"7 August","peak_last":"17 July","peak_shift":"21","fleet_growth":"3.6","weekday_boats":"1 802","saturday_boats":"2 340","weekend_more":"29","weekend_lo":"26","weekend_hi":"29","weekend_2015":"39","late_friday":"12","late_midweek":"10","late_saturday":"7","friday_edge_2015":"51","friday_edge_now":"20","stayed":"46","went_far":"11","idle_lo":"43","idle_hi":"46","trip_half":"14","trip_2015":"16.8","trip_2021":"12.6","marina":"83","marina_lo":"82","marina_hi":"83","race_times_first":"3.1","race_times_best":"5.7","race_boats":"206","race_usual":"41","race_quiet_lo":"12","race_quiet_hi":"63","others_lo":"1.0","others_hi":"3.0","multi_events":"16","multi_quiet_last":"12","multi_first":"2.5","multi_last":"1.3","night_now":"4.5","night_lo":"4.3","night_hi":"4.8","night_ferry":"23"}}</script>
+<script type="application/json" id="data">{"season":{"rows":[{"year":2015,"start":134,"start_label":"14 May","end":278,"end_label":"5 October","len":145,"core":60,"peak":219,"peak_label":"7 August","small_boats_peak":1165,"cut_start":false,"cut_end":false},{"year":2018,"start":124,"start_label":"4 May","end":263,"end_label":"20 September","len":140,"core":89,"peak":208,"peak_label":"27 July","small_boats_peak":2177,"cut_start":false,"cut_end":false},{"year":2021,"start":134,"start_label":"14 May","end":267,"end_label":"24 September","len":134,"core":94,"peak":208,"peak_label":"27 July","small_boats_peak":3035,"cut_start":false,"cut_end":false},{"year":2024,"start":128,"start_label":"8 May","end":270,"end_label":"27 September","len":143,"core":77,"peak":206,"peak_label":"25 July","small_boats_peak":3784,"cut_start":false,"cut_end":false},{"year":2025,"start":121,"start_label":"1 May","end":268,"end_label":"25 September","len":148,"core":69,"peak":201,"peak_label":"20 July","small_boats_peak":4220,"cut_start":false,"cut_end":false},{"year":2026,"start":134,"start_label":"14 May","end":238,"end_label":"26 August","len":105,"core":58,"peak":198,"peak_label":"17 July","small_boats_peak":5178,"cut_start":false,"cut_end":true}],"guide":219,"profile":{"2015":[[91,5.3],[92,5.7],[93,6.8],[94,7.6],[95,9.5],[96,11.2],[97,11.7],[98,12.5],[99,12.8],[100,13.0],[101,13.1],[102,11.5],[103,9.8],[104,9.8],[105,9.6],[106,9.1],[107,8.8],[108,10.1],[109,12.6],[110,14.0],[111,15.2],[112,16.9],[113,17.1],[114,17.9],[115,17.3],[116,16.3],[117,15.7],[118,15.4],[119,14.0],[120,15.2],[121,17.8],[122,20.4],[123,23.6],[124,23.8],[125,23.3],[126,24.3],[127,23.3],[128,21.0],[129,18.5],[130,15.2],[131,16.4],[132,17.7],[133,17.5],[134,26.6],[135,32.9],[136,37.4],[137,37.3],[138,37.6],[139,37.8],[140,39.3],[141,33.2],[142,29.3],[143,29.3],[144,36.5],[145,41.5],[146,42.3],[147,41.3],[148,39.5],[149,37.8],[150,33.2],[151,27.6],[152,22.7],[153,20.6],[154,19.7],[155,23.5],[156,29.7],[157,33.8],[158,36.5],[159,38.2],[160,42.7],[161,47.1],[162,46.7],[163,47.1],[164,49.7],[165,49.2],[166,48.2],[167,48.1],[168,45.9],[169,43.7],[170,37.9],[171,37.1],[172,39.9],[173,41.0],[174,41.9],[175,41.2],[176,43.2],[177,46.5],[178,46.1],[179,46.5],[180,48.5],[181,50.6],[182,58.3],[183,62.4],[184,65.8],[185,73.9],[186,82.5],[187,79.4],[188,80.9],[189,73.8],[190,66.0],[191,59.0],[192,59.3],[193,54.0],[194,60.1],[195,60.7],[196,65.1],[197,75.9],[198,84.3],[199,77.4],[200,77.3],[201,78.1],[202,74.3],[203,80.8],[204,77.4],[205,79.1],[206,74.4],[207,64.7],[208,65.8],[209,66.8],[210,58.6],[211,57.9],[212,51.1],[213,60.2],[214,73.5],[215,77.3],[216,81.1],[217,87.4],[218,93.7],[219,100.0],[220,98.0],[221,96.3],[222,92.8],[223,90.5],[224,88.5],[225,85.5],[226,78.6],[227,76.4],[228,72.8],[229,64.9],[230,59.0],[231,57.4],[232,56.5],[233,63.5],[234,70.5],[235,73.7],[236,74.4],[237,74.1],[238,69.6],[239,62.2],[240,55.1],[241,47.3],[242,42.6],[243,41.6],[244,41.3],[245,39.0],[246,39.2],[247,36.4],[248,30.2],[249,23.2],[250,22.9],[251,23.8],[252,26.7],[253,27.9],[254,27.9],[255,31.2],[256,33.2],[257,31.5],[258,29.5],[259,26.9],[260,24.0],[261,22.8],[262,22.9],[263,24.3],[264,25.0],[265,25.1],[266,24.6],[267,24.8],[268,25.1],[269,24.5],[270,25.5],[271,25.3],[272,26.1],[273,26.2],[274,26.6],[275,27.4],[276,28.8],[277,27.3],[278,26.6],[279,24.7],[280,23.0],[281,22.0],[282,19.5],[283,15.3],[284,12.6],[285,12.0],[286,12.2],[287,12.5],[288,12.1],[289,11.5],[290,10.3],[291,9.6],[292,9.3],[293,9.3],[294,9.3],[295,9.2],[296,9.0],[297,9.2],[298,8.4],[299,8.4],[300,8.1],[301,7.7],[302,7.6],[303,7.5],[304,6.6]],"2018":[[91,5.0],[92,5.1],[93,5.1],[94,5.5],[95,5.7],[96,5.0],[97,5.6],[98,6.9],[99,7.1],[100,7.0],[101,6.9],[102,6.8],[103,6.5],[104,6.9],[105,6.8],[106,6.9],[107,7.7],[108,8.7],[109,10.1],[110,11.8],[111,13.2],[112,15.5],[113,15.2],[114,14.6],[115,14.2],[116,13.5],[117,13.5],[118,15.7],[119,17.8],[120,19.1],[121,20.1],[122,22.0],[123,23.6],[124,25.4],[125,26.7],[126,27.3],[127,28.8],[128,31.1],[129,33.5],[130,37.8],[131,41.2],[132,45.2],[133,46.4],[134,46.1],[135,45.8],[136,44.6],[137,40.8],[138,38.8],[139,38.1],[140,41.9],[141,48.0],[142,49.9],[143,51.3],[144,53.1],[145,54.5],[146,53.5],[147,48.6],[148,42.2],[149,40.6],[150,39.2],[151,38.4],[152,39.8],[153,42.4],[154,46.7],[155,48.0],[156,49.0],[157,50.4],[158,52.2],[159,53.2],[160,54.1],[161,53.4],[162,51.6],[163,51.0],[164,49.6],[165,46.9],[166,43.8],[167,39.5],[168,35.2],[169,37.0],[170,35.6],[171,35.3],[172,35.0],[173,32.4],[174,29.5],[175,32.1],[176,34.5],[177,38.9],[178,43.6],[179,49.7],[180,52.8],[181,58.1],[182,59.9],[183,61.8],[184,65.0],[185,67.0],[186,65.1],[187,65.4],[188,61.6],[189,66.0],[190,62.5],[191,61.4],[192,61.2],[193,66.1],[194,72.9],[195,77.2],[196,75.0],[197,85.1],[198,88.6],[199,90.6],[200,89.8],[201,88.4],[202,90.2],[203,90.2],[204,87.6],[205,88.1],[206,92.6],[207,97.3],[208,100.0],[209,97.5],[210,98.1],[211,98.2],[212,98.0],[213,93.7],[214,91.5],[215,89.7],[216,90.7],[217,81.7],[218,78.1],[219,77.9],[220,75.3],[221,72.0],[222,61.2],[223,54.0],[224,56.8],[225,55.3],[226,48.0],[227,45.6],[228,41.8],[229,47.7],[230,50.7],[231,51.3],[232,47.1],[233,47.2],[234,45.5],[235,44.9],[236,41.1],[237,39.9],[238,38.4],[239,36.2],[240,34.8],[241,34.2],[242,30.7],[243,31.0],[244,33.0],[245,36.2],[246,38.8],[247,38.9],[248,38.5],[249,39.7],[250,38.7],[251,34.4],[252,29.6],[253,28.1],[254,24.7],[255,21.8],[256,20.8],[257,20.6],[258,21.7],[259,22.0],[260,22.1],[261,24.6],[262,26.0],[263,25.4],[264,22.8],[265,19.8],[266,17.2],[267,15.4],[268,13.4],[269,10.7],[270,9.6],[271,10.6],[272,13.9],[273,14.9],[274,16.5],[275,15.8],[276,16.3],[277,16.9],[278,17.1],[279,16.3],[280,15.9],[281,14.4],[282,14.6],[283,15.5],[284,15.1],[285,15.5],[286,15.4],[287,15.5],[288,16.0],[289,16.3],[290,15.5],[291,15.0],[292,13.9],[293,11.4],[294,9.6],[295,8.6],[296,7.5],[297,6.8],[298,6.3],[299,5.4],[300,4.6],[301,3.9],[302,3.6],[303,3.6],[304,3.6]],"2021":[[91,10.0],[92,10.8],[93,12.6],[94,13.2],[95,13.2],[96,12.2],[97,10.3],[98,9.2],[99,7.9],[100,7.4],[101,6.8],[102,6.9],[103,7.1],[104,8.0],[105,8.8],[106,10.3],[107,11.5],[108,14.7],[109,16.1],[110,17.9],[111,17.5],[112,16.7],[113,16.2],[114,16.1],[115,14.6],[116,14.0],[117,13.6],[118,14.2],[119,14.7],[120,17.0],[121,18.8],[122,21.1],[123,20.7],[124,19.3],[125,18.2],[126,18.0],[127,15.9],[128,14.3],[129,12.9],[130,14.1],[131,15.3],[132,17.8],[133,22.4],[134,26.7],[135,29.2],[136,31.3],[137,31.2],[138,31.9],[139,31.5],[140,28.2],[141,24.9],[142,21.6],[143,19.1],[144,21.4],[145,20.8],[146,19.5],[147,20.0],[148,23.4],[149,30.2],[150,39.8],[151,40.2],[152,42.5],[153,44.4],[154,45.3],[155,46.3],[156,48.4],[157,48.2],[158,48.1],[159,48.7],[160,50.2],[161,52.0],[162,51.0],[163,43.5],[164,36.4],[165,35.7],[166,35.0],[167,36.6],[168,37.4],[169,41.5],[170,48.6],[171,52.3],[172,52.3],[173,54.0],[174,54.6],[175,54.8],[176,51.6],[177,49.6],[178,50.6],[179,54.7],[180,57.8],[181,56.5],[182,54.2],[183,55.6],[184,57.7],[185,61.4],[186,61.7],[187,59.6],[188,62.1],[189,67.8],[190,70.2],[191,66.7],[192,67.4],[193,70.3],[194,75.6],[195,81.1],[196,86.2],[197,90.5],[198,98.4],[199,90.1],[200,92.9],[201,89.1],[202,89.4],[203,89.3],[204,88.1],[205,90.5],[206,95.2],[207,94.4],[208,100.0],[209,98.0],[210,86.4],[211,76.7],[212,67.0],[213,64.9],[214,58.7],[215,56.3],[216,56.5],[217,65.7],[218,71.0],[219,73.5],[220,72.3],[221,71.1],[222,67.7],[223,65.8],[224,65.1],[225,66.4],[226,60.9],[227,61.2],[228,60.9],[229,55.8],[230,48.2],[231,41.7],[232,40.2],[233,47.3],[234,52.3],[235,55.6],[236,62.5],[237,63.6],[238,61.8],[239,56.7],[240,49.5],[241,42.6],[242,38.8],[243,36.3],[244,39.8],[245,43.5],[246,47.2],[247,51.6],[248,55.6],[249,55.1],[250,53.2],[251,51.2],[252,51.0],[253,51.0],[254,48.5],[255,44.7],[256,43.6],[257,42.3],[258,40.1],[259,36.1],[260,32.3],[261,31.8],[262,32.0],[263,31.5],[264,30.2],[265,30.0],[266,28.0],[267,25.6],[268,24.6],[269,24.9],[270,23.7],[271,24.0],[272,23.0],[273,23.2],[274,22.8],[275,20.7],[276,15.7],[277,15.6],[278,14.2],[279,14.2],[280,16.0],[281,18.1],[282,20.3],[283,22.9],[284,22.2],[285,22.1],[286,21.8],[287,20.0],[288,17.5],[289,13.9],[290,11.9],[291,12.1],[292,11.7],[293,10.6],[294,10.1],[295,9.8],[296,9.8],[297,9.2],[298,8.5],[299,8.1],[300,8.0],[301,8.3],[302,8.8],[303,8.6],[304,8.2]],"2024":[[91,8.7],[92,8.2],[93,7.9],[94,7.7],[95,7.2],[96,7.4],[97,7.0],[98,6.8],[99,7.3],[100,7.2],[101,7.2],[102,7.6],[103,7.4],[104,7.0],[105,6.9],[106,6.9],[107,7.6],[108,8.3],[109,8.4],[110,9.0],[111,10.4],[112,10.4],[113,10.6],[114,10.6],[115,10.7],[116,11.2],[117,12.8],[118,14.2],[119,15.5],[120,16.8],[121,18.9],[122,19.6],[123,21.8],[124,23.2],[125,23.8],[126,23.8],[127,24.5],[128,26.3],[129,32.0],[130,35.4],[131,40.3],[132,46.1],[133,47.0],[134,47.0],[135,45.0],[136,39.5],[137,36.6],[138,36.9],[139,38.4],[140,45.8],[141,46.2],[142,45.2],[143,46.6],[144,48.4],[145,45.4],[146,41.1],[147,34.6],[148,34.1],[149,35.0],[150,36.3],[151,35.8],[152,37.9],[153,40.7],[154,39.8],[155,41.3],[156,41.3],[157,39.8],[158,39.2],[159,33.8],[160,26.1],[161,26.2],[162,25.7],[163,26.1],[164,26.8],[165,27.6],[166,27.0],[167,32.6],[168,35.7],[169,38.2],[170,39.7],[171,41.9],[172,43.3],[173,45.3],[174,46.8],[175,48.8],[176,52.6],[177,58.2],[178,61.9],[179,61.4],[180,66.0],[181,62.4],[182,61.5],[183,56.8],[184,52.3],[185,44.8],[186,40.4],[187,35.6],[188,34.2],[189,37.5],[190,44.5],[191,45.9],[192,55.1],[193,64.0],[194,65.3],[195,70.9],[196,68.9],[197,67.7],[198,69.5],[199,67.4],[200,73.3],[201,86.1],[202,96.1],[203,95.6],[204,96.4],[205,96.1],[206,100.0],[207,91.3],[208,85.4],[209,73.3],[210,76.9],[211,80.8],[212,83.9],[213,85.0],[214,90.7],[215,91.0],[216,92.1],[217,90.9],[218,88.6],[219,88.2],[220,83.7],[221,72.2],[222,63.6],[223,60.9],[224,61.5],[225,57.7],[226,56.1],[227,55.6],[228,60.7],[229,66.5],[230,71.3],[231,67.9],[232,64.9],[233,58.6],[234,52.7],[235,47.3],[236,44.5],[237,38.7],[238,35.1],[239,36.3],[240,41.4],[241,45.6],[242,51.2],[243,52.4],[244,59.2],[245,60.7],[246,57.1],[247,54.3],[248,51.6],[249,51.0],[250,54.1],[251,54.1],[252,50.8],[253,47.9],[254,44.7],[255,42.6],[256,39.2],[257,31.5],[258,25.4],[259,26.1],[260,28.2],[261,30.5],[262,32.1],[263,36.6],[264,43.4],[265,48.2],[266,48.9],[267,47.3],[268,43.6],[269,40.4],[270,33.1],[271,23.3],[272,15.6],[273,12.9],[274,11.5],[275,11.4],[276,12.6],[277,15.3],[278,17.6],[279,18.2],[280,18.2],[281,18.5],[282,18.4],[283,16.5],[284,13.5],[285,11.0],[286,8.7],[287,8.5],[288,9.0],[289,8.3],[290,8.4],[291,8.8],[292,8.8],[293,9.1],[294,8.8],[295,7.9],[296,8.3],[297,8.4],[298,8.1],[299,8.0],[300,7.3],[301,7.2],[302,7.2],[303,6.7],[304,6.2]],"2025":[[91,4.4],[92,4.8],[93,5.3],[94,5.8],[95,5.8],[96,6.7],[97,6.9],[98,7.2],[99,7.3],[100,7.3],[101,7.1],[102,8.6],[103,9.1],[104,10.3],[105,10.5],[106,12.5],[107,13.9],[108,15.3],[109,15.3],[110,16.0],[111,16.4],[112,16.5],[113,15.4],[114,14.9],[115,15.3],[116,17.2],[117,19.2],[118,19.0],[119,19.7],[120,20.9],[121,25.0],[122,26.1],[123,25.1],[124,22.9],[125,22.8],[126,22.6],[127,22.8],[128,20.2],[129,20.0],[130,21.9],[131,24.9],[132,25.5],[133,26.6],[134,26.1],[135,24.9],[136,24.9],[137,24.2],[138,23.5],[139,24.9],[140,26.4],[141,25.9],[142,25.0],[143,23.9],[144,23.8],[145,21.4],[146,20.8],[147,18.2],[148,21.0],[149,28.8],[150,30.7],[151,37.6],[152,42.1],[153,42.1],[154,44.6],[155,44.6],[156,41.2],[157,39.3],[158,35.7],[159,34.8],[160,35.7],[161,34.1],[162,34.1],[163,37.2],[164,43.0],[165,44.1],[166,49.0],[167,48.3],[168,50.7],[169,50.9],[170,45.4],[171,47.3],[172,51.6],[173,54.7],[174,53.5],[175,49.9],[176,49.8],[177,53.2],[178,46.1],[179,38.8],[180,29.4],[181,36.8],[182,47.3],[183,53.2],[184,49.3],[185,53.6],[186,51.8],[187,56.2],[188,54.2],[189,50.0],[190,50.5],[191,60.5],[192,65.6],[193,68.8],[194,69.1],[195,74.0],[196,77.4],[197,76.3],[198,76.3],[199,78.4],[200,89.9],[201,100.0],[202,97.8],[203,92.8],[204,92.5],[205,94.2],[206,92.1],[207,84.9],[208,77.9],[209,77.3],[210,77.0],[211,72.7],[212,69.6],[213,67.5],[214,67.4],[215,60.8],[216,58.6],[217,54.7],[218,51.9],[219,50.7],[220,51.7],[221,53.4],[222,55.8],[223,57.6],[224,66.5],[225,77.9],[226,80.6],[227,80.4],[228,76.5],[229,81.4],[230,83.6],[231,80.7],[232,74.2],[233,68.5],[234,59.6],[235,57.8],[236,51.4],[237,44.6],[238,43.6],[239,41.9],[240,41.4],[241,45.9],[242,46.7],[243,49.0],[244,47.3],[245,44.8],[246,42.8],[247,41.1],[248,39.2],[249,39.4],[250,40.7],[251,41.8],[252,41.9],[253,41.0],[254,39.7],[255,37.1],[256,32.9],[257,27.6],[258,24.1],[259,20.2],[260,19.0],[261,17.6],[262,18.8],[263,22.7],[264,20.8],[265,21.9],[266,23.8],[267,25.1],[268,25.8],[269,24.2],[270,19.9],[271,21.6],[272,21.6],[273,20.5],[274,19.4],[275,19.4],[276,19.4],[277,16.9],[278,13.0],[279,12.1],[280,11.4],[281,10.6],[282,9.1],[283,7.8],[284,8.4],[285,9.7],[286,10.4],[287,10.9],[288,10.9],[289,11.1],[290,11.5],[291,12.3],[292,11.7],[293,10.3],[294,9.2],[295,8.6],[296,7.9],[297,7.0],[298,5.3],[299,4.3],[300,4.3],[301,4.3],[302,4.0],[303,3.9],[304,4.4]],"2026":[[91,6.3],[92,7.3],[93,7.7],[94,7.7],[95,7.1],[96,7.0],[97,7.0],[98,6.7],[99,6.2],[100,5.9],[101,6.6],[102,7.6],[103,7.9],[104,7.5],[105,7.4],[106,7.8],[107,9.0],[108,9.7],[109,10.0],[110,10.0],[111,10.9],[112,11.4],[113,11.6],[114,11.7],[115,10.4],[116,11.4],[117,12.2],[118,12.2],[119,12.9],[120,14.5],[121,18.0],[122,22.6],[123,24.3],[124,24.4],[125,24.7],[126,24.3],[127,23.8],[128,22.1],[129,22.4],[130,22.4],[131,22.8],[132,23.0],[133,24.1],[134,26.5],[135,27.3],[136,24.4],[137,25.7],[138,26.6],[139,28.0],[140,27.8],[141,26.3],[142,28.1],[143,33.7],[144,36.8],[145,43.8],[146,44.0],[147,44.0],[148,45.4],[149,44.9],[150,40.3],[151,37.0],[152,31.0],[153,31.3],[154,31.9],[155,30.1],[156,28.8],[157,32.5],[158,32.6],[159,32.8],[160,31.1],[161,30.8],[162,32.3],[163,31.5],[164,27.0],[165,24.5],[166,22.5],[167,24.8],[168,27.3],[169,28.3],[170,32.5],[171,37.2],[172,44.7],[173,49.0],[174,52.7],[175,54.8],[176,56.9],[177,59.6],[178,63.2],[179,62.8],[180,62.7],[181,61.2],[182,61.5],[183,57.2],[184,47.8],[185,42.2],[186,35.0],[187,34.5],[188,29.6],[189,28.4],[190,36.9],[191,48.5],[192,57.9],[193,68.4],[194,74.0],[195,87.1],[196,94.2],[197,98.0],[198,100.0],[199,90.3],[200,82.1],[201,77.1],[202,78.3],[203,69.1],[204,66.3],[205,59.7],[206,62.7],[207,67.5],[208,64.2],[209,56.1],[210,64.1],[211,63.5],[212,65.9],[213,67.9],[214,67.8],[215,76.1],[216,77.1],[217,72.2],[218,63.7],[219,57.8],[220,57.9],[221,58.8],[222,52.1],[223,47.3],[224,48.8],[225,55.5],[226,62.4],[227,61.0],[228,56.2],[229,56.2],[230,57.0],[231,50.7],[232,45.6],[233,39.6],[234,34.3],[235,32.3],[236,34.6],[237,37.3],[238,40.6]]}},"week":{"year":2025,"weekday":1801.5,"more":29,"days":[{"name":"Monday","short":"Mon","small_boats":1707,"ratio":0.948,"days":22},{"name":"Tuesday","short":"Tue","small_boats":1552,"ratio":0.862,"days":22},{"name":"Wednesday","short":"Wed","small_boats":1753,"ratio":0.973,"days":21},{"name":"Thursday","short":"Thu","small_boats":1980,"ratio":1.099,"days":22},{"name":"Friday","short":"Fri","small_boats":2013,"ratio":1.117,"days":22},{"name":"Saturday","short":"Sat","small_boats":2340,"ratio":1.299,"days":22},{"name":"Sunday","short":"Sun","small_boats":2316,"ratio":1.286,"days":22}]},"hundred":{"year":2025,"groups":[{"key":"stayed","label":"never left the berth","share":46},{"key":"short","label":"went out, under five miles","share":14},{"key":"mid","label":"five to thirty miles","share":29},{"key":"long","label":"more than thirty miles","share":11}]},"race":{"place":"Svendborg","rows":[{"year":2015,"date":"18 September","weekday":"Friday","small_boats_race":47,"small_boats_usual":15,"usual_low":12,"usual_high":17,"times":3.1},{"year":2018,"date":"22 September","weekday":"Saturday","small_boats_race":64,"small_boats_usual":21,"usual_low":14,"usual_high":28,"times":3.1},{"year":2021,"date":"17 September","weekday":"Friday","small_boats_race":174,"small_boats_usual":39,"usual_low":20,"usual_high":55,"times":4.5},{"year":2024,"date":"20 September","weekday":"Friday","small_boats_race":226,"small_boats_usual":40,"usual_low":21,"usual_high":57,"times":5.7},{"year":2025,"date":"19 September","weekday":"Friday","small_boats_race":206,"small_boats_usual":41,"usual_low":31,"usual_high":63,"times":5.0}]},"n":{"season_len_lo":"134","season_len_hi":"148","core_len_lo":"60","core_len_hi":"94","peak_first":"7 August","peak_last":"17 July","peak_shift":"21","fleet_growth":"3.6","weekday_boats":"1 802","saturday_boats":"2 340","weekend_more":"29","weekend_lo":"26","weekend_hi":"29","weekend_2015":"39","late_friday":"12","late_midweek":"10","late_saturday":"7","friday_edge_2015":"51","friday_edge_now":"20","stayed":"46","went_far":"11","idle_lo":"43","idle_hi":"46","trip_half":"14","trip_2015":"16.8","trip_2021":"12.6","marina":"83","marina_lo":"82","marina_hi":"83","race_times_first":"3.1","race_times_best":"5.7","race_boats":"206","race_usual":"41","race_quiet_lo":"12","race_quiet_hi":"63","others_lo":"1.0","others_hi":"3.0","multi_events":"16","multi_quiet_last":"12","multi_first":"2.5","multi_last":"1.3","night_now":"4.5","night_lo":"4.3","night_hi":"4.8","night_ferry":"23"}}</script>
 
 <div class="wrap">
 
@@ -26,64 +71,76 @@
     <a href="how.html">How it was made</a>
   </nav>
 
-  <header class="prose">
-    <p class="eyebrow">Seafolk · chapter one</p>
-    <h1>A year <em>under sail</em></h1>
-    <p class="deck">When the Danish season starts, which day of the week it
-      happens on, how far a small boat actually goes — and what a race day looks
-      like from the outside.</p>
+  <header class="title">
+    <div class="cartouche">
+      <p class="eyebrow">Seafolk · chapter one</p>
+      <h1>A year <em>under sail</em></h1>
+      <p class="deck">When the Danish season starts, which day of the week it
+        happens on, how far a small boat actually goes — and what a race day looks
+        like from the outside.</p>
+    </div>
+    <dl class="log">
+      <dt>Who</dt>
+      <dd><p>I write software and I have never raced anything. What I have is six
+        years of Danish ship radio on a machine, and in it every small boat in
+        these waters that carries a set and switched it on.</p></dd>
+      <dt>The rule</dt>
+      <dd><p>A boat counts on a day only if it moved — half a knot, at some point,
+        anywhere. A radio blinking at the pontoon is a boat sitting still, and
+        counting it as a day at sea would turn the whole chapter into a story
+        about electronics.</p></dd>
+    </dl>
   </header>
 
   <div class="prose">
-    <p>I write software and I have never raced anything. What I have is six
-      years of Danish ship radio on a machine under my desk, and in it every
-      small boat in these waters that carries a set and switched it on.</p>
-
-    <p>One rule decides most of what follows. A boat counts on a day only if it
-      moved — half a knot, at some point, anywhere. A radio blinking at the
-      pontoon is a boat sitting still, and counting it as a day at sea would
-      turn the whole chapter into a story about electronics.</p>
-
+    <p class="act">The calendar</p>
     <p>The first thing I drew was the calendar.</p>
   </div>
 
-  <figure id="s1">
-    <h3>The busiest week of the summer has walked three weeks earlier since 2015</h3>
-    <div class="chart" id="c-s1"></div>
-    <figcaption>One row per year. The bar is the stretch of the year when at
-      least a quarter of that year's own busiest week was out on the water; the
-      dot is the busiest week itself. The dashed line marks where that week fell
-      in 2015. The 2026 bar stops on 26 August because that is where the archive
-      stops — its dot is well inside the loaded days and is real.</figcaption>
-    <p class="source">Danish Maritime Authority AIS archive · computed by
-      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/sql/20_season_bounds.sql"><code>sql/20_season_bounds.sql</code></a></p>
-    <details><summary>The numbers</summary><div class="scroll"><table id="t-s1"></table></div></details>
-  </figure>
+  <div class="spread spread-wide">
+    <figure id="s1">
+      <h3>The busiest week of the summer has walked three weeks earlier since 2015</h3>
+      <div class="chart" id="c-s1"></div>
+      <figcaption>Each year drawn as a coast seen from the sea: the height of the
+        land is how many boats were out, as a share of that year's own busiest
+        week. The shore is where a quarter of that week was out, so the land is
+        the season; the light is the busiest week itself. The 2026 coast stops on
+        26 August because that is where the archive stops — its light is well
+        inside the loaded days and is real.</figcaption>
+      <p class="source">Danish Maritime Authority AIS archive · computed by
+        <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/sql/20_season_bounds.sql"><code>sql/20_season_bounds.sql</code></a>
+        and <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/sql/10_season_daily.sql"><code>sql/10_season_daily.sql</code></a></p>
+      <details><summary>The numbers</summary><div class="scroll"><table id="t-s1"></table></div></details>
+    </figure>
+    <div class="prose">
+      <p class="big"><span data-n="peak_shift">21</span><small>days earlier</small></p>
+      <p>What did move is the top. In 2015 the busiest week fell on
+        <span data-n="peak_first">7 August</span>; in 2026 it fell on
+        <span data-n="peak_last">17 July</span>. It stepped earlier in every one
+        of the six years I loaded, without once going back.</p>
+      <p>The outer edge hardly moves. Over the four years the archive holds
+        whole, the season runs between
+        <span data-n="season_len_lo">134</span> and
+        <span data-n="season_len_hi">148</span> days, while the fleet inside it
+        grew <span data-n="fleet_growth">3.6</span> times.</p>
+    </div>
+  </div>
 
-  <div class="prose">
-    <p>The outer edge of the season hardly moves. Over the four years the
-      archive holds whole, that bar runs between
-      <span data-n="season_len_lo">134</span> and
-      <span data-n="season_len_hi">148</span> days, while the fleet inside it
-      grew <span data-n="fleet_growth">3.6</span> times. The middle is a
-      different animal: the stretch above half the peak swings from
-      <span data-n="core_len_lo">60</span> days to
+  <div class="cols">
+    <p>The middle is a different animal: the stretch above half the peak swings
+      from <span data-n="core_len_lo">60</span> days to
       <span data-n="core_len_hi">94</span>, in no direction I can find. The edges
       of a Danish season are a calendar. Its middle is weather.</p>
-
-    <p>What did move is the top. In 2015 the busiest week fell on
-      <span data-n="peak_first">7 August</span>; in 2026 it fell on
-      <span data-n="peak_last">17 July</span>. That is
-      <span data-n="peak_shift">21</span> days, and it stepped earlier in every
-      one of the six years I loaded, without once going back.</p>
-
     <p>Six points in a row are not a trend, and I am not going to draw a line
       through them. There is also a duller explanation sitting right there: the
       fleet more than tripled over these years, and if the people who fitted a
       radio after 2015 take their holidays earlier than the ones who already had
       one, the top of the hill moves without a single person changing their
       plans. What I can say is that the direction never reverses.</p>
+  </div>
 
+  <div class="prose">
+    <p class="act">The place</p>
     <p>A season is also a place. Here is the same year as water rather than as
       a calendar, and then the same July ten years apart.</p>
   </div>
@@ -91,31 +148,33 @@
   <figure id="s1-season">
     <h3>In July the water is full of small boats. In January they are gone</h3>
     <div class="chart" id="c-s1-season"></div>
-    <figcaption>Two months of one year, on one colour scale, so the pale map is
-      pale for a reason. A hexagon is a patch of sea about the size of a small
-      county, coarse on purpose so that no single boat can be picked out of
-      one, and it is drawn only where at least five boats were heard that
-      month. The whole of January adds up to less boat-time than one busy July
-      afternoon in the Sound.</figcaption>
+    <figcaption>Two months of one year over the Belts, the Sound and the islands,
+      on one scale of dots, so the empty sheet is empty for a reason. A patch of
+      sea about the size of a small county gets dots for the boats heard in it,
+      scattered at random, coarse on purpose so that no single boat can be picked
+      out, and it is drawn only where at least five boats were heard. The whole
+      of January adds up to less boat-time than one busy July afternoon in the
+      Sound.</figcaption>
     <p class="source">Danish Maritime Authority AIS archive, through the open
-      dataset · built by
-      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/build_map_figures.py"><code>scripts/build_map_figures.py</code></a></p>
+      dataset · drawn by
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/charts_season.py"><code>scripts/charts_season.py</code></a></p>
   </figure>
 
   <figure id="s1-decade">
     <h3>Ten years on, the same water holds several times the boats</h3>
     <div class="chart" id="c-s1-decade"></div>
-    <figcaption>One July against another, ten years apart, on the same scale.
-      The fleet did not only grow, it spread: the new colour fills in the German
-      Baltic and the Kattegat. Counted the same way as everything else here —
-      boats carrying a radio, and patches of sea shared by at least five of
-      them.</figcaption>
+    <figcaption>One July against another, ten years apart, on the same scale of
+      dots. The fleet did not only grow, it spread: the new dots fill in the
+      German Baltic and the Kattegat. Counted the same way as everything else
+      here — boats carrying a radio, and patches of sea shared by at least five
+      of them.</figcaption>
     <p class="source">Danish Maritime Authority AIS archive, through the open
-      dataset · built by
-      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/build_map_figures.py"><code>scripts/build_map_figures.py</code></a></p>
+      dataset · drawn by
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/charts_season.py"><code>scripts/charts_season.py</code></a></p>
   </figure>
 
   <div class="prose">
+    <p class="act">The week</p>
     <p>The week is blunter than the year.</p>
   </div>
 
@@ -123,13 +182,13 @@
     <h3>A summer weekend puts <span data-n="weekend_more">29</span> per cent more
       boats on the water</h3>
     <div class="chart" id="c-s2"></div>
-    <figcaption>Small boats that moved, averaged over each occurrence of that day
-      of the week, May to September 2025. The dashed line is the average Monday
-      to Friday. The weekend has stood between
-      <span data-n="weekend_lo">26</span> and
-      <span data-n="weekend_hi">29</span> per cent above that line in every whole
-      season since 2018; in 2015 it was <span data-n="weekend_2015">39</span> per
-      cent above it.</figcaption>
+    <figcaption>Small boats that moved, averaged over each occurrence of that
+      day of the week, May to September 2025, one sail to a hundred boats. The
+      dashed line is the average Monday to Friday. The weekend has stood
+      between <span data-n="weekend_lo">26</span> and
+      <span data-n="weekend_hi">29</span> per cent above that line in every
+      whole season since 2018; in 2015 it was
+      <span data-n="weekend_2015">39</span> per cent above it.</figcaption>
     <p class="source">Danish Maritime Authority AIS archive · computed by
       <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/sql/81_site_season.sql"><code>sql/81_site_season.sql</code></a>,
       the day-by-day cut of
@@ -137,33 +196,43 @@
     <details><summary>The numbers</summary><div class="scroll"><table id="t-s2"></table></div></details>
   </figure>
 
-  <div class="prose">
-    <p>Saturday and Sunday are the same day to within a rounding error, and
-      everything from Monday to Thursday is the same day as well. On an ordinary
-      summer weekday about <span data-n="weekday_boats">1 802</span> boats are
-      out; on a Saturday it is <span data-n="saturday_boats">2 340</span>. People
-      sail when they are not at work. No surprise there, but it is a
-      useful sanity check on a dataset that could easily have been measuring
-      antennas instead.</p>
+  <div class="fact">
+    <p class="big"><span data-n="saturday_boats">2 340</span><small>on a Saturday</small></p>
+    <div class="prose">
+      <p>On an ordinary summer weekday about
+        <span data-n="weekday_boats">1 802</span> boats are out. Saturday and
+        Sunday are the same day to within a rounding error, and everything from
+        Monday to Thursday is the same day as well.</p>
+      <p>People sail when they are not at work. No surprise there, but it is a
+        useful sanity check on a dataset that could easily have been measuring
+        antennas instead.</p>
+    </div>
+  </div>
 
-    <p>Friday is the interesting one. It stands above midweek, and the boats
+  <dl class="log">
+    <dt>Friday</dt>
+    <dd><p>Friday is the interesting one. It stands above midweek, and the boats
       that go out on a Friday go out late: on
       <span data-n="late_friday">12</span> days in a hundred the radio first
       speaks after three in the afternoon, against
       <span data-n="late_midweek">10</span> midweek and
       <span data-n="late_saturday">7</span> on a Saturday. That is what leaving
-      after work looks like. It is also an indirect measure and I will not
-      pretend otherwise — what I see is the first message of the day, not the
-      moment the lines came off, and a boat that sat all afternoon with the
-      electronics on counts as an early start.</p>
-
-    <p>The Friday edge is shrinking, too. In 2015 a Friday ran
+      after work looks like.</p>
+      <p>It is also an indirect measure and I will not pretend otherwise — what
+      I see is the first message of the day, not the moment the lines came off,
+      and a boat that sat all afternoon with the electronics on counts as an
+      early start.</p></dd>
+    <dt>2015 → 2025</dt>
+    <dd><p>The Friday edge is shrinking, too. In 2015 a Friday ran
       <span data-n="friday_edge_2015">51</span> per cent more late starts than a
       midweek day; in 2025 it was <span data-n="friday_edge_now">20</span> per
       cent. Saturday and Sunday did not move at all over the same years, which
       is what makes me believe the Friday change is about people rather than
-      about receivers.</p>
+      about receivers.</p></dd>
+  </dl>
 
+  <div class="prose">
+    <p class="act">The distance</p>
     <p>Then I asked how far these boats actually go, and got the answer that
       rearranged the rest of the chapter.</p>
   </div>
@@ -172,49 +241,54 @@
     <h3>On almost half their days, boats with the radio on never leave the berth</h3>
     <div class="chart" id="c-s3"></div>
     <figcaption>A hundred days of a small boat with its radio switched on, in
-      2025. On <span data-n="stayed">46</span> of them the boat never exceeds
-      half a knot: the set is on, the boat is not going anywhere. The rest are
-      coloured by how far the boat sailed, in nautical miles — a nautical mile is a
-      little under two kilometres.</figcaption>
+      2025, drawn as a marina of a hundred berths. On
+      <span data-n="stayed">46</span> of them the boat never exceeds half a knot:
+      the set is on, the boat is not going anywhere. The rest are out at sea,
+      sorted by how far the boat sailed that day, in nautical miles — a nautical
+      mile is a little under two kilometres. The bands are not to scale.</figcaption>
     <p class="source">Danish Maritime Authority AIS archive · computed by
       <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/sql/23_radius.sql"><code>sql/23_radius.sql</code></a>
       · distance is how far the boat travelled that day while under way</p>
     <details><summary>The numbers</summary><div class="scroll"><table id="t-s3"></table></div></details>
   </figure>
 
-  <div class="prose">
-    <p>Nearly half of all the days a radio is on, the boat does not move. That
+  <dl class="log">
+    <dt>In the berth</dt>
+    <dd><p>Nearly half of all the days a radio is on, the boat does not move. That
       share sits between <span data-n="idle_lo">43</span> and
       <span data-n="idle_hi">46</span> per cent in every single year, while the
       fleet tripled underneath it. Whatever the sets in the marina are doing,
       charging or being forgotten, they do it at the same rate now as
-      they did in 2015.</p>
-
-    <p>The days that are trips are shorter than I expected. Half of them stay
+      they did in 2015.</p></dd>
+    <dt>A trip</dt>
+    <dd><p>The days that are trips are shorter than I expected. Half of them stay
       inside <span data-n="trip_half">14</span> nautical miles, which is an
       afternoon out and back with a stop for lunch, and only
       <span data-n="went_far">11</span> days in a hundred pass thirty miles.
       Nothing here looks like the offshore sailing I had in my head; it looks
-      like a bay.</p>
-
-    <p>The distances did shift once. Between 2018 and 2021 the typical trip
+      like a bay.</p></dd>
+    <dt>2018 → 2021</dt>
+    <dd><p>The distances did shift once. Between 2018 and 2021 the typical trip
       dropped from <span data-n="trip_2015">16.8</span> miles to
       <span data-n="trip_2021">12.6</span>, and it has come back only halfway
       since. Short trips and long trips moved together, which is what a change in
       <em>who is in the fleet</em> looks like rather than a change in what any
-      one owner does with a Saturday.</p>
-
-    <p>And they all start from the same place.
+      one owner does with a Saturday.</p></dd>
+    <dt>Home port</dt>
+    <dd><p>And they all start from the same place.
       <span data-n="marina">83</span> per cent of days begin in the map square
       that holds a marina, and it is between
       <span data-n="marina_lo">82</span> and
       <span data-n="marina_hi">83</span> per cent in every year of the archive.
-      Read that literally: the square is a couple of kilometres across, so it
-      holds the marina, the fishing quay and the moorings across the basin. It
-      says small boats start from harbours, which surprises nobody. The useful
-      part is that the number does not move — the fleet tripled and the geography
-      of a boating day stayed exactly where it was.</p>
+      The square is a couple of kilometres across, so it holds the marina, the
+      fishing quay and the moorings across the basin: small boats start from
+      harbours, which surprises nobody. The useful part is that the number does
+      not move — the fleet tripled and the geography of a boating day stayed
+      exactly where it was.</p></dd>
+  </dl>
 
+  <div class="prose">
+    <p class="act">The race</p>
     <p>Everything so far is the fleet on an average day. A race is the
       opposite.</p>
   </div>
@@ -222,19 +296,24 @@
   <figure id="s4">
     <h3>On race day Svendborg holds five times the boats of a usual day</h3>
     <div class="chart" id="c-s4"></div>
+    <div class="chart" id="c-s4-years"></div>
     <figcaption>Silverrudder is a single-handed race around the island of Fyn
-      that starts and finishes in Svendborg. Counted is every small boat anywhere
-      in the harbour area, about twenty kilometres across, on the day of the
-      start. A usual day is the same weekday a week and a fortnight either side:
-      a September Friday, except in 2018, when the race fell on a
-      Saturday.</figcaption>
-    <p class="source">Danish Maritime Authority AIS archive · computed by
+      that starts and finishes in Svendborg. The two sheets are the South Funen
+      islands on the start day in 2025 and on a usual day: the same weekday a
+      week and a fortnight either side, averaged. The sheets count by the
+      open dataset's coarse patches of sea, so they take in more water than the
+      row of years under them, which counts every small boat in the harbour
+      area, about twenty kilometres across, on the day of the start. A usual day there is a
+      September Friday, except in 2018, when the race fell on a Saturday.</figcaption>
+    <p class="source">Danish Maritime Authority AIS archive · the sheets drawn by
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/charts_season.py"><code>scripts/charts_season.py</code></a>
+      from the open dataset · the years computed by
       <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/sql/22_regatta_spikes.sql"><code>sql/22_regatta_spikes.sql</code></a>
       · the region is the start harbour, not the course</p>
     <details><summary>The numbers</summary><div class="scroll"><table id="t-s4"></table></div></details>
   </figure>
 
-  <div class="prose">
+  <div class="cols">
     <p>Silverrudder is the one event in my list that grew. Measured against the
       same weekday either side of it, race day ran
       <span data-n="race_times_first">3.1</span> times the boats in 2015 and
@@ -242,7 +321,6 @@
       harbour area held <span data-n="race_boats">206</span> boats on race day,
       against <span data-n="race_usual">41</span> on a usual September
       Friday.</p>
-
     <p>The harbour it multiplies is a quiet one: the usual days behind those
       numbers hold between <span data-n="race_quiet_lo">12</span> and
       <span data-n="race_quiet_hi">63</span> boats, so this is a small number
@@ -251,34 +329,41 @@
       <span data-n="others_lo">1.0</span> and
       <span data-n="others_hi">3.0</span> times a usual day and wander there year
       after year, with no direction at all.</p>
-
     <p>There is a catch in this measure, and the multi-day races show it. Across
       the <span data-n="multi_events">16</span> Danish race weekends in the
       archive, the first day averages <span data-n="multi_first">2.5</span> times
       a usual day and the last day <span data-n="multi_last">1.3</span>; the last
       day is the quietest of its own event in
-      <span data-n="multi_quiet_last">12</span> of them. Boats gather before a
-      start and then leave from wherever they finish, so a camera pointed at the
-      start harbour sees the arrival and misses the departure. This chart watches
-      a harbour. It does not watch a race.</p>
+      <span data-n="multi_quiet_last">12</span> of them.</p>
+    <p>Boats gather before a start and then leave from wherever they finish, so
+      a camera pointed at the start harbour sees the arrival and misses the
+      departure. This chart watches a harbour. It does not watch a race.</p>
+  </div>
 
+  <div class="prose">
+    <p class="act">The night</p>
     <p>Two more things the year says, neither of which needs a picture.</p>
+  </div>
 
-    <p>Night sailing barely exists, and it is the most stable number in the
-      chapter. <span data-n="night_now">4.5</span> per cent of summer movement
-      falls between ten at night and five in the morning, and across six years it
-      never leaves the range <span data-n="night_lo">4.3</span> to
-      <span data-n="night_hi">4.8</span>. The ferries over the same summers sit
-      at <span data-n="night_ferry">23</span> per cent and swing several points
-      around it. The ferries are the control here: they run into the night
-      because a timetable says so, and if a change in the receiver network were
-      moving my numbers, both lines would move together. They do not. Danish
-      pleasure sailing is a daylight activity and has been one for as long as
-      this archive goes back.</p>
-
-    <p>The other thing is the shape of a day, which this chapter cannot see at
-      all — it counts whole days, and a day hides the hour people actually cast
-      off. That is the next chapter.</p>
+  <div class="fact">
+    <p class="big"><span data-n="night_now">4.5</span> %<small>of summer movement is at night</small></p>
+    <div class="prose">
+      <p>Night sailing barely exists, and it is the most stable number in the
+        chapter. <span data-n="night_now">4.5</span> per cent of summer movement
+        falls between ten at night and five in the morning, and across six years
+        it never leaves the range <span data-n="night_lo">4.3</span> to
+        <span data-n="night_hi">4.8</span>. The ferries over the same summers sit
+        at <span data-n="night_ferry">23</span> per cent and swing several points
+        around it.</p>
+      <p>The ferries are the control here: they run into the night because a
+        timetable says so, and if a change in the receiver network were moving
+        my numbers, both lines would move together. They do not. Danish pleasure
+        sailing is a daylight activity and has been one for as long as this
+        archive goes back.</p>
+      <p>The other thing is the shape of a day, which this chapter cannot see at
+        all — it counts whole days, and a day hides the hour people actually cast
+        off. That is the next chapter.</p>
+    </div>
   </div>
 
   <nav class="chapters">
@@ -301,20 +386,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 <script src="js/kit.js"></script>
+<script src="js/chart.js"></script>
+<script src="media/charts/season.js"></script>
 <script src="js/season.js"></script>
-<script src="media/land.js"></script>
-<script src="media/maps.js"></script>
-<script src="js/minimap.js"></script>
-<script>
-  // The static map figures (site/js/minimap.js). Missing component, empty
-  // slot — the chapter still opens from file://.
-  if (window.SeafolkMap) try {
-    SeafolkMap.pair(document.getElementById("c-s1-season"),
-      [{ layer: "small_july_2025", colour: "accent" },
-       { layer: "small_january_2025" }]);
-    SeafolkMap.pair(document.getElementById("c-s1-decade"),
-      [{ layer: "small_july_2015" },
-       { layer: "small_july_2025", colour: "accent" }]);
-  } catch (e) { console.error("minimap season", e); }
-</script>
 </html>

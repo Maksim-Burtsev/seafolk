@@ -18,7 +18,9 @@ from file:// by double-click and fetch() of a sibling file is blocked there:
 
     site/explore/data/index.js      months, cell dictionaries, colour-scale tops
     site/explore/data/YYYY-MM.js    one month, all fleets, loaded on demand
-    site/explore/data/land.js       Natural Earth land clipped to the bbox
+
+The chart underneath (depths, land) is site/explore/data/sheet.js, drawn by
+scripts/charts_explore.py.
 
 THE MEASURE, and why this one.
 
@@ -65,25 +67,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist" / "dataset"
 OUT = ROOT / "site" / "explore" / "data"
-LAND_SRC = ROOT / "data" / "context" / "ne_10m_land.geojson"
 
 # The project bounding box (docs/DATA.md, dataset card § Coverage). The counts
-# stop here, and so does the map's "All of it" view.
+# stop here; the map shows the part of it the bathymetry covers.
 LON0, LAT0, LON1, LAT1 = 3.0, 53.0, 17.0, 59.0
 
-# Land is clipped to a bigger box than the data. Clipped to the data box, the
-# coast of Sweden and Germany ended in a straight grey edge floating inside the
-# frame, which reads as a bug rather than as a map: land has to run off the
-# edge of the frame at every preset.
-MLON0, MLAT0, MLON1, MLAT1 = -2.0, 50.0, 22.0, 62.0
-
-# Douglas-Peucker tolerance, in degrees. The coast people actually look at is
-# kept near the source's own detail; the far coast, which is only there so the
-# frame is full, is simplified hard to stay inside the file budget.
-TOL_NEAR, TOL_FAR = 0.0015, 0.02
-
 BUDGET_MB = 40
-LAND_KB = 400
 RES6, RES5 = 6, 5
 
 # ship_group in the files -> the name a reader sees. `passenger` and `other`
@@ -112,113 +101,6 @@ def ch(sql: str):
             yield line.rstrip("\n").split("\t")
     if p.wait() != 0:
         sys.exit(f"clickhouse failed:\n{p.stderr.read().strip()[:2000]}")
-
-
-def clip_ring(ring):
-    """Sutherland-Hodgman against the map rectangle. Convex clip window, so it
-    is the right algorithm; on a concave ring it can leave a zero-area sliver
-    along the boundary, which is invisible in a filled land layer.
-    ponytail: stdlib clip instead of shapely — shapely would be a new dependency
-    for one background polygon; swap it in if the map ever needs real geometry."""
-    edges = ((0, MLON0, 1), (0, MLON1, -1), (1, MLAT0, 1), (1, MLAT1, -1))
-    out = ring
-    for axis, bound, sign in edges:
-        inside = lambda pt: (pt[axis] - bound) * sign >= 0
-        src, out = out, []
-        for i, cur in enumerate(src):
-            prev = src[i - 1]
-            if inside(cur):
-                if not inside(prev):
-                    out.append(cross(prev, cur, axis, bound))
-                out.append(cur)
-            elif inside(prev):
-                out.append(cross(prev, cur, axis, bound))
-        if not out:
-            return []
-    return out
-
-
-def cross(a, b, axis, bound):
-    t = (bound - a[axis]) / (b[axis] - a[axis])
-    other = 1 - axis
-    pt = [0.0, 0.0]
-    pt[axis] = bound
-    pt[other] = a[other] + t * (b[other] - a[other])
-    return pt
-
-
-def simplify(pts, tol):
-    """Douglas-Peucker, iterative so a 3 500-point coastline cannot blow the
-    recursion limit. Distances are in degrees, which is fine for a backdrop."""
-    if len(pts) < 3:
-        return pts
-    keep = [False] * len(pts)
-    keep[0] = keep[-1] = True
-    stack, t2 = [(0, len(pts) - 1)], tol * tol
-    while stack:
-        a, b = stack.pop()
-        if b - a < 2:
-            continue
-        ax, ay = pts[a]
-        dx, dy = pts[b][0] - ax, pts[b][1] - ay
-        d2 = dx * dx + dy * dy
-        best, at = -1.0, -1
-        for i in range(a + 1, b):
-            px, py = pts[i]
-            if d2 == 0:
-                far = (px - ax) ** 2 + (py - ay) ** 2
-            else:
-                t = ((px - ax) * dx + (py - ay) * dy) / d2
-                t = 0.0 if t < 0 else 1.0 if t > 1 else t
-                far = (px - ax - t * dx) ** 2 + (py - ay - t * dy) ** 2
-            if far > best:
-                best, at = far, i
-        if best > t2:
-            keep[at] = True
-            stack += [(a, at), (at, b)]
-    return [p for p, k in zip(pts, keep) if k]
-
-
-def build_land() -> str:
-    if not LAND_SRC.exists():
-        sys.exit(f"missing {LAND_SRC} — see scripts/fetch_context.sh")
-    # The two runnable checks on the geometry: a square straddling the west edge
-    # comes back as a square cut off at the edge, a square entirely outside
-    # comes back empty, and a straight line simplifies to its two ends.
-    probe = clip_ring([[MLON0 - 1, 54], [MLON0 + 1, 54], [MLON0 + 1, 55], [MLON0 - 1, 55]])
-    assert len(probe) == 4 and min(p[0] for p in probe) == MLON0, probe
-    assert clip_ring([[MLON0 - 2, 54], [MLON0 - 1, 54], [MLON0 - 1, 55]]) == []
-    assert simplify([[0, 0], [1, 1], [2, 2], [3, 3]], 0.01) == [[0, 0], [3, 3]]
-
-    geo = json.loads(LAND_SRC.read_text())
-    polys, kept_near = [], 0
-    for feat in geo["features"]:
-        g = feat["geometry"]
-        raw = g["coordinates"] if g["type"] == "MultiPolygon" else [g["coordinates"]]
-        for poly in raw:
-            xs = [p[0] for p in poly[0]]
-            ys = [p[1] for p in poly[0]]
-            if max(xs) < MLON0 or min(xs) > MLON1 or max(ys) < MLAT0 or min(ys) > MLAT1:
-                continue
-            near = not (max(xs) < LON0 or min(xs) > LON1 or max(ys) < LAT0 or min(ys) > LAT1)
-            rings = []
-            for ring in poly:
-                c = simplify(clip_ring([list(p[:2]) for p in ring]),
-                             TOL_NEAR if near else TOL_FAR)
-                if len(c) >= 4:
-                    # 4 decimals ~ 11 m: finer than a pixel at the deepest zoom
-                    # the map allows, and no 9-digit run can appear in the file.
-                    rings.append([[round(x, 4), round(y, 4)] for x, y in c])
-            if rings:
-                polys.append(rings)
-                kept_near += near
-    if not polys:
-        sys.exit("land clip produced nothing — check the map box")
-    fc = {"type": "Feature", "properties": {},
-          "geometry": {"type": "MultiPolygon", "coordinates": polys}}
-    print(f"land            {len(polys)} polygons ({kept_near} in the data box), "
-          f"{sum(len(r) for p in polys for r in p)} points")
-    return "window.SEAFOLK_LAND=" + json.dumps(fc, separators=(",", ":")) + ";\n"
 
 
 def main():
@@ -281,11 +163,6 @@ def main():
              "cells6": inv[RES6], "cells5": inv[RES5], "fleets": fleets,
              "bbox": [LON0, LAT0, LON1, LAT1]}
     write(OUT / "index.js", "window.SEAFOLK_INDEX=" + dump(index) + ";\n")
-    write(OUT / "land.js", build_land())
-    land_kb = (OUT / "land.js").stat().st_size / 1024
-    print(f"land.js         {land_kb:.0f} KB of {LAND_KB} KB")
-    if land_kb > LAND_KB:
-        sys.exit(f"land.js is {land_kb:.0f} KB — raise TOL_FAR or shrink the map box")
 
     for month in order:
         # [indices, values] per fleet — half the bytes of [[i,v],...].

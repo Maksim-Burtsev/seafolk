@@ -6,7 +6,8 @@ It is not allowed to name a radio ID even so: `scripts/test_site.py` refuses
 the word anywhere under site/, in any file, on any page.
 
     figure  what it says                        where the numbers come from
-    H1      the >= 5 rule, drawn                nothing — it is an illustration
+    H1      the >= 5 rule, drawn                nothing — it is an illustration,
+                                                on a sheet by scripts/charts_how.py
     H2      what that rule costs                h3_hourly, sql/70_export.sql's
                                                 own grouping, recomputed here
     H3      the pipeline                        load_log, vessel_day, du
@@ -253,11 +254,12 @@ def build(ch):
     ad, emo = adoption(ch), emodnet(ch)
 
     charts = {
-        # H1 is a DRAWING. These are the boats in the seven hexagons of the
-        # illustration, two rows, four then three — not a measurement, and the
-        # caption says so. They live here so that the ledger shows every number
-        # that reaches the page, including the invented ones.
-        "picture": {"floor": FLOOR, "rows": [[2, 9, 1, 4], [5, 12, 3]]},
+        # H1 is a DRAWING. These are the boats in the seven patches of the
+        # illustration, in the order scripts/charts_how.py places the patches on
+        # its sheet — not a measurement, and the caption says so. They live here
+        # so that the ledger shows every number that reaches the page, including
+        # the invented ones. The fourth is the instructive one: one boat short.
+        "picture": {"floor": FLOOR, "counts": [9, 12, 5, 4, 2, 1, 3]},
         "floor": {"cells_pct": round(100 * fl["cells_share"], 1),
                   "moving_pct": round(100 * fl["moving_share"], 1)},
         "pipe": pipe,

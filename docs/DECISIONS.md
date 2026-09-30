@@ -611,3 +611,7 @@ what it rules out.
   a drawn track is checked against `vessel_day` (Class A, never leisure) by the
   builder before drawing, and no radio ID reaches a written file. Small boats
   still come only from the floored `leisure_daily` export.
+- 2026-09-30 (round 3) — **Poster fonts are downloaded, not a dependency.**
+  `scripts/render_posters.py` fetches Source Serif 4 and IBM Plex Mono (the
+  site's two faces, SIL OFL) once into `data/context/fonts/` (gitignored) so
+  the PDFs carry the same type as the site; matplotlib's default would not.

@@ -7,6 +7,50 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="css/site.css">
+<style>
+/* The story page's own layout: prose never runs as a wall. A short block
+   stands beside a big number (.pull), three findings stand side by side
+   (.trio), and a figure can carry its note beside it (.spread, site.css). */
+.opener { gap: 14px; }
+.opener h2 { max-width: 22ch; }
+.lead { font-size: clamp(20px, 2.2vw, 24px); font-style: italic; line-height: 1.4; max-width: 40ch; }
+.aside {
+  max-width: 60ch; font-style: italic; color: var(--label);
+  border-left: 2px solid var(--ferry); padding: 2px 0 2px 18px;
+}
+.big small {
+  display: block; font-size: .42em; line-height: 1.15; letter-spacing: 0;
+  color: var(--label); font-style: italic; font-weight: 400;
+}
+.big span + small { margin-top: 8px; font-size: .3em; max-width: 9em; }
+.sounding { display: flex; flex-direction: column; gap: 12px; }
+.sounding .caps, .trio .caps { letter-spacing: .14em; line-height: 1.55; max-width: 22em; }
+
+.pull {
+  display: grid; grid-template-columns: 15rem minmax(0, 62ch); gap: 10px 40px;
+  align-items: start;
+}
+.pull > * { border-top: 1.5px solid var(--ink); padding-top: 16px; }
+.pull > .prose { border-top-width: 1px; border-top-color: var(--hairline); }
+.pull .big, .trio .big { font-size: clamp(46px, 5.6vw, 66px); }
+@media (max-width: 760px) {
+  .pull { grid-template-columns: 1fr; }
+  .pull > .prose { border-top: 0; padding-top: 0; }
+}
+
+.trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px 36px; }
+.trio > div { border-top: 1.5px solid var(--ink); padding-top: 16px; display: flex; flex-direction: column; gap: 12px; }
+.trio p:not(.big):not(.caps) { font-size: 17px; }
+@media (max-width: 900px) { .trio { grid-template-columns: 1fr; } }
+
+.spread > figure { margin-inline: 5px; }
+.spread > .note { gap: 14px; }
+.spread > .note .big { font-size: clamp(46px, 5vw, 60px); margin-top: 6px; }
+.spread > .note p:not(.big) { font-size: 17px; }
+/* ?only=<id> (scripts/shot.sh) for a figure that sits inside a spread */
+body.only > .wrap > .spread:has(.shot) { display: grid; }
+body.only .spread:has(.shot) > :not(.shot) { display: none; }
+</style>
 
 <!-- Every number below is written by scripts/build_site_data.py from the store.
      Nothing here is typed by hand: the JSON block feeds the charts, and each
@@ -52,7 +96,7 @@
     <dt>The haul</dt>
     <dd><p>So, out of pure interest: download it, push it through ClickHouse on my
       Mac Mini and see what falls out. I did not take all of it. I took
-      <span data-n="days_loaded">2 122</span> days,
+      <span data-n="days_loaded">2 122</span> days,
       ending on <span data-n="last_day">26 August 2026</span>: all of 2015, 2018,
       2021 and 2025, March 2024 onward, this year as far as the files go, and
       four winter months with storms in them. That is
@@ -70,13 +114,13 @@
   </dl>
 
   <!-- ==================== Act 1 ==================== -->
-  <div class="prose">
+  <header class="prose opener">
     <p class="act">Act one — more and more people go to sea</p>
     <h2>The first thing I looked at was the calendar</h2>
     <p>How many small boats actually leave a berth on an ordinary day, and when
       in the year they do it. A radio
       switched on at the pontoon does not count here; the boat has to have moved.</p>
-  </div>
+  </header>
 
   <figure id="i1">
     <h3>Every summer more small boats go out than the summer before</h3>
@@ -91,12 +135,18 @@
     <details><summary>The numbers</summary><div class="scroll"><table id="t-i1"></table></div></details>
   </figure>
 
-  <div class="prose">
-    <p>The shape never changes. It lifts in May, stands through July, falls away
-      in September, and from November to March there is almost nobody out there.
-      What changes is the height. In the busiest week of 2015 an average of
-      <span data-n="peak_2015">1 165</span> boats were out on any given day. In the
-      busiest week of 2026 it was <span data-n="peak_2026">5 178</span>.</p>
+  <div class="pull">
+    <div class="sounding">
+      <p class="big"><small><span data-n="peak_2015">1 165</span> →</small><span data-n="peak_2026">5 178</span></p>
+      <p class="caps">boats out a day in the busiest week · 2015 and 2026</p>
+    </div>
+    <div class="prose">
+      <p>The shape never changes. It lifts in May, stands through July, falls away
+        in September, and from November to March there is almost nobody out there.
+        What changes is the height. In the busiest week of 2015 an average of
+        <span data-n="peak_2015">1 165</span> boats were out on any given day. In the
+        busiest week of 2026 it was <span data-n="peak_2026">5 178</span>.</p>
+    </div>
   </div>
 
   <figure id="i1-maps">
@@ -105,44 +155,38 @@
     <figcaption>The same waters in two months of one year. Small boats are drawn as stipple: a patch of sea about the size of a small county gets dots in proportion to the boats heard in it, scattered at random, so no dot is a boat and no boat can be picked out. A patch is drawn only where at least <span data-n="k_floor">5</span> boats were heard that month. Both sheets are on one scale.</figcaption>
     <p class="source">Danish Maritime Authority AIS archive, through the open
       dataset · built by
-      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/build_map_figures.py"><code>scripts/build_map_figures.py</code></a></p>
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/charts_index.py"><code>scripts/charts_index.py</code></a></p>
   </figure>
 
-  <div class="prose">
-    <p>That is the same season with <span data-n="season_growth">4.4</span> times as
-      many boats in it — and it is the point where I stopped trusting myself. A
-      curve that climbs like that has an obvious second explanation, and it has
-      nothing to do with boats: more antennas along the coast, hearing boats that
-      were always out there.</p>
-  </div>
-
-  <figure id="i2">
-    <h3>Small boats multiplied. The ships they share the water with did not</h3>
-    <div class="chart" id="c-i2"></div>
-    <figcaption>Counted between 1 March and 26 August, the only stretch all six
-      years have in full. Commercial ships are the control: a new antenna on the
-      coast hears a coaster as easily as a yacht, so if the climb were antennas,
-      the grey line would climb with the bars.</figcaption>
-    <p class="source">Danish Maritime Authority AIS archive · computed by
-      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/sql/61_adoption.sql"><code>sql/61_adoption.sql</code></a></p>
-    <details><summary>The numbers</summary><div class="scroll"><table id="t-i2"></table></div></details>
-  </figure>
-
-  <div class="prose">
-    <p>The grey line does not climb. Over the same weeks of the same years the
-      commercial fleet went from <span data-n="ships_2015">10 082</span> ships to
-      <span data-n="ships_2026">10 784</span>, which is as flat as a real-world count
-      gets, while small boats went from <span data-n="boats_2015">6 137</span> to
-      <span data-n="boats_2026">22 773</span>. Denmark now hears
-      <span data-n="boats_per_ship_2026">2.1</span> small boats for every commercial
-      ship in these waters. In 2015 the same count was
-      <span data-n="boats_per_ship_2015">0.6</span>.</p>
-
-    <p>What I cannot tell you is how many boats there are. I can count the ones
-      carrying a radio, and part of that
-      <span data-n="boats_growth">3.7</span>-fold rise is people fitting a set to a
-      boat they already had. Nobody publishes how many sets were sold, so the
-      two cannot be split apart.</p>
+  <div class="spread">
+    <figure id="i2">
+      <h3>Small boats multiplied. The ships they share the water with did not</h3>
+      <div class="chart" id="c-i2"></div>
+      <figcaption>Counted between 1 March and 26 August, the only stretch all six
+        years have in full. Commercial ships are the control: a new antenna on the
+        coast hears a coaster as easily as a yacht, so if the climb were antennas,
+        the grey stacks would climb with the orange ones.</figcaption>
+      <p class="source">Danish Maritime Authority AIS archive · computed by
+        <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/sql/61_adoption.sql"><code>sql/61_adoption.sql</code></a></p>
+      <details><summary>The numbers</summary><div class="scroll"><table id="t-i2"></table></div></details>
+    </figure>
+    <div class="prose note">
+      <p>That is the same season with <span data-n="season_growth">4.4</span> times as
+        many boats in it — and it is the point where I stopped trusting myself. A
+        curve that climbs like that has an obvious second explanation, and it has
+        nothing to do with boats: more antennas along the coast, hearing boats that
+        were always out there.</p>
+      <p>The grey stacks do not climb. Over the same weeks of the same years the
+        commercial fleet went from <span data-n="ships_2015">10 082</span> ships to
+        <span data-n="ships_2026">10 784</span>, which is as flat as a real-world count
+        gets, while small boats went from <span data-n="boats_2015">6 137</span> to
+        <span data-n="boats_2026">22 773</span>.</p>
+      <p class="big"><span data-n="boats_per_ship_2026">2.1</span><small>small boats for every commercial ship, 2026</small></p>
+      <p>Denmark now hears
+        <span data-n="boats_per_ship_2026">2.1</span> small boats for every commercial
+        ship in these waters. In 2015 the same count was
+        <span data-n="boats_per_ship_2015">0.6</span>.</p>
+    </div>
   </div>
 
   <figure id="i2-maps">
@@ -155,47 +199,59 @@
       radio.</figcaption>
     <p class="source">Danish Maritime Authority AIS archive, through the open
       dataset · built by
-      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/build_map_figures.py"><code>scripts/build_map_figures.py</code></a></p>
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/charts_index.py"><code>scripts/charts_index.py</code></a></p>
   </figure>
 
+  <p class="aside">What I cannot tell you is how many boats there are. I can count the ones
+    carrying a radio, and part of that
+    <span data-n="boats_growth">3.7</span>-fold rise is people fitting a set to a
+    boat they already had. Nobody publishes how many sets were sold, so the
+    two cannot be split apart.</p>
+
   <div class="prose">
-    <p>Then I looked at where the boats are registered. That is the thing I had
+    <p class="lead">Then I looked at where the boats are registered. That is the thing I had
       most wrong before I started.</p>
   </div>
-
 
   <figure id="i3">
     <h3>The largest group of small boats in Danish water is German</h3>
     <div class="chart" id="c-i3"></div>
-    <figcaption>Share of the small boats heard each year, by the country their
-      radio is registered in. The area I counted runs from the North Sea to
-      Bornholm and reaches down past Kiel and Flensburg, so a good part of the
-      German Baltic coast is inside it.</figcaption>
+    <figcaption>A hundred small boats, shared out the way the flags were among
+      every small boat heard in 2026: one pontoon per country, and a mark on each
+      where its pontoon ended in 2015. The country is the one the radio is
+      registered in. The area I counted runs from the North Sea to Bornholm and
+      reaches down past Kiel and Flensburg, so a good part of the German Baltic
+      coast is inside it.</figcaption>
     <p class="source">Danish Maritime Authority AIS archive · computed by
       <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/sql/80_site_flags.sql"><code>sql/80_site_flags.sql</code></a>
       · the country is the registration, not where the boat sails</p>
     <details><summary>The numbers</summary><div class="scroll"><table id="t-i3"></table></div></details>
   </figure>
 
-  <div class="prose">
-    <p>German boats are <span data-n="german_2026">35</span> per cent of the fleet
-      and Danish boats <span data-n="danish_2026">24</span> per cent, and Germany has
-      led in every year I loaded. Then come Sweden at
-      <span data-n="swedish_2026">14</span> per cent, Norway at
-      <span data-n="norwegian_2026">10</span> and the Netherlands at
-      <span data-n="dutch_2026">7</span>. Whenever I say "the Danish fleet" below,
-      what I mean is the fleet inside the box I drew, which is a
-      less tidy thing.</p>
+  <div class="pull">
+    <div class="sounding">
+      <p class="big"><span data-n="german_2026">35</span><small>per cent German</small></p>
+    </div>
+    <div class="prose">
+      <p>German boats are <span data-n="german_2026">35</span> per cent of the fleet
+        and Danish boats <span data-n="danish_2026">24</span> per cent, and Germany has
+        led in every year I loaded. Then come Sweden at
+        <span data-n="swedish_2026">14</span> per cent, Norway at
+        <span data-n="norwegian_2026">10</span> and the Netherlands at
+        <span data-n="dutch_2026">7</span>. Whenever I say "the Danish fleet" below,
+        what I mean is the fleet inside the box I drew, which is a
+        less tidy thing.</p>
+    </div>
   </div>
 
   <!-- ================ Who else is out there ================ -->
-  <div class="prose">
+  <header class="prose opener">
     <h2>Who else is out there</h2>
     <p>Small boats share this water with everybody else, and I had no real
       picture of everybody else until I drew them. Each map
       below is a month or a year of one kind of ship under way, counted on the
       same patches of sea.</p>
-  </div>
+  </header>
 
   <figure id="i3-cargo">
     <h3>Cargo goes almost everywhere, and then squeezes through two gates</h3>
@@ -205,7 +261,7 @@
       only the Sound at Drogden and the Great Belt to pass through.</figcaption>
     <p class="source">Danish Maritime Authority AIS archive, through the open
       dataset · built by
-      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/build_map_figures.py"><code>scripts/build_map_figures.py</code></a></p>
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/charts_index.py"><code>scripts/charts_index.py</code></a></p>
   </figure>
 
   <figure id="i3-ferries">
@@ -219,7 +275,7 @@
       their own.</figcaption>
     <p class="source">Danish Maritime Authority AIS archive, through the open
       dataset · built by
-      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/build_map_figures.py"><code>scripts/build_map_figures.py</code></a></p>
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/charts_index.py"><code>scripts/charts_index.py</code></a></p>
   </figure>
 
   <figure id="i3-fishing">
@@ -234,11 +290,11 @@
       manoeuvre for hours at walking pace.</figcaption>
     <p class="source">Danish Maritime Authority AIS archive, through the open
       dataset · built by
-      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/build_map_figures.py"><code>scripts/build_map_figures.py</code></a></p>
+      <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/scripts/charts_index.py"><code>scripts/charts_index.py</code></a></p>
   </figure>
 
   <!-- ==================== Act 2 ==================== -->
-  <div class="prose">
+  <header class="prose opener">
     <p class="act">Act two — when the storm comes</p>
     <h2>A storm is the one experiment the sea runs for you</h2>
     <p>Denmark's weather service gives its storms names.
@@ -248,7 +304,7 @@
     <p>For every day around every storm I counted how many boats of
       each kind the radio heard, and how many of those went a
       nautical mile or more. The second out of the first is the line below.</p>
-  </div>
+  </header>
 
   <figure id="i4">
     <h3>The fishing fleet stops for a storm. The cargo fleet carries on</h3>
@@ -266,64 +322,90 @@
     <details><summary>The numbers</summary><div class="scroll"><table id="t-i4"></table></div></details>
   </figure>
 
+  <div class="trio">
+    <div>
+      <p class="big" style="color:var(--fishing)"><small><span data-n="storm_fishing_before">55</span> →</small><span data-n="storm_fishing_day">16</span></p>
+      <p class="caps">fishing boats of every hundred, three days out and on the day</p>
+      <p>Across every one of them the shape repeats. Three days out,
+        <span data-n="storm_fishing_before">55</span> of every hundred fishing
+        boats the radio heard went out. On the storm's own day,
+        <span data-n="storm_fishing_day">16</span> did. The rest had not
+        vanished: their radios were on all through it, sitting still in harbour.
+        They were just tied up in port.</p>
+    </div>
+    <div>
+      <p class="big" style="color:var(--cargo)"><small><span data-n="storm_cargo_before">84</span> →</small><span data-n="storm_cargo_day">82</span></p>
+      <p class="caps">cargo ships of every hundred, the same days</p>
+      <p>Cargo did not notice. On the same day
+        <span data-n="storm_cargo_day">82</span> of every hundred cargo ships
+        went out, against <span data-n="storm_cargo_before">84</span> three days
+        earlier, and no single storm's own line falls the way the fishing lines
+        do. A coaster with a schedule does not ask the weather for permission.</p>
+    </div>
+    <div>
+      <p class="big"><span data-n="pia_fishing_low">3</span></p>
+      <p class="caps">fishing boats of every hundred, storm Pia</p>
+      <p>The deepest of them is Pia, in December 2023, the lowest pale line on
+        the chart: it took the fishing fleet down to
+        <span data-n="pia_fishing_low">3</span> boats in every hundred. It is
+        still low three days later, and those days are Christmas, and Christmas is
+        not weather.</p>
+    </div>
+  </div>
+
   <div class="prose">
-    <p>Across every one of them the shape repeats. Three days out,
-      <span data-n="storm_fishing_before">55</span> of every hundred fishing
-      boats the radio heard went out. On the storm's own day,
-      <span data-n="storm_fishing_day">16</span> did. The rest had not
-      vanished: their radios were on all through it, sitting still in harbour.
-      They were just tied up in port.</p>
-
-    <p>Cargo did not notice. On the same day
-      <span data-n="storm_cargo_day">82</span> of every hundred cargo ships
-      went out, against <span data-n="storm_cargo_before">84</span> three days
-      earlier, and no single storm's own line falls the way the fishing lines
-      do. A coaster with a schedule does not ask the weather for permission.</p>
-
-    <p>The deepest of them is Pia, in December 2023, the lowest pale line on
-      the chart: it took the fishing fleet down to
-      <span data-n="pia_fishing_low">3</span> boats in every hundred. It is
-      still low three days later, and those days are Christmas, and Christmas is
-      not weather.</p>
-
-    <p>Lay the fleets side by side and the order never changes.</p>
+    <p class="lead">Lay the fleets side by side and the order never changes.</p>
   </div>
 
   <figure id="i5">
     <h3>On a storm day most of the fishing fleet stays in. Cargo barely
       notices</h3>
     <div class="chart" id="c-i5"></div>
-    <figcaption>Of every hundred boats of a fleet that go out on a usual day,
-      how many stayed in on a storm day. The storms' own dates against the same
-      dates a fortnight away, pooled over every storm, so a big storm counts for
-      more than a small one. Sailing boats are measured only over the storms
-      that landed in a sailing season, where enough of them were out to divide
-      by; the bar says how many.</figcaption>
+    <figcaption>A hundred boats of each fleet that would go out on a usual day.
+      Those that stayed in on a storm day are drawn tied up inside the harbour,
+      the rest are out at sea. The storms' own dates against the same dates a
+      fortnight away, pooled over every storm, so a big storm counts for more
+      than a small one. Sailing boats are measured only over the storms that
+      landed in a sailing season, where enough of them were out to divide by;
+      their row says how many.</figcaption>
     <p class="source">Danish Maritime Authority AIS archive · computed by
       <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/sql/52_who_stays.sql"><code>sql/52_who_stays.sql</code></a>
-      · the sailing bar is a share divided by a share, with no count of
+      · the sailing row is a share divided by a share, with no count of
       private boats behind it</p>
     <details><summary>The numbers</summary><div class="scroll"><table id="t-i5"></table></div></details>
   </figure>
 
-  <div class="prose">
-    <p>Of every hundred fishing boats that would have gone out on an ordinary
-      day, <span data-n="stayed_fishing">63</span> stayed in.
-      <span data-n="stayed_cargo">2</span> of every hundred cargo ships did.
-      Hour by hour the sailing boats go in earliest of all: where enough of them
-      were out to count, the fleet halves
-      <span data-n="sailing_hours">3</span> hours
-      <span data-n="sailing_when">before the storm's own first midnight</span>.
-      They go by the forecast.</p>
+  <div class="pull">
+    <div class="sounding">
+      <p class="big" style="color:var(--fishing)"><span data-n="stayed_fishing">63</span></p>
+      <p class="caps">fishing boats in a hundred stay in</p>
+    </div>
+    <div class="prose">
+      <p>Of every hundred fishing boats that would have gone out on an ordinary
+        day, <span data-n="stayed_fishing">63</span> stayed in.
+        <span data-n="stayed_cargo">2</span> of every hundred cargo ships did.
+        Hour by hour the sailing boats go in earliest of all: where enough of them
+        were out to count, the fleet halves
+        <span data-n="sailing_hours">3</span> hours
+        <span data-n="sailing_when">before the storm's own first midnight</span>.
+        They go by the forecast.</p>
+    </div>
+  </div>
 
-    <p>The ferries are the case I find most human, because both of the obvious
-      things are true at once. They keep sailing and they sail less. Over the
-      storms' own days the lines with a Danish end ran
-      <span data-n="storm_ferry_now">23 954</span> departures against
-      <span data-n="storm_ferry_ref">27 536</span> over the same days a
-      fortnight earlier, the same ships, the same crews,
-      <span data-n="storm_ferry_share">87</span> per cent of the
-      timetable.</p>
+  <div class="pull">
+    <div class="sounding">
+      <p class="big"><span data-n="storm_ferry_share">87</span><small>per cent of the timetable</small></p>
+    </div>
+    <div class="prose">
+      <p>The ferries are the case I find most human, because both of the obvious
+        things are true at once. They keep sailing and they sail less. Over the
+        storms' own days the lines with a Danish end ran
+        <span data-n="storm_ferry_now">23 954</span> departures against
+        <span data-n="storm_ferry_ref">27 536</span> over the same days a
+        fortnight earlier, the same ships, the same crews,
+        <span data-n="storm_ferry_share">87</span> per cent of the
+        timetable.</p>
+    </div>
   </div>
 
   <figure id="i6">
@@ -340,59 +422,81 @@
   </figure>
 
   <!-- ==================== Act 3 ==================== -->
-  <div class="prose">
+  <header class="prose opener">
     <p class="act">Act three — the archive lies, a little</p>
     <h2>Two things in here are wrong, and both change what you may count</h2>
     <p>Everything above is built on an archive I did not make. The first of the
       two is the one I would want to know about if I were reading
       somebody else's numbers.</p>
+  </header>
+
+  <div class="pull">
+    <div class="sounding">
+      <p class="big"><span data-n="cap">43 200</span></p>
+      <p class="caps">messages a day, the most a radio can send</p>
+    </div>
+    <div class="prose">
+      <p>A big ship's radio sends at most one position every
+        <span data-n="cap_seconds">2</span> seconds. Over a day that is
+        <span data-n="cap">43 200</span> messages and not one more, a property of the
+        radio that no busy day can change.</p>
+    </div>
   </div>
 
   <figure id="i7">
     <h3>A radio has a ceiling, and this archive goes through it</h3>
     <div class="chart" id="c-i7"></div>
     <div class="chart" id="c-i7b"></div>
-    <figcaption>Above: what a big ship's radio can physically send in a day,
-      and the most this archive holds for one ship on one day, drawn to the same
-      scale. Below: for each month, the share of ships' days over that ceiling.
-      The tall bar in 2015 is a month the archive is already known to have
-      stored twice; the same test finds it without being told, which is roughly
-      why I believe the test.</figcaption>
+    <figcaption>Above: each strip is one day of a big ship's radio sending as
+      fast as it physically can, and the stack is what this archive holds for
+      one ship on one day, drawn to the same scale. Below: for each month, the
+      share of ships' days over that ceiling. The tall bar in 2015 is a month
+      the archive is already known to have stored twice; the same test finds it
+      without being told, which is roughly why I believe the test.</figcaption>
     <p class="source">Danish Maritime Authority AIS archive · computed by
       <a href="https://github.com/Maksim-Burtsev/seafolk/blob/master/sql/60_coverage_index.sql"><code>sql/60_coverage_index.sql</code></a>
       · the ceiling is from the radio standard <code>ITU-R M.1371</code></p>
     <details><summary>The numbers</summary><div class="scroll"><table id="t-i7"></table></div></details>
   </figure>
 
-  <div class="prose">
-    <p>A big ship's radio sends at most one position every
-      <span data-n="cap_seconds">2</span> seconds. Over a day that is
-      <span data-n="cap">43 200</span> messages and not one more, a property of the
-      radio that no busy day can change. Before
-      2023, <span data-n="over_cap_before">0.06</span> per cent of ships' days in the
-      archive sat above that ceiling. From December 2023 onward it runs up to
-      <span data-n="over_cap_now">1.1</span> per cent, every single month, and the
-      worst day I found holds <span data-n="worst_msgs">359 899</span> messages for one
-      ship — <span data-n="worst_times">8.3</span> times what the radio can
-      send.</p>
+  <div class="pull">
+    <div class="sounding">
+      <p class="big"><small><span data-n="over_cap_before">0.06</span> →</small><span data-n="over_cap_now">1.1</span></p>
+      <p class="caps">per cent of ships' days above the ceiling</p>
+    </div>
+    <div class="prose">
+      <p>Before
+        2023, <span data-n="over_cap_before">0.06</span> per cent of ships' days in the
+        archive sat above that ceiling. From December 2023 onward it runs up to
+        <span data-n="over_cap_now">1.1</span> per cent, every single month, and the
+        worst day I found holds <span data-n="worst_msgs">359 899</span> messages for one
+        ship — <span data-n="worst_times">8.3</span> times what the radio can
+        send.</p>
+      <p>Those ships are not lying. The archive is keeping some messages twice.
+        Counting heads is immune to that, since the same ship counted twice is
+        still one ship, so nothing in the first two acts moves. Counting messages
+        is not, so no chart on this site counts messages across 2023.</p>
+    </div>
+  </div>
 
-    <p>Those ships are not lying. The archive is keeping some messages twice.
-      Counting heads is immune to that, since the same ship counted twice is
-      still one ship, so nothing in the first two acts moves. Counting messages
-      is not, so no chart on this site counts messages across 2023.</p>
-
-    <p>The second thing is a filing error. A ferry lands in my counts only on the
-      days it told the world it was a passenger ship, and ships get their own type
-      wrong all the time. In 2025, <span data-n="hidden_share">16</span> per cent of
-      the sailing days of a <span data-n="hidden_fleet">487</span>-ship ferry fleet
-      were filed as something else. It is not spread evenly, either.
-      <span data-n="hidden_ship">MENJA</span>, which works the
-      <span data-n="hidden_ship_line">Esbjerg – Nordby</span> crossing to
-      <span data-n="hidden_ship_island">Fanø</span>, is in the archive on
-      <span data-n="hidden_ship_days">2 116</span> of its
-      <span data-n="days_loaded">2 122</span> days and is filed as
-      <span data-n="hidden_ship_type">Undefined</span> on every one of them. In my ferry
-      counts she does not exist.</p>
+  <div class="pull">
+    <div class="sounding">
+      <p class="big"><span data-n="hidden_share">16</span><small>per cent of ferry days filed as something else</small></p>
+    </div>
+    <div class="prose">
+      <p>The second thing is a filing error. A ferry lands in my counts only on the
+        days it told the world it was a passenger ship, and ships get their own type
+        wrong all the time. In 2025, <span data-n="hidden_share">16</span> per cent of
+        the sailing days of a <span data-n="hidden_fleet">487</span>-ship ferry fleet
+        were filed as something else. It is not spread evenly, either.
+        <span data-n="hidden_ship">MENJA</span>, which works the
+        <span data-n="hidden_ship_line">Esbjerg – Nordby</span> crossing to
+        <span data-n="hidden_ship_island">Fanø</span>, is in the archive on
+        <span data-n="hidden_ship_days">2 116</span> of its
+        <span data-n="days_loaded">2 122</span> days and is filed as
+        <span data-n="hidden_ship_type">Undefined</span> on every one of them. In my ferry
+        counts she does not exist.</p>
+    </div>
   </div>
 
   <div class="prose">
@@ -424,10 +528,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
-<script src="media/land.js"></script>
 <script src="js/storm-player.js"></script>
-<script src="media/maps.js"></script>
-<script src="js/minimap.js"></script>
 <script src="js/kit.js"></script>
 <script src="media/charts/index.js"></script>
 <script src="media/charts/hero-ferries.js"></script>

@@ -111,63 +111,96 @@ function season() {
 }
 
 
+/* ============================= boat glyphs ============================== */
+/* The unit charts on this page are crowds of little boats. Each kind is one
+ * path standing on a waterline at y = 0, bow to the right, about 24 units long
+ * and up to 21 high; a chart scales it to its cell. A sailing boat tied up in
+ * harbour has its sails down: a bare mast. */
+const GLYPH = {
+  sail:    "M-10.5,-3.6H10.5Q8.6,0 6,0H-6Q-8.6,0 -10.5,-3.6Z"
+         + "M-1.6,-4.7V-21.5Q-5.4,-12 -9.8,-4.7Z M0,-20Q5.2,-11 8.8,-4.7H0Z",
+  moored:  "M-10.5,-3.6H10.5Q8.6,0 6,0H-6Q-8.6,0 -10.5,-3.6Z M-1.5,-3.6V-19H-0.1V-3.6Z",
+  fishing: "M-11,-4.5H8.5L11.5,-8.5L9.5,0H-9.5Z M-7,-4.5V-11.5H0V-4.5Z"
+         + "M2.5,-4.5V-18H3.7V-4.5Z M3.7,-16.5L10.5,-6H9L3.7,-14Z",
+  work:    "M-11,-4H7.5L11.5,-7.5L9.5,0H-9.5Z M-1.5,-4V-12.5H5.5V-4Z M-7.5,-4V-9H-4.5V-4Z",
+  ferries: "M-12.5,-4H12.5L10.5,0H-10.5Z M-10,-4V-8H10.5V-4Z M-7,-8V-11.5H7V-8Z M-2,-11.5V-15H1.5V-11.5Z",
+  cargo:   "M-12.5,-4H13L11,0H-11Z M-11.5,-4V-12H-8V-4Z M-7,-4V-8.5H-2.3V-4Z"
+         + "M-1.8,-4V-9.8H2.9V-4Z M3.4,-4V-8.5H8.1V-4Z",
+};
+const boat = (g, kind, x, y, s, fill, rot) => g.append("path").attr("d", GLYPH[kind])
+  .attr("transform", `translate(${x.toFixed(1)},${y.toFixed(1)})`
+        + (rot ? ` rotate(${rot.toFixed(1)})` : "") + ` scale(${s.toFixed(3)})`)
+  .attr("fill", fill);
+/* Python's round(), half to even, so a count of glyphs agrees with the number
+ * the build printed into the prose: 2.5 cargo ships in a hundred is 2 there. */
+const round = v => { const f = Math.floor(v); return v - f === 0.5 ? f + (f % 2) : Math.round(v); };
+/* The same scatter on every redraw. */
+const rng = seed => () => (seed = seed * 16807 % 2147483647) / 2147483647;
+const serif = (w, px, it) => `${it ? "italic " : ""}${w} ${px}px "Source Serif 4", Georgia, serif`;
+const mono = (px, w) => `${w || 500} ${px}px "IBM Plex Mono", ui-monospace, monospace`;
+const text = (g, x, y, s, font, fill, anchor) => g.append("text").attr("x", x).attr("y", y)
+  .attr("text-anchor", anchor || "start").attr("fill", fill).style("font", font).text(s);
+
+
 /* ====================== I2 — the fleet and the control ================== */
+/* Two stacks a year, a mark per thousand: small boats pile up, big ships stay
+ * the same height. The last mark of a stack is cut to its fraction, from the
+ * waterline up, so a stack is exactly as tall as its count. */
 function fleet() {
-  const F = D.fleet;
+  const F = D.fleet, UNIT = 1000;
+  const top = Math.ceil(d3.max(F.small_boats) / UNIT) + 1.4;
   kit.figure(document.getElementById("c-i2"),
-    { ratio: 0.46, ratioNarrow: 0.85, margin: { top: 26, right: 96, bottom: 40, left: 54 },
-      marginNarrow: { right: 30, left: 48 } },
+    { ratio: 0.95, ratioNarrow: 1.45, margin: { top: 8, right: 6, bottom: 30, left: 6 } },
     (g, w, h, narrow) => {
-      const x = d3.scaleBand(F.years.map(String), [0, w]).padding(0.34);
-      const y = d3.scaleLinear([0, d3.max(F.small_boats) * 1.1], [h, 0]);
-      kit.axis(g, y, { side: "left", ticks: 4, grid: w, fmt: sp,
-                       title: "boats and ships heard, March to August" });
-      kit.axis(g, x, { side: "bottom", at: h });
-
-      g.selectAll(null).data(F.years).join("rect")
-        .attr("x", d => x(String(d))).attr("width", x.bandwidth())
-        .attr("y", (d, i) => y(F.small_boats[i]))
-        .attr("height", (d, i) => h - y(F.small_boats[i]))
-        .attr("fill", ink("accent"));
-      [0, F.years.length - 1].forEach(i => kit.halo(g.append("text")
-        .attr("x", x(String(F.years[i])) + x.bandwidth() / 2)
-        .attr("y", y(F.small_boats[i]) - 8).attr("text-anchor", "middle")
-        .attr("fill", ink("accent-tx"))
-        .style("font", '500 13px "IBM Plex Mono", ui-monospace, monospace')
-        .text(sp(F.small_boats[i]))));
-
-      const mid = d => x(String(d)) + x.bandwidth() / 2;
-      g.append("path").attr("fill", "none").attr("stroke", ink("working"))
-        .attr("stroke-width", 2.4)
-        .attr("d", d3.line().x(mid).y((d, i) => y(F.big_ships[i]))(F.years));
-      g.selectAll(null).data(F.years).join("circle")
-        .attr("cx", mid).attr("cy", (d, i) => y(F.big_ships[i])).attr("r", 3.4)
-        .attr("fill", ink("working"));
-
-      if (!narrow) kit.endLabels(g, w, [
-        { y: y(F.small_boats.at(-1)), text: "small boats", color: ink("accent-tx"), weight: 600 },
-        { y: y(F.big_ships.at(-1)), text: "big ships", color: ink("working") }]);
-      else {
-        kit.halo(g.append("text").attr("x", 2).attr("y", y(F.big_ships[0]) - 12)
-          .attr("fill", ink("working"))
-          .style("font", '500 12px "Source Serif 4", Georgia, serif').text("big ships"));
-        kit.halo(g.append("text").attr("x", 2).attr("y", 12)
-          .attr("fill", ink("accent-tx"))
-          .style("font", '600 12px "Source Serif 4", Georgia, serif').text("small boats"));
+      const x = d3.scaleBand(F.years.map(String), [0, w]).paddingInner(0.2).paddingOuter(0.04);
+      const step = h / top, col = x.bandwidth() / 2;
+      const sS = Math.min(step * 0.86 / 21.5, col * 0.95 / 21);
+      const sC = Math.min(step * 0.66 / 12, col * 0.95 / 25.5);
+      const Y = v => h - v / UNIT * step;
+      const clip = (id, y0, y1) => g.append("clipPath").attr("id", id).append("rect")
+        .attr("x", -9999).attr("width", 99999).attr("y", y0).attr("height", y1 - y0);
+      function stack(kind, cx, v, s, fill, id) {
+        const n = v / UNIT, full = Math.floor(n);
+        for (let k = 0; k < full; k++) boat(g, kind, cx, h - k * step, s, fill);
+        if (n - full > 0.02) {
+          clip(id, h - (full + (n - full)) * step, h - full * step);
+          boat(g, kind, cx, h - full * step, s, fill).attr("clip-path", `url(#${id})`);
+        }
       }
-      // the empty band above the first bars and below the last two is the only
-      // place a two-line note fits without sitting on an orange bar.
-      kit.note(g, { x: mid(F.years[0]), y: y(F.big_ships[0]), dx: 8,
-        dy: y(d3.max(F.small_boats) * 0.95) - y(F.big_ships[0]),
-        color: ink("working"), leader: true,
-        text: narrow ? ["commercial ships,", "the same weeks —", "flat"]
-                     : ["commercial ships, the same weeks —",
-                        "if antennas were the story, this would climb too"] });
+
+      F.years.forEach((yr, i) => {
+        const x0 = x(String(yr));
+        stack("sail", x0 + col / 2, F.small_boats[i], sS, ink("accent"), `i2-s${i}`);
+        stack("cargo", x0 + col * 1.5, F.big_ships[i], sC, ink("working"), `i2-c${i}`);
+        text(g, x0 + col, h + 20, yr, mono(12), ink("label"), "middle");
+      });
+      g.append("line").attr("x1", 0).attr("x2", w).attr("y1", h + 0.5).attr("y2", h + 0.5)
+        .attr("stroke", ink("ink")).attr("stroke-width", 1.2);
+
+      [0, F.years.length - 1].forEach(i => kit.halo(text(g, x(String(F.years[i])) + col / 2,
+        Y(F.small_boats[i]) - step * 1.05, sp(F.small_boats[i]), mono(narrow ? 11 : 12.5, 600),
+        ink("accent-tx"), "middle")));
+
+      // the key, in the empty water above the first two years
+      const kx = 4, ky = step * 1.4, fs = narrow ? 12.5 : 14, tx = kx + 30 * Math.max(sS, sC);
+      boat(g, "sail", kx + 11 * sS, ky, sS, ink("accent"));
+      text(g, tx, ky - 3, "small boats", serif(600, fs), ink("accent-tx"));
+      boat(g, "cargo", kx + 13 * sC, ky + step * 1.25, sC, ink("working"));
+      text(g, tx, ky + step * 1.25 - 3, "big ships", serif(600, fs), ink("working"));
+      text(g, kx, ky + step * 2.35, narrow ? "each mark: a thousand" : "each mark: a thousand heard, March to August",
+           serif(400, narrow ? 11.5 : 13, true), ink("label"));
+
+      // the one note: how far the small boats climbed
+      const last = F.years.length - 1;
+      kit.halo(narrow
+        ? text(g, kx, ky + step * 4.2, `${D.n.boats_growth} × as many`, serif(600, 16, true), ink("accent-tx"))
+        : text(g, x(String(F.years[last])) - col * 0.2, Y(F.small_boats[last]) - step * 0.35,
+               `${D.n.boats_growth} × as many`, serif(600, 19, true), ink("accent-tx"), "end"));
 
       kit.hover(g, w, h, px => {
-        const i = d3.bisect(F.years.map(d => mid(d) + x.step() / 2), px);
+        const i = Math.floor(px / x.step());
         return F.years[i] === undefined ? null : {
-          x: mid(F.years[i]), y: y(F.small_boats[i]), color: ink("accent"),
+          x: x(String(F.years[i])) + col / 2, y: Y(F.small_boats[i]), color: ink("accent"),
           text: `${F.years[i]}\n${sp(F.small_boats[i])} small boats\n${sp(F.big_ships[i])} big ships` };
       });
     });
@@ -178,39 +211,115 @@ function fleet() {
 
 
 /* ============================= I3 — the flags =========================== */
-/* One accent for the subject and a descending ramp of ink for the rest, so
- * that any two neighbouring bands differ by more than a shade. */
-const FLAG_INK = { German: "accent", Danish: "ink", Swedish: "working",
-                   Norwegian: "ref", Dutch: "pale", "everyone else": "hairline" };
+/* A harbour of a hundred small boats, shared out the way the flags were in
+ * the last year: one pontoon per country off one quay, so the German pontoon
+ * is simply the longest. A dotted mark on each pontoon is where it ended in
+ * the first year. The flags' own colours are the only literals on this page:
+ * a flag is not a palette choice. */
+const FLAG = { red: "#bf2b2d", white: "#fbf7ec", gold: "#e2ab2a", black: "#23211d",
+               swe: "#2a64a0", nor: "#1f3a70", ned: "#2b4f93" };
+function flag(g, who, x, y, fw) {
+  const fh = fw * 0.66, f = g.append("g").attr("transform", `translate(${x},${y})`);
+  const r = (a, b, c, d, col) => f.append("rect").attr("x", a * fw).attr("y", b * fh)
+    .attr("width", c * fw).attr("height", d * fh).attr("fill", col);
+  g.append("line").attr("x1", x).attr("x2", x).attr("y1", y - 2).attr("y2", y + fw * 1.35)
+    .attr("stroke", ink("ink")).attr("stroke-width", 1.3);
+  if (who === "German") { r(0, 0, 1, 1 / 3, FLAG.black); r(0, 1 / 3, 1, 1 / 3, FLAG.red); r(0, 2 / 3, 1, 1 / 3, FLAG.gold); }
+  else if (who === "Dutch") { r(0, 0, 1, 1 / 3, FLAG.red); r(0, 1 / 3, 1, 1 / 3, FLAG.white); r(0, 2 / 3, 1, 1 / 3, FLAG.ned); }
+  else if (who === "Danish") { r(0, 0, 1, 1, FLAG.red); r(12 / 37, 0, 4 / 37, 1, FLAG.white); r(0, 12 / 28, 1, 4 / 28, FLAG.white); }
+  else if (who === "Swedish") { r(0, 0, 1, 1, FLAG.swe); r(5 / 16, 0, 2 / 16, 1, FLAG.gold); r(0, 4 / 10, 1, 2 / 10, FLAG.gold); }
+  else if (who === "Norwegian") { r(0, 0, 1, 1, FLAG.red); r(6 / 22, 0, 4 / 22, 1, FLAG.white); r(0, 6 / 16, 1, 4 / 16, FLAG.white);
+    r(7 / 22, 0, 2 / 22, 1, FLAG.nor); r(0, 7 / 16, 1, 2 / 16, FLAG.nor); }
+  else {   // everyone else: a plain burgee
+    f.append("path").attr("d", `M0,0L${fw},${fh / 2}L0,${fh}Z`).attr("fill", ink("surface"))
+      .attr("stroke", ink("ink")).attr("stroke-width", 0.8);
+    return;
+  }
+  f.append("rect").attr("width", fw).attr("height", fh).attr("fill", "none")
+    .attr("stroke", ink("ink")).attr("stroke-width", 0.6);
+}
 
 function flags() {
-  const F = D.flags;
+  const F = D.flags, last = F.years.length - 1;
+  const rows = F.order.map(k => ({ k, n: round(F.shares[k][last]), was: F.shares[k][0] }));
+  const lines = per => d3.sum(rows, r => Math.ceil(r.n / per));
   kit.figure(document.getElementById("c-i3"),
-    { ratio: 0.45, ratioNarrow: 0.98, margin: { top: 22, right: 128, bottom: 40, left: 40 },
-      marginNarrow: { right: 96, left: 36 } },
+    { ratio: 0.4, ratioNarrow: 1.42, margin: { top: 4, right: 4, bottom: 4, left: 0 } },
     (g, w, h, narrow) => {
-      const x = d3.scaleBand(F.years.map(String), [0, w]).padding(0.3);
-      const y = d3.scaleLinear([0, 100], [h, 0]);
-      kit.axis(g, y, { side: "left", values: [0, 50, 100], fmt: d => d + " %" });
-      kit.axis(g, x, { side: "bottom", at: h });
+      const per = narrow ? 14 : 36;
+      const quay = narrow ? 0 : Math.min(176, w * 0.2);
+      const endRoom = narrow ? 6 : 64;
+      // one boat's berth, and the height of a pontoon's line of boats. On a
+      // phone each country gets a heading row and its boats wrap.
+      let step = (w - quay - endRoom) / (per + 0.6);
+      const need = narrow ? lines(per) * 1.25 + rows.length * 2.1 : rows.length * 2.1;
+      if (!narrow) step = Math.min(step, h / need);
+      else step = Math.min(step, h / need);
+      const s = step * 0.92 / 21;
+      const lineH = step * 1.25, headH = narrow ? step * 1.6 : 0;
+      const rowH = narrow ? null : h / rows.length;
 
-      let base = F.years.map(() => 0);
-      const ends = [];
-      F.order.forEach(flag => {
-        const v = F.shares[flag], token = FLAG_INK[flag];
-        g.selectAll(null).data(F.years).join("rect")
-          .attr("x", d => x(String(d))).attr("width", x.bandwidth())
-          .attr("y", (d, i) => y(base[i] + v[i]))
-          .attr("height", (d, i) => y(base[i]) - y(base[i] + v[i]))
-          .attr("fill", ink(token))
-          .attr("stroke", ink("surface")).attr("stroke-width", 1);
-        ends.push({ y: y(base.at(-1) + v.at(-1) / 2),
-                    text: `${flag} ${Math.round(v.at(-1))} %`,
-                    color: token === "accent" ? ink("accent-tx") : ink("label"),
-                    weight: token === "accent" ? 600 : 500 });
-        base = base.map((b, i) => b + v[i]);
+      // water, and the quay the pontoons run off
+      g.append("rect").attr("x", quay).attr("width", w - quay).attr("height", h)
+        .attr("fill", ink("shoal")).attr("opacity", 0.55);
+      if (!narrow) {
+        g.append("rect").attr("width", quay).attr("height", h).attr("fill", ink("land"));
+        g.append("line").attr("x1", quay).attr("x2", quay).attr("y1", 0).attr("y2", h)
+          .attr("stroke", ink("ink")).attr("stroke-width", 1.4);
+      }
+
+      let y = 0;
+      rows.forEach((r, i) => {
+        const own = i === 0;
+        const colour = own ? ink("accent") : ink("sea-ink");
+        const fw = narrow ? 20 : Math.min(30, rowH * 0.34);
+        const nl = narrow ? Math.ceil(r.n / per) : 1;
+        const top = narrow ? y + headH : i * rowH + rowH * 0.2;
+        const lh = narrow ? lineH : rowH * 0.62;
+        // the country: its flag on the quay (or over its pontoons on a phone)
+        const fx = narrow ? 2 : 18, fy = narrow ? y + headH * 0.2 : top + lh * 0.88 - fw * 1.35;
+        flag(g, r.k, fx, fy, fw);
+        const name = r.k === "everyone else" ? "Everyone else" : r.k;
+        const nx = fx + fw + 9, ny = fy + fw * 0.52;
+        text(g, nx, ny, name, serif(600, narrow ? 14.5 : 16.5), ink("ink"));
+        if (narrow) kit.halo(text(g, w - 2, ny, `${r.n}`, serif(600, 19, true),
+                                  own ? ink("accent-tx") : ink("ink"), "end"));
+
+        for (let l = 0; l < nl; l++) {
+          const n = Math.min(per, r.n - l * per), py = top + (l + 1) * lh - lh * 0.12;
+          const px0 = quay + (narrow ? 0 : 0);
+          // the pontoon: a strip of jetty, drawn the way a chart draws one
+          g.append("rect").attr("x", px0).attr("y", py).attr("width", (n + 0.6) * step)
+            .attr("height", Math.max(3, step * 0.16)).attr("fill", ink("surface"))
+            .attr("stroke", ink("ink")).attr("stroke-width", 0.9);
+          for (let k = 0; k < n; k++) boat(g, "sail", px0 + step * (k + 0.8), py - 0.5, s, colour);
+          if (!narrow) {
+            // clear of the dotted mark when that falls just past the pontoon's end
+            const end = px0 + (n + 0.6) * step, xt = quay + step * (r.was + 0.3);
+            kit.halo(text(g, xt > end - 6 && xt < end + 34 ? xt + 10 : end + 12, py + 2, `${r.n}`,
+              serif(600, Math.min(30, rowH * 0.42), true), own ? ink("accent-tx") : ink("ink")));
+          }
+        }
+        // where this pontoon ended in the first year
+        if (!narrow) {
+          const xt = quay + step * (r.was + 0.3), py = top + lh - lh * 0.12;
+          g.append("line").attr("x1", xt).attr("x2", xt).attr("y1", py - lh * 0.95).attr("y2", py + 10)
+            .attr("stroke", ink("ink")).attr("stroke-width", 1.2).attr("stroke-dasharray", "2 2");
+          kit.halo(text(g, xt, py + 21, F.years[0], mono(10.5), ink("label"), "middle"));
+        } else {
+          kit.halo(text(g, w - 30, ny, `${F.years[0]}: ${Math.round(r.was)}`, mono(10.5), ink("label"), "end"));
+        }
+        y = top + nl * lh + step * 0.5;
       });
-      kit.endLabels(g, w, ends, narrow ? 15 : 17);
+
+      // the key, in the open water under the short pontoons
+      const kf = narrow ? 11.5 : 13.5;
+      if (!narrow) {
+        text(g, w - 8, h - 30, `one boat: one in a hundred heard in ${F.years[last]}`,
+             serif(400, kf, true), ink("label"), "end");
+        text(g, w - 8, h - 12, `dotted mark: where the pontoon ended in ${F.years[0]}`,
+             serif(400, kf, true), ink("label"), "end");
+      }
     });
 
   kit.table(document.getElementById("t-i3"), ["year", ...F.order],
@@ -219,72 +328,95 @@ function flags() {
 
 
 /* ========================= I4 — every storm at once ====================== */
-/* Round 2: no selector. Two fleets, their mean over every storm with a whole
- * window, and each of those storms behind them as a hairline of its own hue.
- * The reader gets the claim without touching anything. */
-const I4 = [["fishing", "fishing boats", "accent", "accent-tx"],
-            ["cargo", "cargo ships", "ink", "ink"]];
+/* No selector (round 2). Two fleets in their chart colours: the mean of every
+ * storm with a whole window as a thick line with a boat riding each day, and
+ * every storm on its own as a hairline behind it. The storm's day is hatched
+ * the way a chart hatches an area to keep out of. */
+const I4 = [["fishing", "fishing boats", "fishing"], ["cargo", "cargo ships", "cargo"]];
 
 function storms() {
   const S = D.storms;
   const OFF = S.offsets;
   const off = o => (o > 0 ? "+" : o < 0 ? "−" : "") + Math.abs(o);
-  const line = d3.line().x(d => x(d[0])).y(d => y(d[1]));
+  const line = d3.line().x(d => x(d[0])).y(d => y(d[1])).curve(d3.curveMonotoneX);
   let x, y;
 
   kit.figure(document.getElementById("c-i4"),
-    { ratio: 0.46, ratioNarrow: 0.95,
-      margin: { top: 24, right: 106, bottom: 46, left: 50 },
-      marginNarrow: { right: 70, left: 46 } },
+    { ratio: 0.5, ratioNarrow: 1.05,
+      margin: { top: 40, right: 112, bottom: 40, left: 46 },
+      marginNarrow: { top: 40, right: 16, left: 38 } },
     (g, w, h, narrow) => {
       x = d3.scaleLinear(d3.extent(OFF), [0, w]);
       y = d3.scaleLinear([0, 100], [h, 0]);
+      const dx = x(1) - x(0);
 
-      // the storm's own date, one day wide, shaded across the panel
-      const pad = (x(1) - x(0)) / 2;
-      g.append("rect").attr("x", x(0) - pad).attr("width", 2 * pad)
-        .attr("y", 0).attr("height", h)
-        .attr("fill", ink("hairline")).attr("opacity", 0.55);
-      kit.halo(g.append("text").attr("x", x(0)).attr("y", 11)
-        .attr("text-anchor", "middle").attr("fill", ink("label"))
-        .style("font", `500 ${narrow ? 11 : 12}px "IBM Plex Mono", ui-monospace, monospace`)
-        .text("the storm"));
+      // the storm's day: hatched, with its name tag hung above the frame
+      const pat = g.append("defs").append("pattern").attr("id", "i4-hatch")
+        .attr("patternUnits", "userSpaceOnUse").attr("width", 7).attr("height", 7)
+        .attr("patternTransform", "rotate(45)");
+      pat.append("line").attr("y2", 7).attr("stroke", ink("sea-ink"))
+        .attr("stroke-width", 1.2).attr("opacity", 0.4);
+      g.append("rect").attr("x", x(0) - dx / 2).attr("width", dx).attr("y", -10)
+        .attr("height", h + 10).attr("fill", ink("sea-ink")).attr("opacity", 0.06);
+      g.append("rect").attr("x", x(0) - dx / 2).attr("width", dx).attr("y", -10)
+        .attr("height", h + 10).attr("fill", "url(#i4-hatch)");
+      [x(0) - dx / 2, x(0) + dx / 2].forEach(v => g.append("line").attr("x1", v).attr("x2", v)
+        .attr("y1", -10).attr("y2", h).attr("stroke", ink("sea-ink")).attr("stroke-width", 0.8)
+        .attr("opacity", 0.6));
+      const tag = narrow ? "STORM" : "THE STORM";
+      const tw = tag.length * (narrow ? 7.6 : 8.4) + 16;
+      g.append("rect").attr("x", x(0) - tw / 2).attr("y", -34).attr("width", tw).attr("height", 22)
+        .attr("fill", ink("ink"));
+      text(g, x(0), -18.5, tag, mono(narrow ? 11 : 12), ink("surface"), "middle")
+        .attr("letter-spacing", "0.18em");
 
-      kit.axis(g, y, { side: "left", values: [0, 25, 50, 75, 100], fmt: d => d + " %",
-                       grid: w, title: narrow ? "% that went out"
-                         : "of every 100 boats heard, how many went out" });
-      kit.axis(g, x, { side: "bottom", at: h, values: OFF,
-                       fmt: o => o === 0 ? "day" : off(o) });
+      // dotted graticule and the scale, in chart furniture
+      [0, 25, 50, 75, 100].forEach(v => {
+        g.append("line").attr("x1", 0).attr("x2", w).attr("y1", y(v)).attr("y2", y(v))
+          .attr("stroke", ink(v ? "hairline" : "ink")).attr("stroke-width", v ? 1 : 1.2)
+          .attr("stroke-dasharray", v ? "1 4" : null).attr("stroke-linecap", "round");
+        text(g, -8, y(v) + 4, v + (narrow ? "" : " %"), mono(11.5, 400), ink("label"), "end");
+      });
+      text(g, -8 - (narrow ? 0 : 0), -18, narrow ? "% out" : "of 100 heard, how many went out",
+           serif(400, 13.5, true), ink("label"), narrow ? "end" : "start")
+        .attr("x", narrow ? -2 : -40);
+      OFF.forEach(o => text(g, x(o), h + 24, o === 0 ? (narrow ? "storm" : "storm day") : off(o) + (narrow ? "" : " d"),
+        mono(narrow ? 11 : 12, o === 0 ? 600 : 400), ink(o === 0 ? "ink" : "label"), "middle"));
 
-      // every storm first, as its fleet's hue at a fifth of the weight: the
-      // spread is the evidence that the mean is not one lucky gale.
+      // every storm on its own, faint
       I4.forEach(([key, , tok]) => S[key].each.forEach(pts => g.append("path")
         .attr("d", line(pts)).attr("fill", "none").attr("stroke", ink(tok))
-        .attr("stroke-width", 1).attr("opacity", 0.22)
-        .attr("stroke-linejoin", "round")));
+        .attr("stroke-width", 1).attr("opacity", 0.2)));
 
+      // the fishing fleet's water drains away: a wash under its mean
+      g.append("path").attr("fill", ink("fishing")).attr("opacity", 0.09)
+        .attr("d", d3.area().x(d => x(d[0])).y0(h).y1(d => y(d[1]))
+          .curve(d3.curveMonotoneX)(S.fishing.mean));
+
+      const s = narrow ? 0.72 : 1.35;
       const ends = [];
-      I4.forEach(([key, label, tok, txt]) => {
+      I4.forEach(([key, label, tok]) => {
         g.append("path").attr("d", line(S[key].mean)).attr("fill", "none")
-          .attr("stroke", ink(tok)).attr("stroke-width", 3.4)
-          .attr("stroke-linejoin", "round").attr("stroke-linecap", "round");
-        g.selectAll(null).data(S[key].mean).join("circle")
-          .attr("cx", d => x(d[0])).attr("cy", d => y(d[1])).attr("r", 3.6)
-          .attr("fill", ink(tok));
-        ends.push({ y: y(S[key].mean.at(-1)[1]), color: ink(txt), weight: 600,
-                    text: narrow ? label.split(" ")[0] : label + ", all storms" });
+          .attr("stroke", ink(tok)).attr("stroke-width", narrow ? 2.6 : 3.4)
+          .attr("stroke-linecap", "round");
+        S[key].mean.forEach(d => boat(g, tok, x(d[0]), y(d[1]) + 2.5 * s, s, ink(tok))
+          .attr("stroke", ink("surface")).attr("stroke-width", 2.2 / s)
+          .attr("paint-order", "stroke").attr("stroke-linejoin", "round"));
+        ends.push({ y: y(S[key].mean.at(-1)[1]) - 4, color: ink(tok), weight: 600,
+                    text: label });
       });
-      kit.endLabels(g, w, ends);
+      if (!narrow) kit.endLabels(g, w + 14, ends, 18);
+      else ends.forEach(e => kit.halo(text(g, w, e.y - 16, e.text, serif(600, 13), e.color, "end")));
 
-      // one annotation, under the fishing mean on the storm's own date: every
-      // line here is a share of a fleet, so the band down to zero is empty.
+      // the one note, under the fishing mean on the storm's own day
       const low = S.fishing.mean.find(d => d[0] === 0)[1];
       const n = D.n.storm_fishing_day;
       kit.note(g, narrow
-        ? { x: 0, y: h - 24, size: 11.5, color: ink("accent-tx"),
-            text: [`on the storm day ${n} of every`, "100 fishing boats went out"] }
-        : { x: x(0), y: y(low), dy: 22, anchor: "middle", color: ink("accent-tx"),
-            text: [`on the storm day ${n} of every 100 fishing boats went out`] });
+        ? { x: x(0), y: y(low) - 10, dy: y(64) - y(low) + 10, anchor: "middle", size: 11.5,
+            color: ink("fishing"), leader: true,
+            text: [`${n} of every 100`, "fishing boats", "went out"] }
+        : { x: x(0), y: y(low), dy: 40, anchor: "middle", color: ink("fishing"),
+            text: [`on the storm day ${n} of every 100`, "fishing boats went out"] });
 
       const flat = I4.flatMap(([key, label, tok]) =>
         S[key].mean.map(d => [...d, label, tok]));
@@ -305,44 +437,68 @@ function storms() {
 
 
 /* ====================== I5 — who stays in, per fleet ===================== */
-function stayedIn() {
-  const rows = D.stayed;
-  kit.figure(document.getElementById("c-i5"),
-    { ratio: 0.42, ratioNarrow: 0.8,
-      margin: { top: 12, right: 64, bottom: 44, left: 116 },
-      marginNarrow: { left: 96, right: 52, bottom: 42 } },
-    (g, w, h, narrow) => {
-      const x = d3.scaleLinear([0, 100], [0, w]);
-      const y = d3.scaleBand(rows.map(r => r.fleet), [0, h]).padding(0.42);
-      const pooled = d3.max(rows, r => r.storms);
-      kit.axis(g, x, { side: "bottom", at: h, values: [0, 25, 50, 75, 100],
-                       fmt: d => d + " %",
-                       title: narrow ? null : "of every 100 that go out on a usual day" });
+/* A hundred boats of each fleet that would go out on a usual day. Those that
+ * stay in on a storm day are tied up in rows inside a harbour mole, grey (a
+ * sailing boat with its sails down); the rest are out at sea in their fleet's
+ * colour, bobbing. The harbour's size is the number. */
+const FLEET = { sailing: ["sail", "accent", "accent-tx"], fishing: ["fishing", "fishing", "fishing"],
+                work: ["work", "working", "working"], ferries: ["ferries", "ferry", "ferry"],
+                cargo: ["cargo", "cargo", "cargo"] };
 
-      rows.forEach(r => {
-        const own = r.fleet === "fishing";
-        const colour = ink(own ? "accent" : "working");
-        g.append("rect").attr("x", 0).attr("y", y(r.fleet))
-          .attr("width", Math.max(x(r.value), 1)).attr("height", y.bandwidth())
-          .attr("fill", colour);
-        g.append("text").attr("x", -14).attr("y", y(r.fleet) + y.bandwidth() / 2)
-          .attr("dy", "0.34em").attr("text-anchor", "end").attr("fill", ink("ink"))
-          .style("font", `${own ? 600 : 500} ${narrow ? 12 : 13.5}px `
-                 + '"Source Serif 4", Georgia, serif')
-          .text(r.label);
-        kit.halo(g.append("text").attr("x", x(r.value) + 9)
-          .attr("y", y(r.fleet) + y.bandwidth() / 2).attr("dy", "0.34em")
-          .attr("fill", own ? ink("accent-tx") : ink("label"))
-          .style("font", `${own ? 600 : 500} 13px "IBM Plex Mono", ui-monospace, monospace`)
-          .text(Math.round(r.value)));
-        // every fleet is measured over every storm except the sailing one,
-        // which has only the storms with enough boats out to divide by. That
-        // row says so; the rest would say the same thing five times.
-        if (r.storms !== pooled) kit.halo(g.append("text")
-          .attr("x", 4).attr("y", y(r.fleet) - 5).attr("fill", ink("label"))
-          .style("font", '400 11.5px "Source Serif 4", Georgia, serif')
-          .text(`${r.storms} storms`));
+function stayedIn() {
+  const rows = D.stayed.map(r => ({ ...r, s: round(r.value) }));
+  const pooled = d3.max(rows, r => r.storms);
+  kit.figure(document.getElementById("c-i5"),
+    { ratio: 0.6, ratioNarrow: 2.05, margin: { top: 22, right: 4, bottom: 4, left: 0 } },
+    (g, w, h, narrow) => {
+      const R = narrow ? 5 : 4, lab = narrow ? 0 : Math.min(210, w * 0.21);
+      const head = narrow ? 34 : 0, gw = w - lab;
+      const cols = r => Math.max(1, Math.ceil(r.s / R));
+      // the widest row decides the berth, so every row is on one scale
+      const span = d3.max(rows, r => cols(r) + 1.25 + Math.ceil((100 - r.s) / R));
+      const blockH = h / rows.length;
+      const cell = Math.min(gw / (span + 0.3), (blockH - head - 18) / (R * 0.8 + 0.7));
+      const ch = cell * 0.8, t = cell * 0.26, s = cell * 0.78 / 24;
+
+      rows.forEach((r, i) => {
+        const [kind, tok, tx] = FLEET[r.fleet];
+        const gx = lab + t, gy = i * blockH + head + t + 4, GH = R * ch;
+        const HW = cols(r) * cell + cell * 0.15;
+        const rnd = rng(97 + i * 131);
+
+        // the label: the fleet, and the number that is the harbour's size
+        if (narrow) {
+          text(g, 0, gy - t - 12, r.label, serif(600, 15), ink("ink"));
+          kit.halo(text(g, w - 2, gy - t - 12, `${r.s} stay in`, serif(600, 15, true), ink(tx), "end"));
+        } else {
+          text(g, 0, gy + 8, r.label, serif(600, 17), ink("ink"));
+          text(g, 0, gy + GH * 0.5 + 24, r.s, serif(600, Math.min(44, blockH * 0.4), true), ink(tx));
+          text(g, 0, gy + GH * 0.5 + 44, "of 100 stay in", mono(11), ink("label"));
+        }
+        if (r.storms !== pooled) text(g, narrow ? 0 : 0, narrow ? gy + GH + t + 14 : gy + 26,
+          `${r.storms} storms with enough boats out`, serif(400, 12, true), ink("label"));
+
+        const sx = gx + HW + t;
+        // the harbour: calm shallow water inside a mole open to the east
+        g.append("rect").attr("x", gx).attr("y", gy).attr("width", HW).attr("height", GH)
+          .attr("fill", ink("shoal"));
+        const L = gx - t, Ri = gx + HW, Ro = Ri + t, T = gy - t, B = gy + GH + t;
+        const e1 = gy + GH * 0.3, e2 = gy + GH * 0.7;
+        g.append("path").attr("fill", ink("land")).attr("stroke", ink("ink")).attr("stroke-width", 1)
+          .attr("d", `M${L},${T}H${Ro}V${e1}H${Ri}V${gy}H${gx}V${gy + GH}H${Ri}V${e2}H${Ro}V${B}H${L}Z`);
+
+        for (let k = 0; k < r.s; k++)
+          boat(g, kind === "sail" ? "moored" : kind, gx + cell * (Math.floor(k / R) + 0.58),
+               gy + ch * (k % R + 0.9), s, ink("working")).attr("opacity", 0.55);
+        for (let k = 0; k < 100 - r.s; k++)
+          boat(g, kind, sx + cell * (Math.floor(k / R) + 0.95) + (rnd() - 0.5) * cell * 0.16,
+               gy + ch * (k % R + 0.9) + (rnd() - 0.5) * ch * 0.2, s, ink(tok), (rnd() - 0.5) * 10);
       });
+      if (!narrow) {
+        const gx0 = lab + 3;
+        text(g, gx0, -8, "in harbour", serif(400, 13.5, true), ink("label"));
+        text(g, lab + (cols(rows[0]) + 1) * cell + 10, -8, "out at sea", serif(400, 13.5, true), ink("label"));
+      }
     });
 
   kit.table(document.getElementById("t-i5"),
@@ -358,30 +514,18 @@ function seaEmpties() {
   // The figure STAYS, and says so. Hiding it left the paragraph above
   // promising "here is the same storm as a map" and nothing underneath.
   const fail = () => SeafolkStorm.unavailable(host, key);
-  if (!window.SeafolkStorm || !window.SEAFOLK_LAND) {
+  if (!window.SeafolkStorm || !window.chart) {
     host.textContent = "The animation could not be loaded — open "
       + `site/media/storm-${key}.mp4`;
     return;
   }
+  // load() also pulls in media/charts/storms.js, the sheets both the player
+  // and the triptych under it are drawn on (site/js/storm-player.js)
   SeafolkStorm.load([key], got => {
     if (!got.length) return fail();
     try { SeafolkStorm.mount(host, key); } catch (e) { fail(); }
+    SeafolkStorm.triptych(document.getElementById("c-i6-triptych"), key);
   });
-}
-
-
-/* ======================== the static map figures ========================= */
-/* site/js/minimap.js + site/media/maps.js belong to another session. If they
- * are not on the page the slot stays empty and the story still opens from
- * file://, rather than one missing component taking the page down with it.
- * Each map's own title and note come out of the data (see minimap.js), so the
- * only thing said here is which layer and which one is the subject. */
-function maps(id, method, list) {
-  const el = document.getElementById(id);
-  if (!el || !list.length) return;
-  if (!window.SeafolkMap || typeof SeafolkMap[method] !== "function") return;
-  try { SeafolkMap[method](el, method === "draw" ? list[0] : list); }
-  catch (e) { el.textContent = ""; console.error("minimap " + id, e); }
 }
 
 
@@ -406,79 +550,107 @@ function impossible() {
   const I = D.impossible;
   const months = I.months.map(([m, v, dup]) => [d3.utcParse("%Y-%m")(m), v, dup, m]);
 
-  /* the picture: two bars, to scale, one against the other. */
+  /* The picture, to scale. One strip is one day of a big ship's radio sending
+   * as fast as it may, drawn like a chart's border: ink and paper by the hour.
+   * Above, alone, the one strip a radio can fill: the ceiling. Below, the
+   * archive's worst day for one ship, strip after strip of it. */
   kit.figure(document.getElementById("c-i7"),
-    { ratio: 0.14, ratioNarrow: 0.5,
-      margin: { top: 10, right: 16, bottom: 4, left: 0 },
-      marginNarrow: { right: 8, left: 0 } },
+    { ratio: 0.42, ratioNarrow: 1.3,
+      margin: { top: 24, right: 8, bottom: 6, left: 0 }, marginNarrow: { bottom: 40 } },
     (g, w, h, narrow) => {
-      const x = d3.scaleLinear([0, I.worst.msgs], [0, w]);
-      const bars = [
-        { v: I.cap, tok: "working", tx: "label",
-          label: narrow ? ["the most a ship's radio", "can send in a day"]
-                        : ["the most a ship's radio can send in a day"] },
-        { v: I.worst.msgs, tok: "accent", tx: "accent-tx",
-          label: narrow ? ["what this archive holds for", "one ship on its worst day"]
-                        : ["what this archive holds for one ship on its worst day"] }];
-      const row = h / 2, bh = Math.min(30, row * 0.38);
-      bars.forEach((b, i) => {
-        const top = i * row;
-        b.label.forEach((t, k) => g.append("text").attr("x", 0)
-          .attr("y", top + 12 + k * 15).attr("fill", ink(b.tx))
-          .style("font", `${i ? 600 : 500} ${narrow ? 12.5 : 14}px `
-                 + '"Source Serif 4", Georgia, serif').text(t));
-        const by = top + 12 + b.label.length * 15;
-        g.append("rect").attr("x", 0).attr("y", by)
-          .attr("width", Math.max(x(b.v), 2)).attr("height", bh)
-          .attr("fill", ink(b.tok));
-        // a bar that fills the frame has no room beside it for its own number,
-        // so on a phone the long one carries it inside instead.
-        const out = x(b.v) < w * 0.72;
-        kit.halo(g.append("text")
-          .attr("x", out ? x(b.v) + 9 : x(b.v) - 10).attr("y", by + bh / 2)
-          .attr("text-anchor", out ? "start" : "end")
-          .attr("dy", "0.34em").attr("fill", out ? ink(b.tx) : ink("surface"))
-          .style("font", `${i ? 600 : 500} ${narrow ? 12 : 13.5}px `
-                 + '"IBM Plex Mono", ui-monospace, monospace')
-          .text(sp(b.v) + (i ? `  \u00d7${I.worst.times}` : "")))
-          .attr("stroke", out ? ink("surface") : ink(b.tok));
-      });
+      const days = I.worst.msgs / I.cap, n = Math.ceil(days), H = 24;
+      const lab = narrow ? 0 : Math.min(260, w * 0.27);
+      const head = narrow ? 58 : 0, mid = narrow ? 64 : 34;
+      const tw = w - lab - (narrow ? 0 : 60);
+      const gap = narrow ? 5 : 7;
+      const sh = (h - head - mid - gap * (n - 1)) / (n + 1);
+      const x0 = lab;
+      const strip = (y, frac, colour) => {
+        const len = tw * frac;
+        g.append("rect").attr("x", x0).attr("y", y).attr("width", len).attr("height", sh)
+          .attr("fill", ink("surface")).attr("stroke", colour).attr("stroke-width", 1);
+        for (let k = 0; k < H * frac; k += 2) g.append("rect")
+          .attr("x", x0 + tw * k / H).attr("y", y)
+          .attr("width", Math.min(tw / H, len - tw * k / H)).attr("height", sh).attr("fill", colour);
+      };
+      const hours = y => [0, 6, 12, 18, 24].forEach(hh => text(g, x0 + tw * hh / H, y,
+        (hh < 10 ? "0" : "") + hh + ":00", mono(narrow ? 10 : 11, 400), ink("label"),
+        hh === 0 ? "start" : hh === 24 ? "end" : "middle"));
+
+      // the ceiling: one radio, one day, flat out
+      hours(head - 7);
+      strip(head, 1, ink("ink"));
+      // the archive's worst ship-day
+      const y1 = head + sh + mid;
+      let yl = y1;
+      for (let k = 0; k < n; k++) { yl = y1 + k * (sh + gap); strip(yl, Math.min(1, days - k), ink("ferry")); }
+      const xr = x0 + tw * (days - (n - 1)) + (narrow ? 10 : 16);
+
+      const one = [`one radio, a message every ${D.n.cap_seconds} seconds`, "for 24 hours: the ceiling"];
+      const arch = ["what the archive holds", "for one ship", "on its worst day"];
+      const lines = (x, y, arr, font, fill, anchor) => {
+        const t = text(g, x, y, "", font, fill, anchor);
+        arr.forEach((s, i) => t.append("tspan").attr("x", x).attr("dy", i ? "1.25em" : 0).text(s));
+        return kit.halo(t);
+      };
+      if (narrow) {
+        lines(0, 14, one, serif(600, 13.5), ink("ink"));
+        text(g, w, head + sh + 18, `${sp(I.cap)} messages`, mono(11.5, 600), ink("ink"), "end");
+        lines(0, y1 - 30, ["what the archive holds for one ship", "on its worst day"], serif(600, 13.5), ink("ferry"));
+        text(g, 0, yl + sh + 26, sp(I.worst.msgs), serif(600, 24, true), ink("ferry"));
+        text(g, w, yl + sh + 24, `× ${D.n.worst_times} the ceiling`, serif(600, 15, true), ink("ferry"), "end");
+      } else {
+        lines(0, head + sh / 2 - 6, one, serif(600, 14.5), ink("ink"));
+        text(g, x0 + tw + 10, head + sh / 2 + 4, sp(I.cap), mono(12, 600), ink("ink"));
+        const ym = y1 + (n * (sh + gap)) / 2;
+        lines(0, ym - 44, arch, serif(600, 16), ink("ferry"));
+        text(g, 0, ym + 36, sp(I.worst.msgs), serif(600, 34, true), ink("ferry"));
+        text(g, 0, ym + 58, "messages", mono(11.5), ink("ferry"));
+        kit.halo(text(g, xr, yl + sh / 2 + 9, `× ${D.n.worst_times}`, serif(600, 28, true), ink("ferry")));
+        kit.halo(text(g, xr + 78, yl + sh / 2 + 6, "days of radio, filed as one", serif(400, 15, true), ink("ferry")));
+      }
     });
 
   /* …and under it, quietly, when it started. */
   const TOP = 1.2;
   kit.figure(document.getElementById("c-i7b"),
-    { ratio: 0.17, ratioNarrow: 0.32,
-      margin: { top: 16, right: 16, bottom: 30, left: 44 },
+    { ratio: 0.17, ratioNarrow: 0.34,
+      margin: { top: 22, right: 16, bottom: 30, left: 44 },
       marginNarrow: { left: 40 } },
     (g, w, h, narrow) => {
       const x = d3.scaleUtc([new Date(Date.UTC(2014, 11, 1)), new Date(Date.UTC(2026, 9, 1))], [0, w]);
       const y = d3.scaleLinear([0, TOP], [h, 0]);
       const bw = Math.max(2, w / 150);
-      kit.axis(g, y, { side: "left", values: [0, 1], fmt: d => d + " %" });
-      kit.axis(g, x, { side: "bottom", at: h,
-                       values: [2015, 2018, 2021, 2024].map(k => new Date(Date.UTC(k, 0, 1))),
-                       fmt: d3.utcFormat("%Y") });
+      [0, 1].forEach(v => {
+        g.append("line").attr("x1", 0).attr("x2", w).attr("y1", y(v)).attr("y2", y(v))
+          .attr("stroke", ink(v ? "hairline" : "ink")).attr("stroke-dasharray", v ? "1 4" : null)
+          .attr("stroke-linecap", "round");
+        text(g, -8, y(v) + 4, v + " %", mono(11.5, 400), ink("label"), "end");
+      });
+      [2015, 2018, 2021, 2024].forEach(k => text(g, x(new Date(Date.UTC(k, 0, 1))), h + 20, k,
+        mono(12, 400), ink("label"), "middle"));
+      text(g, -36, -10, "share of ships' days over the ceiling, month by month",
+           serif(400, narrow ? 12 : 13.5, true), ink("label"));
       g.selectAll(null).data(months).join("rect")
         .attr("x", d => x(d[0]) - bw / 2).attr("width", bw)
         .attr("y", d => y(Math.min(d[1], TOP)))
         .attr("height", d => h - y(Math.min(d[1], TOP)))
-        .attr("fill", d => d[3] >= I.step ? ink("accent") : ink("working"));
+        .attr("fill", d => d[3] >= I.step ? ink("ferry") : ink("working"));
       // the one bar that runs off the top keeps its value rather than a taller
       // axis, which would flatten the wall this strip is about.
       months.filter(d => d[1] > TOP).forEach(d => kit.halo(g.append("text")
         .attr("x", x(d[0]) + 7).attr("y", 8).attr("fill", ink("label"))
-        .style("font", '400 11px "IBM Plex Mono", ui-monospace, monospace')
+        .style("font", mono(11, 400))
         .text(`${d[1].toFixed(1)} %`)));
       kit.halo(g.append("text").attr("x", x(new Date(Date.UTC(2023, 11, 1))) + 6)
-        .attr("y", 11).attr("fill", ink("accent-tx"))
-        .style("font", '400 12px "Source Serif 4", Georgia, serif')
+        .attr("y", 11).attr("fill", ink("ferry"))
+        .style("font", serif(600, 12.5, true))
         .text(narrow ? "from 2024 on" : "every month from December 2023 on"));
 
       kit.hover(g, w, h, px => {
         const d = d3.least(months, m => Math.abs(x(m[0]) - px));
         return Math.abs(x(d[0]) - px) > 12 ? null : {
-          x: x(d[0]), y: y(Math.min(d[1], TOP)), color: ink("accent"),
+          x: x(d[0]), y: y(Math.min(d[1], TOP)), color: ink("ferry"),
           text: `${d3.utcFormat("%B %Y")(d[0])}\n${d[1]} % of that month's ships' days` };
       });
     });
@@ -514,11 +686,6 @@ sheets("c-i3-fishing", [["i3-fishing", "2025"]],
        [["dots", "fishing", "fishing boats under way; the denser the stipple, the more hours of fishing"]]);
 storms();
 stayedIn();
-seaEmpties();
-// the three keys, and their titles, are the build's — this page only says
-// which storm, and it is the storm the animation above is playing.
-if (window.SeafolkMap) maps("c-i6-triptych", "triptych",
-  (SeafolkMap.storm(D.storms.media) || []).map((layer, i) =>
-    ({ layer, colour: i === 1 ? "accent" : "ink" })));
+seaEmpties();          // …and the triptych under it, the same storm as three still sheets
 impossible();
 })();

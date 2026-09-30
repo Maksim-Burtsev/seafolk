@@ -270,7 +270,9 @@ footer {
 .chapters a:hover { color: var(--ferry); }
 
 /* ---- ?only=<figure id>: one figure alone, for a screenshot ---- */
-body.only > .wrap > :not(.shot) { display: none; }
+body.only > .wrap > :not(.shot):not(:has(.shot)) { display: none; }
+body.only .spread:has(.shot) > :not(.shot) { display: none; }
+body.only .spread:has(.shot) { display: block; }
 body.only > .wrap { padding-top: clamp(16px, 3vw, 28px); }
 
 @media (prefers-reduced-motion: reduce) {

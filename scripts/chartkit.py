@@ -11,8 +11,8 @@ place names and the title cartouche are drawn over it in the browser by
 site/js/chart.js, so text stays sharp and in the site's own fonts. That only
 works because the projection is trivially linear: x is proportional to
 longitude and y to latitude inside the sheet's box, with the aspect fixed at
-cos(56 deg) — the same arithmetic in both languages, recorded per image in
-site/media/charts/charts.js.
+cos(56 deg) — `project()` here and `chart.project` in site/js/chart.js, with each
+image's box and size recorded in its page's manifest, site/media/charts/<page>.js.
 
     sheet = Sheet("denmark", width=1600)
     sheet.base()
@@ -45,7 +45,7 @@ C = {
     "shoal": ("#bcd6dc", "#cfe2e4", "#e0ece9"),        # 0-5, 5-10, 10-20 m
     "contour": "#6f93a3", "sounding": "#5d7f90",
     "cargo": "#a3246a", "ferry": "#b32a1f", "fishing": "#1e6b5a",
-    "small": "#c96f12", "other": "#6b6f78", "ink": "#22303f",
+    "small": "#c96f12", "other": "#6b6f78", "ink": "#1d2a37",
 }
 
 # Named boxes: lon0, lon1, lat0, lat1.
@@ -55,6 +55,14 @@ BOXES = {
 }
 ASPECT = 1 / math.cos(math.radians(56))
 KM_PER_DEG_LAT = 111.2
+
+
+def project(box, w, h, lon, lat):
+    """Pixel (x, y) of a lon/lat on a w x h sheet of `box`, y down. The same two
+    lines are chart.project in site/js/chart.js; scripts/test_charts.py holds
+    both to known places so a flip in either language goes red."""
+    x0, x1, y0, y1 = box
+    return (lon - x0) / (x1 - x0) * w, (y1 - lat) / (y1 - y0) * h
 
 
 def _gauss(a, sigma):
@@ -154,8 +162,12 @@ class Sheet:
         rng = np.random.default_rng(3)
         n = int(self.w * self.h / 2600)
         fs = max(4.2, self.w / 330)
+        # sample only rows and columns inside the sheet, so a close-up gets as
+        # many soundings per square centimetre as the whole of Denmark does
+        ii = np.flatnonzero((lats > y0) & (lats < y1))
+        jj = np.flatnonzero((lons > x0) & (lons < x1))
         for _ in range(n):
-            i, j = rng.integers(0, d.shape[0]), rng.integers(0, d.shape[1])
+            i, j = rng.choice(ii), rng.choice(jj)
             v, x, y = d[i, j], lons[j], lats[i]
             if np.isnan(v) or v < 3 or not (x0 < x < x1 and y0 < y < y1):
                 continue
