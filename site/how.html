@@ -51,14 +51,13 @@ pre {
   <!-- ==================== 1. the first question ==================== -->
   <div class="prose">
     <p class="act">The first question</p>
-    <h2>Are you tracking private boats?</h2>
+    <h2>No private boat is tracked</h2>
 
-    <p>No. Here is exactly what that means.</p>
+    <p>Are you tracking private boats? No. Here is exactly what that means.</p>
 
     <p>A private boat's radio ID, its name and its track never leave this machine.
       They sit in a working table on the disk under my desk because I need them to
-      tell one boat from another. Nothing built from that table carries them out —
-      not a chart, not the map, not the dataset.</p>
+      tell one boat from another. Nothing built from that table carries them out.</p>
 
     <p>What leaves is counts: how many different boats were in one patch of sea on
       one day, the patch being a hexagon about the size of a small island. And only
@@ -131,7 +130,7 @@ pre {
       keeping any of it was never an option.</p>
 
     <p>It is a loop, and the loop is the design. Download one archive. Unzip it
-      straight into the database. Count what is in it per hexagon per hour. Write the
+      straight into ClickHouse. Count what is in it per hexagon per hour. Write the
       counts. Delete the archive. Take the next one.</p>
   </div>
 
@@ -187,15 +186,15 @@ pre {
 
     <p>An upgrade of the database changed the argument order of the function
       that turns a position into a grid square. Both orders are good numbers, so
-      nothing threw and every table downstream looked healthy — row counts
-      right, the loader's invariant exact, plausible traffic in the busiest
-      squares. The swap reflects every point on Earth across the line where
-      latitude equals longitude, so it showed up only on a map. The test that
-      should have caught it called the same function with the same swapped
-      convention, and was symmetric under the mistake; it no longer asks the
-      database anything, but pins one square — Copenhagen — computed by
-      another library in another language, and asserts the store has rows in it.
-      Finding it late cost a reload from scratch.</p>
+      nothing threw and every table downstream looked healthy: row counts
+      right, plausible traffic in the busiest squares. The swap reflects every
+      point on Earth across the line where latitude equals longitude, so it
+      showed up only on a map. The test that should have caught it called the
+      same function with the same swapped convention, and was symmetric under
+      the mistake. The replacement test no longer asks the database anything:
+      it pins one square, Copenhagen, computed by another library in another
+      language, and asserts the store has rows in it. Finding it late cost a
+      reload from scratch.</p>
   </div>
 
   <div class="prose">
@@ -254,8 +253,8 @@ pre {
       <span data-n="boats_2026">22 773</span> in 2026,
       <span data-n="boats_growth">3.7</span> times as many. Some of that is more
       boats and some is people fitting a radio to a boat they already had. Divide by
-      the commercial fleet heard on the same receivers — a control that grows when
-      reception grows — and the rise is still
+      the commercial fleet heard on the same receivers (a control that grows when
+      reception grows) and the rise is still
       <span data-n="instrument_growth">3.5</span>, so the listening explains about
       <span data-n="instrument_cost">6.5</span> per cent of the climb. Nobody
       publishes how many radios were sold, so the halves cannot be separated
@@ -290,7 +289,7 @@ pre {
       that gap is my scope, not my reception. The mirror image is one patch off the
       island of Læsø: number <span data-n="marina_rank_ours">9</span> on my list of
       busiest water and number <span data-n="marina_rank_emo">16 984</span> on
-      theirs. It holds a marina — <span data-n="marina_boats">353</span> boats across
+      theirs. It holds a marina, <span data-n="marina_boats">353</span> boats across
       the month, mostly tied up. They measure the time a track spends in a square,
       and a boat at a berth draws no track, so they give it
       <span data-n="marina_emo_hours">4.1</span> hours. Neither is wrong: one cannot
@@ -325,8 +324,8 @@ scripts/export.sh</pre>
 
   <div class="prose">
     <p>Out of that come three files.
-      <code>class_a_hourly_&lt;year&gt;.parquet</code> holds the commercial traffic —
-      cargo, ferries, fishing, work boats — per small hexagon per hour, one file for
+      <code>class_a_hourly_&lt;year&gt;.parquet</code> holds the commercial traffic
+      (cargo, ferries, fishing, work boats) per small hexagon per hour, one file for
       each of the <span data-n="dataset_years">8</span> loaded years.
       <code>leisure_daily.parquet</code> holds the private fleet per large hexagon
       per day, every row carrying at least <span data-n="floor_k">5</span> boats.

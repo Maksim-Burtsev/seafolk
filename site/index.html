@@ -24,30 +24,39 @@
   </header>
 
   <div class="prose">
-    <p>I write software. I am not a sailor and I had never read a line of ship
-      radio before this spring. What started it was a small fact: the Danish
-      maritime authority puts its whole radio archive on a public web server, and
-      almost nobody seems to have looked at the pleasure boats in it.</p>
+    <p>I write software for a living. I am not a sailor and I am not a data
+      scientist. I just like the sea and ships, and I like ClickHouse, and this
+      project is what happens when those meet.</p>
 
-    <p>Ships carry a radio that shouts. Every few seconds it says: this is me,
-      this is where I am, this is how fast I am going and which way I am pointed.
-      Anyone with an antenna can hear it. It exists so that ships in fog know
-      about each other, and it now sits on almost anything bigger than a dinghy.</p>
+    <p>It started with a different project. In late August 2026 I tried to build
+      <a href="https://github.com/Maksim-Burtsev/ais-lake">ais-lake</a>, a live
+      map of real ships with their voyages and port waits on top. It did not
+      work out, and the reason was the data. The open real-time feeds are
+      partial. Most of the good coverage sits in communities where you have to
+      run your own receiver and share its feed to get in, and what you do get
+      arrives late and with holes, so the map shows the sea in a state it is
+      not in. No good source, no product.</p>
 
-    <p>Most countries publish a slice of that and keep the rest. Finland removes
-      the private boats before publishing. Norway leaves out the small leisure
-      craft. Denmark publishes all of it, back to 2006, as a plain directory full
-      of zip files.</p>
+    <p>While I was digging through sources for it I found Denmark. Every ship
+      carries a radio that shouts every few seconds: this is me, this is where I
+      am, this is how fast I am going. Anyone with an antenna can hear it. Most
+      countries publish a slice of that and keep the rest. Finland removes the
+      private boats, Norway leaves out the small leisure craft. Denmark
+      publishes all of it back to 2006, small private boats included, as a
+      plain directory of zip files.</p>
 
-    <p>I did not take all of it. I took <span data-n="days_loaded">2 122</span> days,
-      ending on <span data-n="last_day">26 August 2026</span>: the whole of 2015, 2018, 2021 and
-      2025, March 2024 onward, this year as far as the files go, and two winter
-      months around some storms. That is
+    <p>So, out of pure interest: download it, push it through ClickHouse on my
+      Mac Mini and see what falls out. I did not take all of it. I took
+      <span data-n="days_loaded">2 122</span> days,
+      ending on <span data-n="last_day">26 August 2026</span>: all of 2015, 2018,
+      2021 and 2025, March 2024 onward, this year as far as the files go, and
+      four winter months with storms in them. That is
       <span data-n="years_worth">6</span> years' worth spread over
-      <span data-n="years_spanned">12</span> calendar years, and
-      <span data-n="rows_billion">32</span> billion lines of radio. I pushed it
-      through the Mac Mini under my desk, deleted every line the moment it had
-      been counted, and kept <span data-n="store_gb">11</span> gigabytes of counts.</p>
+      <span data-n="years_spanned">12</span> calendar years, or
+      <span data-n="rows_billion">32</span> billion lines of radio. It came down
+      as terabytes of zip files, and every file was deleted as soon as it was
+      counted. What stayed is <span data-n="store_gb">11</span> gigabytes of
+      counts.</p>
 
     <p>One rule shaped everything that came after. A private boat never leaves
       this machine as a private boat: no radio ID, no name, no track, and every
@@ -59,9 +68,9 @@
   <div class="prose">
     <p class="act">Act one — more and more people go to sea</p>
     <h2>The first thing I looked at was the calendar</h2>
-    <p>Not the sea. The calendar. How many small boats actually leave a berth on
-      an ordinary day, and when in the year they do it. A radio switched on at
-      the pontoon does not count here; the boat has to have moved.</p>
+    <p>How many small boats actually leave a berth on an ordinary day, and when
+      in the year they do it. A radio
+      switched on at the pontoon does not count here; the boat has to have moved.</p>
   </div>
 
   <figure id="i1">
@@ -89,8 +98,8 @@
     <h3>In July the water is full of small boats. In January they are gone</h3>
     <div class="chart" id="c-i1-maps"></div>
     <figcaption>The same waters in two months of one year. A hexagon is a patch
-      of sea about the size of a small county — coarse on purpose, so that no
-      single boat can be picked out of one — and it is drawn only where at
+      of sea about the size of a small county, coarse on purpose so that no
+      single boat can be picked out of one, and it is drawn only where at
       least <span data-n="k_floor">5</span> boats were heard that month. Both
       maps are on one scale.</figcaption>
     <p class="source">Danish Maritime Authority AIS archive, through the open
@@ -131,8 +140,8 @@
     <p>What I cannot tell you is how many boats there are. I can count the ones
       carrying a radio, and part of that
       <span data-n="boats_growth">3.7</span>-fold rise is people fitting a set to a
-      boat they already had. Nobody publishes how many sets were sold, so there is
-      no way to split the two apart.</p>
+      boat they already had. Nobody publishes how many sets were sold, so the
+      two cannot be split apart.</p>
   </div>
 
   <figure id="i2-maps">
@@ -174,7 +183,7 @@
       <span data-n="swedish_2026">14</span> per cent, Norway at
       <span data-n="norwegian_2026">10</span> and the Netherlands at
       <span data-n="dutch_2026">7</span>. Whenever I say "the Danish fleet" below,
-      what I mean is the fleet inside the box I drew, which is a different and
+      what I mean is the fleet inside the box I drew, which is a
       less tidy thing.</p>
   </div>
 
@@ -182,9 +191,9 @@
   <div class="prose">
     <h2>Who else is out there</h2>
     <p>Small boats share this water with everybody else, and I had no real
-      picture of what everybody else was doing until I drew them. Each map
+      picture of everybody else until I drew them. Each map
       below is a month or a year of one kind of ship under way, counted on the
-      same patches of sea. Three fleets, three completely different shapes.</p>
+      same patches of sea.</p>
   </div>
 
   <figure id="i3-cargo">
@@ -220,8 +229,8 @@
     <figcaption>Every hour of 2025 in which a fishing boat was moving
       somewhere. Most of it sits in the Skagerrak, off the west coast of
       Jutland and out in the North Sea; east of the Belts there is almost
-      nothing. The strongest patches are the fishing harbours themselves —
-      Skagen, Hirtshals, Hanstholm, Thyborøn, Hvide Sande — where the boats
+      nothing. The strongest patches are the fishing harbours themselves,
+      Skagen, Hirtshals, Hanstholm, Thyborøn, Hvide Sande, where the boats
       manoeuvre for hours at walking pace.</figcaption>
     <p class="source">Danish Maritime Authority AIS archive, through the open
       dataset · built by
@@ -235,9 +244,9 @@
     <p>Denmark's weather service gives its storms names.
       <span data-n="storm_count">14</span> of them fall on days this archive holds.
       A storm is a clean question: everybody gets the same warning at the same
-      time, and then you can watch who goes out anyway.</p>
-    <p>For every day around every storm I counted two things: how many boats of
-      each kind the radio heard at all, and how many of those went anywhere — a
+      time, and then you watch who goes out anyway.</p>
+    <p>For every day around every storm I counted how many boats of
+      each kind the radio heard, and how many of those went a
       nautical mile or more. The second out of the first is the line below.</p>
   </div>
 
@@ -263,7 +272,7 @@
       boats the radio heard went out. On the storm's own day,
       <span data-n="storm_fishing_day">16</span> did. The rest had not
       vanished: their radios were on all through it, sitting still in harbour.
-      They were tied up and watching.</p>
+      They were just tied up in port.</p>
 
     <p>Cargo did not notice. On the same day
       <span data-n="storm_cargo_day">82</span> of every hundred cargo ships
@@ -271,8 +280,8 @@
       earlier, and no single storm's own line falls the way the fishing lines
       do. A coaster with a schedule does not ask the weather for permission.</p>
 
-    <p>The deepest of them is Pia, in December 2023 — the lowest pale line on
-      the chart, which took the fishing fleet down to
+    <p>The deepest of them is Pia, in December 2023, the lowest pale line on
+      the chart: it took the fishing fleet down to
       <span data-n="pia_fishing_low">3</span> boats in every hundred. It is
       still low three days later, and those days are Christmas, and Christmas is
       not weather.</p>
@@ -305,18 +314,16 @@
       were out to count, the fleet halves
       <span data-n="sailing_hours">3</span> hours
       <span data-n="sailing_when">before the storm's own first midnight</span>.
-      They are reading a forecast, not feeling the sea.</p>
+      They go by the forecast.</p>
 
     <p>The ferries are the case I find most human, because both of the obvious
       things are true at once. They keep sailing and they sail less. Over the
       storms' own days the lines with a Danish end ran
       <span data-n="storm_ferry_now">23 954</span> departures against
       <span data-n="storm_ferry_ref">27 536</span> over the same days a
-      fortnight earlier — the same ships, the same crews,
+      fortnight earlier, the same ships, the same crews,
       <span data-n="storm_ferry_share">87</span> per cent of the
       timetable.</p>
-
-    <p>Here is one of those storms as a map.</p>
   </div>
 
   <figure id="i6">
@@ -336,9 +343,8 @@
   <div class="prose">
     <p class="act">Act three — the archive lies, a little</p>
     <h2>Two things in here are wrong, and both change what you may count</h2>
-    <p>Everything above is built on an archive I did not make, and two things
-      in it are wrong. Neither is fatal; both change what you are allowed to
-      count. The first is the one I would want to know about if I were reading
+    <p>Everything above is built on an archive I did not make. The first of the
+      two is the one I would want to know about if I were reading
       somebody else's numbers.</p>
   </div>
 
@@ -361,8 +367,8 @@
   <div class="prose">
     <p>A big ship's radio sends at most one position every
       <span data-n="cap_seconds">2</span> seconds. Over a day that is
-      <span data-n="cap">43 200</span> messages and not one more — a property of the
-      radio, not of the ship, and not something a busy day can change. Before
+      <span data-n="cap">43 200</span> messages and not one more, a property of the
+      radio that no busy day can change. Before
       2023, <span data-n="over_cap_before">0.06</span> per cent of ships' days in the
       archive sat above that ceiling. From December 2023 onward it runs up to
       <span data-n="over_cap_now">1.1</span> per cent, every single month, and the
@@ -371,9 +377,9 @@
       send.</p>
 
     <p>Those ships are not lying. The archive is keeping some messages twice.
-      Counting heads is immune to that — the same ship counted twice is still one
-      ship — so nothing in the first two acts moves. Counting messages is not, and
-      that is why no chart on this site counts messages across 2023.</p>
+      Counting heads is immune to that, since the same ship counted twice is
+      still one ship, so nothing in the first two acts moves. Counting messages
+      is not, so no chart on this site counts messages across 2023.</p>
 
     <p>The second thing is a filing error. A ferry lands in my counts only on the
       days it told the world it was a passenger ship, and ships get their own type
@@ -394,8 +400,7 @@
     <h2>All of it is in a repository, and every chart is a query away</h2>
     <p>The counts, the queries that made them, the code that drew these charts and
       an open dataset of the results are on GitHub, under a licence that lets you
-      do what you like with them. The chapters below go deeper than this page
-      does.</p>
+      do what you like with them.</p>
   </div>
 
   <nav class="chapters">
