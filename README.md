@@ -12,31 +12,26 @@ every AIS pipeline. This project keeps exactly that part and tells its story.
 
 ## What comes out
 
-1. **The essay site** (`site/`, English, static, opens from `file://` by
-   double-click): [`site/index.html`](site/index.html) — the story in three acts
-   (the fleet of small boats that tripled, who stops when a storm comes, and
-   where the archive lies) — and four chapters: *A year under sail*
-   (`season.html`), *The sea by the hour* (`pulse.html`), *Lifelines*
-   (`ferries.html`), *When the storm comes* (`storms.html`), plus *How it was
-   made* (`how.html`): the pipeline, the privacy rule, the bugs. The whole site
-   is drawn as a Danish nautical chart: depths and soundings from EMODnet
-   Bathymetry, cargo lanes in magenta, ferries in red ink along their real
-   tracks, fishing and small boats as stipple (`scripts/chartkit.py`,
-   `scripts/charts_*.py`, `site/js/chart.js`).
+1. **The page** (`site/index.html`, English, static, opens from `file://` by
+   double-click): who is out on the Danish sea — summer, the other fleets, the
+   day, the ferries, storms, the archive's own mistakes and how it was made —
+   drawn as a navigator's working chart and logbook: a printed chart with
+   EMODnet depths, and everything the data says added by hand in pen and pencil
+   (`scripts/chartkit.py`, `scripts/charts_*.py`, `site/js/chart.js`,
+   `site/js/hand.js`).
 2. **The map** (`site/explore/`) — every fleet as stipple on the same chart,
    month by month, built only from the open dataset below.
 3. **Open dataset** — H3 aggregates for 2015, 2018, 2021, two storm months each
    of 2022 and 2023, and 2024-03 → today, as Parquet, plus the loader and the
    queries that reproduce every chart.
-4. **Animation and posters** (`site/media/`, `site/posters/`) — three storms hour
-   by hour on the chart, the four day clocks, two A3 chart posters
-   (*Danish Waters*, one July of traffic; *A year of boats*, 2025 month by month).
+4. **Posters** (`site/posters/`) — two A3 charts: *Danish Waters* (one July of
+   traffic) and *A year of boats* (2025 month by month).
 
 Every number in the site's prose is written into the page by
 `scripts/build_site_data.sh` from the store (`<span data-n>`), never typed; the
 map sheets are drawn by `scripts/build_charts.sh` after it (it needs
 `uv run scripts/fetch_bathymetry.py` once). The brief the site was built to is
-[`docs/SITE.md`](docs/SITE.md), § Round 3 for the chart look.
+[`docs/SITE.md`](docs/SITE.md), § Round 4 for the look.
 
 ## Privacy rule
 

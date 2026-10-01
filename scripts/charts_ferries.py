@@ -1,4 +1,4 @@
-"""The chart sheets and the two animations of site/ferries.html.
+"""The chart sheets of the ferries part of site/index.html (round 4; was site/ferries.html).
 
     CH_PATH=<clone> uv run --project notes scripts/charts_ferries.py
 
@@ -29,7 +29,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import chartkit as ck                          # noqa: E402
 from charts_index import ch, public_only, segments   # noqa: E402
-from site_data.ferries import BIG, F4_LINE, F4_SHIP  # noqa: E402
+from site_data._ferries import BIG, F4_LINE, F4_SHIP  # noqa: E402
 
 MONTH = ("2025-07-01", "2025-07-31")
 DAY = "2025-07-08"                # an ordinary Tuesday in July; any weekday would do
@@ -139,10 +139,11 @@ def frac(box, pts, t0):
 
 
 def page_number(key):
-    """A number the build already wrote into site/ferries.html."""
-    html = (ck.ROOT / "site" / "ferries.html").read_text(encoding="utf-8")
+    """A number the build already wrote into site/index.html (round 4: the
+    ferries chapter is a part of the one page, its keys prefixed "ferries_")."""
+    html = (ck.ROOT / "site" / "index.html").read_text(encoding="utf-8")
     data = json.loads(re.search(r'id="data">(.*?)</script>', html, re.S).group(1))
-    return int(data["n"][key])
+    return int(data["n"]["ferries_" + key])
 
 
 def race_crossing(ship, year, minutes):
@@ -165,28 +166,10 @@ def main():
     charts = {}
     public_only(*MONTH)
 
-    # F0: every passenger ship's track through July 2025 on the islands'
-    # sheet — the island crossings in strong red ink, the rest as a faint web.
-    tr = tracks(*MONTH, ISLANDS, 2)
-    isl, rest = split_island(tr, island_windows(*MONTH))
-    s = ck.Sheet(ISLANDS, 1800).base()
-    s.tracks(segments(rest, 600), "ferry", lw=.3, alpha=.07)
-    s.tracks(segments(isl, 600), "ferry", lw=.6, alpha=.2)
-    charts["ferries-web"] = s.save("ferries-web")
-    print(f"ferries-web: {len(isl)} island crossings, {len(rest)} other pieces of track")
-
-    # …and the Tuesday the pen draws: every island ferry, whole day, 2-minute steps.
-    wins = island_windows(DAY, DAY)
-    day = tracks(DAY, DAY, ISLANDS, 2)
-    t0 = min(p[0] for m in day for p in day[m]) // 86400 * 86400
-    ships = [frac(ISLANDS, pts, t0) for m, pts in day.items()
-             if m in wins and max(p[3] for p in pts) >= 3]
-    print(f"ferries-day: {len(ships)} island ferries under way on {DAY}")
-
     # F4: the Søby – Fynshav lane (a month of ELLEN), and the race.
     s = fine_base(ck.Sheet(ELLEN_BOX, 1600))
     lane = tracks(*MONTH, ELLEN_BOX, 1, f"AND name = '{F4_SHIP}'")
-    s.tracks(segments(list(lane.values()), 300), "ferry", lw=.5, alpha=.05)
+    s.tracks(segments(list(lane.values()), 300), "redpen", lw=.5, alpha=.05, hand=True)
     charts["ferries-ellen"] = s.save("ferries-ellen")
     before, after = page_number("ellen_before"), page_number("ellen_after")
     old, old_t = race_crossing("SKJOLDNAES", 2018, before)
@@ -195,11 +178,11 @@ def main():
             {"ship": F4_SHIP, "year": 2025, "minutes": after, "track": frac(ELLEN_BOX, new, new_t)}]
     print(f"race: SKJOLDNAES {before} min ({len(old)} fixes), ELLEN {after} min ({len(new)} fixes)")
 
-    body = json.dumps({"day": DAY, "ships": ships, "race": race}, separators=(",", ":"))
+    body = json.dumps({"race": race}, separators=(",", ":"))
     assert not re.search(r"(?<![\d.])\d{9}(?![\d.])", body), "a nine-digit integer in the tracks"
     (ck.OUT / "ferries-tracks.js").write_text(
-        "// Written by scripts/charts_ferries.py: the island ferries of one July day and the\n"
-        "// F4 race, minutes from the start and position as a fraction of their sheet.\n"
+        "// Written by scripts/charts_ferries.py: the F4 race, minutes from the start\n"
+        "// and position as a fraction of its sheet.\n"
         f"window.SEAFOLK_FERRIES={body};\n")
     ck.write_manifest(charts, "ferries")
 

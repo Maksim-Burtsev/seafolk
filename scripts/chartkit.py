@@ -44,8 +44,10 @@ C = {
     "paper": "#f4eddb", "land": "#eadcb2", "coast": "#4a3c26",
     "shoal": ("#bcd6dc", "#cfe2e4", "#e0ece9"),        # 0-5, 5-10, 10-20 m
     "contour": "#6f93a3", "sounding": "#5d7f90",
-    "cargo": "#a3246a", "ferry": "#b32a1f", "fishing": "#1e6b5a",
-    "small": "#c96f12", "other": "#6b6f78", "ink": "#1d2a37",
+    "cargo": "#3b3934", "ferry": "#b02e1c", "fishing": "#1d6553",
+    "small": "#24418f", "other": "#6b6f78", "ink": "#1d2a37",
+    # the navigator's hand (round 4): what a person adds to a printed chart
+    "pen": "#24418f", "redpen": "#b02e1c", "graphite": "#3b3934", "greenpen": "#1d6553",
 }
 
 # Named boxes: lon0, lon1, lat0, lat1.
@@ -218,12 +220,98 @@ class Sheet:
                         xs.append(px)
                         ys.append(py)
                         break
-        self.ax.scatter(xs, ys, s=size, c=C.get(color, color), alpha=alpha, lw=0, zorder=z)
+        # pen dots are never the same size twice
+        sizes = size * np.random.default_rng(seed).lognormal(0, .35, len(xs))
+        self.ax.scatter(xs, ys, s=sizes, c=C.get(color, color), alpha=alpha, lw=0, zorder=z)
         return len(xs)
 
-    def tracks(self, segments, color, lw=.6, alpha=.9, z=22):
-        self.ax.add_collection(LineCollection(segments, colors=C.get(color, color), lw=lw,
-                                              alpha=alpha, zorder=z, capstyle="round"))
+    def tracks(self, segments, color, lw=.6, alpha=.9, z=22, hand=False):
+        lc = LineCollection(segments, colors=C.get(color, color), lw=lw, alpha=alpha, zorder=z,
+                            capstyle="round")
+        if hand:                         # a pen, not a plotter: a slight tremor along the line
+            lc.set_sketch_params(.7, 24, 2.5)
+        self.ax.add_collection(lc)
+        return self
+
+    def flow(self, lon, lat, weight, color="graphite", pct=99.2, sigma_km=2.2, gamma=.6,
+             strokes=34000, length_px=(5, 15), lw=.7, alpha=.85, seed=5, z=6):
+        """Density as short pencil strokes laid ALONG the lanes, the way a hand
+        shades a route: each stroke sits where the traffic is (drawn with
+        probability by density) and points along the ridge of the density —
+        perpendicular to its gradient — so the strokes run with the ships.
+        (The idea is Kimi Code's, from its second-opinion sketch, 2026-10-01.)"""
+        x0, x1, y0, y1 = self.box
+        W, H = self.w, self.h
+        h, *_ = np.histogram2d(lat, lon, bins=[H, W], range=[[y0, y1], [x0, x1]], weights=weight)
+        D = _gauss(h, sigma_km / self.km_per_px)[::-1]
+        nz = D[D > D.max() * 1e-4]
+        if not nz.size:
+            return self
+        D = np.clip(D / np.percentile(nz, pct), 0, 1) ** gamma
+        self._wash = np.maximum(self._wash, D)
+        S = _gauss(D, 3.0)                       # the direction comes from a smoother field
+        gy, gx = np.gradient(S)
+        rng = np.random.default_rng(seed)
+        p = D.ravel() / D.sum()
+        idx = rng.choice(D.size, size=strokes, p=p)
+        py, px = np.divmod(idx, W)
+        px = px + rng.random(strokes); py = py + rng.random(strokes)
+        iy, ix = py.astype(int).clip(0, H - 1), px.astype(int).clip(0, W - 1)
+        ang = np.arctan2(gy[iy, ix], gx[iy, ix]) + np.pi / 2 + rng.normal(0, .22, strokes)
+        L = rng.uniform(*length_px, strokes) * (.6 + .4 * D[iy, ix])
+        dx, dy = np.cos(ang) * L / 2, np.sin(ang) * L / 2
+        to_ll = lambda X, Y: np.c_[x0 + X / W * (x1 - x0), y1 - Y / H * (y1 - y0)]
+        segs = [to_ll(np.array([a - c, a + c]), np.array([b - d, b + d])) for a, b, c, d in zip(px, py, dx, dy)]
+        rgb = matplotlib.colors.to_rgb(C.get(color, color))
+        cols = [(*rgb, a) for a in alpha * (.35 + .65 * D[iy, ix])]
+        self.ax.add_collection(LineCollection(segs, colors=cols, lw=lw, zorder=z, capstyle="round"))
+        return self
+
+    def hatch(self, lon, lat, weight, color="graphite", pct=99.2, sigma_km=2.2, gamma=.55,
+              layers=((38, 3.4, .16), (-50, 3.8, .45), (82, 4.4, .78)), lw=.55, alpha=.6, seed=3, z=6):
+        """Density drawn the way a hand shades a chart: pencil strokes in parallel
+        runs, laid only where the traffic is, a second direction over the busier
+        water and a third over the lanes themselves (engraving's cross-hatch).
+        Strokes lift and restart, wander a little and never quite line up.
+        `layers` is (angle in degrees, spacing in px, density threshold)."""
+        x0, x1, y0, y1 = self.box
+        W, H = self.w, self.h
+        h, *_ = np.histogram2d(lat, lon, bins=[H, W], range=[[y0, y1], [x0, x1]], weights=weight)
+        D = _gauss(h, sigma_km / self.km_per_px)[::-1]
+        nz = D[D > D.max() * 1e-4]
+        if not nz.size:
+            return self
+        D = np.clip(D / np.percentile(nz, pct), 0, 1) ** gamma
+        self._wash = np.maximum(self._wash, D)
+        rng = np.random.default_rng(seed)
+        diag = math.hypot(W, H)
+        segs, cols = [], []
+        rgb = matplotlib.colors.to_rgb(C.get(color, color))
+        for angle, spacing, thresh in layers:
+            k = -diag
+            while k < diag:
+                a = math.radians(angle + rng.normal(0, 1.4))
+                dx, dy, nx, ny = math.cos(a), math.sin(a), -math.sin(a), math.cos(a)
+                cx, cy = W / 2 + nx * k, H / 2 + ny * k
+                ts = np.arange(-diag / 2, diag / 2, 1.5)
+                px, py = cx + dx * ts, cy + dy * ts
+                ok = (px >= 0) & (px < W - 1) & (py >= 0) & (py < H - 1)
+                vals = np.zeros_like(ts)
+                vals[ok] = D[py[ok].astype(int), px[ok].astype(int)]
+                on = ok & (vals > thresh + rng.normal(0, .04, len(ts)))
+                # the pencil lifts: chop long runs into strokes of 10-60 px
+                lift = rng.random(len(ts)) < 1 / rng.uniform(6, 20)
+                on &= ~lift
+                edges = np.flatnonzero(np.diff(np.r_[0, on.astype(int), 0]))
+                for st, en in zip(edges[::2], edges[1::2]):
+                    if en - st < 3:
+                        continue
+                    wob = rng.normal(0, .5, en - st).cumsum() * .12
+                    xs, ys = px[st:en] + nx * wob, py[st:en] + ny * wob
+                    segs.append(np.c_[x0 + xs / W * (x1 - x0), y1 - ys / H * (y1 - y0)])
+                    cols.append((*rgb, min(1, alpha * (.45 + vals[st:en].mean()))))
+                k += spacing * rng.uniform(.75, 1.3)
+        self.ax.add_collection(LineCollection(segs, colors=cols, lw=lw, zorder=z, capstyle="round"))
         return self
 
     # ---- output ---------------------------------------------------------------

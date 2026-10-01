@@ -28,16 +28,27 @@
   --ink:      #1d2a37;   /* chart ink: text, frames */
   --label:    #5a5446;   /* captions, axis labels */
   --sea-ink:  #3b5b6b;   /* water names, soundings */
-  --accent:   #c96f12;   /* small boats — the subject */
-  --accent-tx:#a2560a;
-  --cargo:    #a3246a;
-  --ferry:    #b32a1f;
-  --fishing:  #1e6b5a;
+  /* Round 4: everything that is data is drawn by hand over the print —
+     a ballpoint, a red pen, a pencil, a green fineliner. */
+  --pen:      #24418f;   /* the author's ballpoint: small boats, notes */
+  --redpen:   #b02e1c;   /* ferries, and the one thing a note points at */
+  --graphite: #3b3934;   /* cargo, and every "everything else" */
+  --greenpen: #1d6553;   /* fishing */
+  --accent:   var(--pen);
+  --accent-tx:var(--pen);
+  --cargo:    var(--graphite);
+  --ferry:    var(--redpen);
+  --fishing:  var(--greenpen);
+  --table:    #e6dcc4;   /* what the sheets lie on */
+  --logpaper: #f8f2e2;
+  --rule:     rgba(70, 110, 160, .26);
+  --margin:   rgba(190, 60, 40, .5);
   --working:  #7c7a70;   /* every other series */
   --ref:      #b3a98c;   /* a reference line, a ghost */
   --pale:     #d6ccb0;   /* the oldest year in a series of years */
   --serif: "Source Serif 4", Georgia, serif;
   --mono:  "IBM Plex Mono", ui-monospace, monospace;
+  --hand:  "Annie Use Your Telescope", "Segoe Print", cursive;
 }
 
 * { box-sizing: border-box; }
@@ -74,7 +85,7 @@ a:hover { text-decoration-color: var(--ferry); }
   font: 500 12px/1.2 var(--mono); letter-spacing: .22em; text-transform: uppercase;
   color: var(--label); margin: 0;
 }
-.act { color: var(--ferry); display: flex; align-items: center; gap: 14px; }
+.act { color: var(--ink); display: flex; align-items: center; gap: 14px; }
 .act::before, .act::after { content: ""; flex: 1; height: 1px; background: var(--ink); opacity: .35; }
 .act::before { max-width: 48px; }
 
@@ -93,7 +104,7 @@ h1 {
   font: 600 clamp(36px, 6.2vw, 62px)/1.06 var(--serif);
   letter-spacing: -.02em; text-wrap: balance; margin: 0;
 }
-h1 em { font-style: italic; color: var(--ferry); }
+h1 em { font-style: italic; color: inherit; }
 h2 {
   font: 600 clamp(25px, 3.1vw, 33px)/1.2 var(--serif);
   letter-spacing: -.012em; margin: 0; max-width: 24ch; text-wrap: balance;
@@ -199,8 +210,8 @@ figcaption {
 /* ---- the log: the backstory as entries in a ship's log, not a wall of text ---- */
 .log { display: grid; grid-template-columns: 9.5em 1fr; gap: 0; max-width: 78ch; margin: 0; padding: 0; }
 .log dt {
-  font: 500 12px/1.5 var(--mono); letter-spacing: .12em; text-transform: uppercase;
-  color: var(--ferry); padding: 20px 16px 0 0; border-top: 1px solid var(--hairline);
+  font: 400 22px/1.2 var(--hand); color: var(--pen);
+  padding: 16px 16px 0 0; border-top: 1px solid var(--hairline);
 }
 .log dd { margin: 0; padding: 16px 0 18px; border-top: 1px solid var(--hairline); }
 .log dd p + p { margin-top: 10px; }
@@ -216,9 +227,8 @@ figcaption {
 @media (max-width: 900px) { .spread { grid-template-columns: 1fr; } .spread > .prose { position: static; } }
 
 /* the big number a paragraph is about, set like a sounding on a chart */
-.big {
-  font: 600 clamp(44px, 7vw, 76px)/1 var(--serif); font-variation-settings: "opsz" 20;
-  font-style: italic; color: var(--ferry); letter-spacing: -.02em;
+.big { /* a number the author wrote in the margin, in ballpoint */
+  font: 400 clamp(52px, 8vw, 88px)/.9 var(--hand); color: var(--pen); letter-spacing: 0;
 }
 
 /* ---- controls ---- */
@@ -295,3 +305,77 @@ body.only > .wrap { padding-top: clamp(16px, 3vw, 28px); }
   .sheet .water { font-size: 9px; }
   .sheet .water.big { font-size: 10px; letter-spacing: .16em; }
 }
+
+
+/* =====================================================================
+   Round 4 — the chart and the log (owner's review 2026-10-01).
+   Two kinds of paper lie on the table: printed chart sheets the author drew
+   on, and log pages where he counted. Print is ink-navy serif; everything
+   the author added is a pen, a pencil or his hand (--hand).
+   ===================================================================== */
+html { background: var(--table); }
+body {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .3 0 0 0 0 .24 0 0 0 0 .12 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    var(--table);
+}
+.hand { font-family: var(--hand); color: var(--pen); }
+
+/* a sheet of paper lying on the table */
+figure, .logpage {
+  background: var(--logpaper); border: 0; outline: 0; margin-inline: 0;
+  box-shadow: 0 1px 1px rgba(60, 40, 10, .08), 0 14px 28px -20px rgba(60, 40, 10, .55);
+}
+figure h3 { font-size: clamp(21px, 2.4vw, 27px); }
+figcaption { font-style: normal; font-size: 15.5px; }
+
+/* a log page: blue rules, a red double margin, the writing sits on the rules */
+.logpage {
+  --row: 40px;
+  background:
+    linear-gradient(90deg, transparent 0 calc(var(--lm) - 6px), var(--margin) calc(var(--lm) - 6px) calc(var(--lm) - 4.5px),
+                    transparent calc(var(--lm) - 4.5px) calc(var(--lm) - 1px), var(--margin) calc(var(--lm) - 1px) var(--lm), transparent var(--lm)),
+    repeating-linear-gradient(180deg, transparent 0 calc(var(--row) - 1px), var(--rule) calc(var(--row) - 1px) var(--row)),
+    var(--logpaper);
+  --lm: clamp(28px, 7vw, 92px);
+  padding: 30px clamp(14px, 3vw, 34px) 26px calc(var(--lm) + clamp(12px, 2.5vw, 26px));
+}
+/* graph paper, for the charts that need a scale */
+.graph {
+  background:
+    repeating-linear-gradient(0deg, transparent 0 19px, rgba(70,110,160,.13) 19px 20px),
+    repeating-linear-gradient(90deg, transparent 0 19px, rgba(70,110,160,.13) 19px 20px),
+    var(--logpaper);
+}
+
+/* the hero's title block, printed the way a chart prints its title */
+.titleblock {
+  position: absolute; right: 3.5%; top: 6%; width: min(41%, 440px);
+  background: rgba(248, 243, 230, .95); padding: clamp(16px, 2.2vw, 28px);
+  border: 1.5px solid var(--ink); outline: 1px solid var(--ink); outline-offset: -6px;
+  display: flex; flex-direction: column; gap: 10px; text-align: center; line-height: 1.35;
+}
+.titleblock .no { font: 500 11px/1 var(--mono); letter-spacing: .3em; text-transform: uppercase; color: var(--label); }
+.titleblock h1 { font: 600 clamp(26px, 3.4vw, 44px)/1.08 var(--serif); letter-spacing: .01em; }
+.titleblock .sub { font: italic 400 clamp(14px, 1.35vw, 17px)/1.4 var(--serif); color: var(--label); }
+.titleblock .scrawl { font: 400 clamp(19px, 1.9vw, 25px)/1.15 var(--hand); color: var(--pen);
+  transform: rotate(-1.6deg); margin-top: 6px; }
+.titleblock .clock { justify-content: center; gap: 18px; }
+.titleblock .clock b { color: var(--redpen); font-family: var(--hand); font-size: 22px; font-weight: 400; letter-spacing: 0; }
+@media (max-width: 760px) { .titleblock { position: static; width: auto; margin-top: 14px; } }
+
+/* a handwritten note on a chart sheet (site/js/chart.js draws its leader) */
+.sheet .note {
+  position: absolute; font: 400 clamp(13px, 1.6vw, 21px)/1.05 var(--hand); color: var(--pen);
+  white-space: pre; pointer-events: none; transform: rotate(var(--rot, -1.5deg));
+}
+.sheet .note.red { color: var(--redpen); }
+.sheet .note.grey { color: var(--graphite); }
+.sheet .note.green { color: var(--greenpen); }
+.sheet svg.leaders { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+@media (max-width: 640px) { .sheet .note { font-size: 12px; } }
+
+/* section heads: printed small, the way a chart letters a region */
+.section { display: flex; flex-direction: column; gap: 10px; max-width: 60ch; }
+.section .act { margin-bottom: 4px; }
+.section h2 { font-size: clamp(26px, 3.2vw, 36px); max-width: 22ch; }

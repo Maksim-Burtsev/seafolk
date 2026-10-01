@@ -22,7 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import chartkit as ck                                   # noqa: E402
-from site_data.storms import ANCHORAGES, ANCHOR_SHORT   # noqa: E402
+from site_data._storms import ANCHORAGES, ANCHOR_SHORT   # noqa: E402
 
 ROOT = ck.ROOT
 DS = ROOT / "dist" / "dataset"
@@ -30,7 +30,7 @@ PIN = ["--geotoh3_argument_order=lat_lon", "--h3togeo_lon_lat_result_order=0"]
 
 # The storms that have a triptych, the same keys scripts/render_storm.py files
 # its clips under. Dates come from data/context/storms.csv, never from here.
-TRIPTYCH = ("amy", "malik", "pia")
+TRIPTYCH = ("amy",)          # round 4: the one storm on the page
 # Daylight, one fixed UTC window on every day of a triptych (the same window
 # the old map figures used): fishing boats work by the sun, and a
 # fixed window keeps the three days comparable.
@@ -90,30 +90,6 @@ def anchors():
 def main():
     charts = {}
 
-    # The animation's chart: nothing on it but the sea. The fleets are drawn by
-    # the browser, hour by hour, over this image.
-    s = ck.Sheet("denmark", 1600).base()
-    charts["storms-sea"] = s.save("storms-sea")
-
-    # T2-fishing: every hour of 2025 a fishing boat was moving, one dot per 40.
-    s = ck.Sheet("denmark", 1600).base()
-    lon, lat, v = fishing_hours(2025, "1")
-    n = s.stipple(lon, lat, [min(round(x / 40), 12) for x in v], 1.3, "fishing", size=1.1, alpha=.7)
-    charts["storms-fishing"] = {**s.save("storms-fishing"), "dots": n}
-    print(f"storms-fishing: {n} dots from {len(v)} cells")
-
-    # T3: the anchorages, on a sheet of the water they sit in.
-    # Under the anchors, where big ships lie still: every hour of 2025 a cargo
-    # ship sat in a cell without moving, as a magenta wash. Harbours and the
-    # roadsteads come up on their own.
-    s = ck.Sheet(ANCHOR_BOX, 900).base()
-    rows = ch(f"""SELECT h3ToGeo(h3).2, h3ToGeo(h3).1, sum(vessels)
-                  FROM file('{DS}/class_a_hourly_2025.parquet')
-                  WHERE ship_group = 'cargo' AND moving_msgs = 0 GROUP BY h3""")
-    s.wash([float(r[0]) for r in rows], [float(r[1]) for r in rows], [int(r[2]) for r in rows],
-           "cargo", pct=99.5, sigma_km=1.2, gamma=.55, alpha=.7)
-    charts["storms-anchorages"] = {**s.save("storms-anchorages"), "anchors": anchors()}
-
     # T4 triptychs: one dot per daylight hour with a fishing boat under way in a
     # cell, the same scale on all three days of a storm.
     dates = storm_dates()
@@ -124,7 +100,7 @@ def main():
             s = ck.Sheet(FISH_BOX, 900).base(soundings=False)
             lon, lat, v = fishing_hours(d.year, f"toDate(hour) = '{d}' AND toHour(hour) "
                                                f"BETWEEN {DAY_H0} AND {DAY_H1}")
-            n = s.stipple(lon, lat, v, 1.8, "fishing", size=15, alpha=.8, seed=11) if v else 0
+            n = s.stipple(lon, lat, v, 1.8, "greenpen", size=15, alpha=.8, seed=11) if v else 0
             cid = f"storms-{key}-{i}"
             charts[cid] = {**s.save(cid), "day": d.isoformat(), "dots": n}
             print(f"{cid}: {d} {n} dots from {len(v)} cells")

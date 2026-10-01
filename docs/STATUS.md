@@ -3,13 +3,66 @@
 Newest session on top. Each entry: what was done, findings with numbers, open
 questions, and the exact next session. Write it for someone with zero context.
 
-**Next: the owner reviews round 3 (the site as a nautical chart), then GitHub
-Pages goes on.** Open `site/index.html` by double-click (and the chapters from
-its footer, `site/explore/`, `site/posters/*.png`). The dataset is public on
-Hugging Face. `.github/workflows/pages.yml` is written but NOT committed — a
-push with it would try to deploy while Pages is off; commit it and enable
-Pages (`gh api -X POST repos/Maksim-Burtsev/seafolk/pages -f build_type=workflow`)
+**Next: the owner reviews round 4 — one page, drawn by hand.** Open
+`site/index.html` by double-click (and `site/explore/`, `site/posters/*.png`).
+The dataset is public on Hugging Face. `.github/workflows/pages.yml` is written
+but NOT committed; commit it and enable Pages
+(`gh api -X POST repos/Maksim-Burtsev/seafolk/pages -f build_type=workflow`)
 after the owner's yes. The store is unchanged since S8.
+
+---
+
+## Round 4 — one page, drawn by hand — 2026-10-01
+
+**Why.** The owner on round 3: only the hero (ferries drawn by a pen over the
+chart) worked; the rest still read as a generated artifact with a yellow
+background — a stock headline, red accents, sailboats like warning triangles,
+flags like emoji stickers, a magenta "cyberpunk" cargo wash. He asked for
+handwork throughout (blue ballpoint, pencil), a modest human voice, one page of
+results, and no load on his machine.
+
+**What was done.** `site/index.html` is the only page; the chapters are its
+sections (title "Who is out on the Danish sea", a printed title block over the
+pen-drawn ferry day, a short intro, then Summer · Everyone else · The day ·
+Ferries · Storms · The archive's own mistakes · How it was made). Figures: the
+season on graph paper (2015 pencil, 2026 pen); boats-vs-ships and flags as
+tally strokes on log pages; small-boat, cargo, ferry and fishing sheets with
+handwritten notes and drawn leaders; cargo as pencil strokes laid along the
+lanes (`chartkit.Sheet.flow`, idea from Kimi Code's sketch); four pen compass
+roses; ELLEN vs SKJOLDNAES on the chart; the storm curves with sketched boats;
+the storm-day harbour; Amy as three sheets; the radio ceiling as pencil strips;
+the pipeline as a pencil sketch. New: `site/js/hand.js` (rough.js), notes in
+`chart.sheet`, `Sheet.flow/.hatch`, pen tremor, the ink palette in `site.css`.
+Data: chapter modules became `scripts/site_data/_<part>.py`, merged into
+`index.py`. Deleted: the five chapter pages and their JS, the storm player,
+storm clips and the clocks film, the unused sheets and builders
+(`charts_season/pulse/how`, `render_storm`, `render_clocks`). Posters
+re-rendered in pencil and pen. Kimi Code drew three figures as a second
+opinion; it reached the same tally idea independently, and its flow-aligned
+cargo hatching was adopted. Every heavy step ran at nice 20 / background QoS.
+
+### Validate — real output
+
+```
+$ nice -n 19 scripts/build_site_data.sh      exit 0 (one page; 44 spans written)
+$ nice -n 19 scripts/build_charts.sh         exit 0 · i1-jul 14 547 dots · hero 236 ferries
+                                              race SKJOLDNAES 66 / ELLEN 60 min · amy 3 124 / 703 / 4 841
+$ uv run scripts/test_build_guards.py        PASS
+$ uv run scripts/test_site.py                PASS (index: 78 prose elements, 42 numbers, 14 figures;
+                                              explorer 17.5 MB, 0 small-boat cells under five)
+$ uv run --project notes scripts/test_charts.py   PASS (Drogden ink at 255,220; chart.js agrees on 4 places)
+$ grep -rEn '\b[0-9]{9}\b' site/*.html site/js site/media | wc -l   0
+```
+
+No punchcard pass on round 4: presentation code over the guarded data paths of
+round 3 (same builders, same privacy asserts, same projection test); the one
+data change is a narrower merge of existing modules.
+
+### Open questions
+
+- **The owner's review of round 4.**
+- Safari/Firefox and a real phone untested; rough.js, D3 and fonts load from CDNs.
+- Issue #1: load the rest of 2026 when the year is over.
 
 ---
 

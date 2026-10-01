@@ -140,8 +140,7 @@ def main():
     charts = {}
 
     # Small boats: July against January, and July 2015 against July 2025, all at one dot scale.
-    for cid, month in [("i1-jul", "2025-07"), ("i1-jan", "2025-01"),
-                       ("i2-2015", "2015-07"), ("i2-2025", "2025-07")]:
+    for cid, month in [("i1-jul", "2025-07"), ("i1-jan", "2025-01")]:
         s = ck.Sheet("denmark", 1200).base()
         lon, lat, v = zip(*small_boats(month))
         n = s.stipple(lon, lat, [round(x / BOATS_PER_DOT) for x in v], 9, "small", size=5, alpha=.8)   # half-width sheets: a dot must survive the downscale
@@ -152,19 +151,19 @@ def main():
     s = ck.Sheet("denmark", 1600).base()
     cargo = public(2025, ["cargo"], 7)
     cargo_oracle(*cargo)
-    s.wash(*cargo, "cargo", pct=99.3, sigma_km=1.8)
+    s.flow(*cargo, "graphite")
     charts["i3-cargo"] = s.save("i3-cargo")
 
     # Fishing, all of 2025, as stipple: one dot per 40 ship-hours in a cell.
     s = ck.Sheet("denmark", 1600).base()
     lon, lat, v = public(2025, ["fishing"])
-    n = s.stipple(lon, lat, [min(round(x / 40), 12) for x in v], 1.3, "fishing", size=1.1, alpha=.7)
+    n = s.stipple(lon, lat, [min(round(x / 40), 12) for x in v], 1.3, "greenpen", size=1.6, alpha=.75)
     charts["i3-fishing"] = {**s.save("i3-fishing"), "dots": n}
 
     # The ferry web: every passenger ship's track through July 2025.
     s = ck.Sheet("denmark", 1600).base()
     segs = segments(ferry_tracks("2025-07-01", "2025-07-31", 2), 600)
-    s.tracks(segs, "ferry", lw=.35, alpha=.18)
+    s.tracks(segs, "redpen", lw=.45, alpha=.22, hand=True)
     charts["i3-ferries"] = s.save("i3-ferries")
 
     # The hero: a quiet chart with July's small boats as a faint stipple, and the

@@ -615,3 +615,12 @@ what it rules out.
   `scripts/render_posters.py` fetches Source Serif 4 and IBM Plex Mono (the
   site's two faces, SIL OFL) once into `data/context/fonts/` (gitignored) so
   the PDFs carry the same type as the site; matplotlib's default would not.
+- 2026-10-01 (round 4) — **One page, drawn by hand.** Owner's review of round 3:
+  only the pen-drawn hero survived. The site is `site/index.html` alone (the
+  chapter pages, their JS, the storm player, the storm clips and the clocks film
+  are deleted; their data modules stay as parts of index.py). Every figure is
+  pen, pencil or handwriting over printed paper (docs/SITE.md § Round 4).
+- 2026-10-01 (round 4) — **New runtime dependency: rough.js 4.6.6** (jsDelivr,
+  MIT), the hand tremor of every drawn figure; and the Google font *Annie Use
+  Your Telescope* for handwriting. Both load like D3 and the existing fonts; the
+  page still opens from `file://`. Rules out drawing figures as clean SVG.

@@ -4,7 +4,7 @@
 
 Writes into site/posters/ a PDF to print and a 300-dpi PNG of each:
 
-  danish-waters   one July of traffic on one chart: cargo as a magenta wash,
+  danish-waters   one July of traffic on one chart: cargo in pencil hatching,
                   ferries as red ink tracks, fishing as green stipple, small
                   boats as sail-orange stipple, over depths, contours and
                   soundings; neatline, compass rose, scale bar, cartouche.
@@ -243,13 +243,13 @@ def danish_waters():
     mh = mw * (box[3] - box[2]) * ck.ASPECT / (box[1] - box[0])
 
     s = ck.Sheet(box, width=round(mw / 25.4 * 100)).base()
-    s.wash(*ci.public(2025, ["cargo"], 7), "cargo", pct=99.3, sigma_km=1.8, alpha=.75)
+    s.flow(*ci.public(2025, ["cargo"], 7), "graphite", strokes=60000)
     lon, lat, v = ci.public(2025, ["fishing"], 7)
     fish = s.stipple(lon, lat, [min(round(x / 8), 14) for x in v], 1.3, "fishing", size=.9, alpha=.75)
     lon, lat, v = zip(*ci.small_boats("2025-07"))
     small = s.stipple(lon, lat, [round(x / ci.BOATS_PER_DOT) for x in v], 9, "small", size=1.5, alpha=.85)
     segs = ci.segments(ci.ferry_tracks("2025-07-01", "2025-07-31", 2), 600)
-    s.tracks(segs, "ferry", lw=.25, alpha=.07)
+    s.tracks(segs, "redpen", lw=.3, alpha=.12, hand=True)
     s.ax.collections[-1].set_rasterized(True)
     s._soundings_draw()
     print(f"danish-waters: {fish} fishing dots, {small} small-boat dots, {len(segs)} ferry segments")
@@ -265,7 +265,7 @@ def danish_waters():
 
     X = lambda lon: mx + (lon - box[0]) / (box[1] - box[0]) * mw     # noqa: E731
     Y = lambda lat: my + (box[3] - lat) / (box[3] - box[2]) * mh     # noqa: E731
-    pg.rose(X(7.98), Y(54.42), 14, C["cargo"])
+    pg.rose(X(7.98), Y(54.42), 14, C["ink"])
 
     # the cartouche, on the Swedish shore where a chart letters its title
     cx, cy = X(12.5), Y(58.42)
@@ -280,7 +280,7 @@ def danish_waters():
     pg.text(t, cy + 45.2, "as the ships' own radios", F["it"], 10, LABEL)
     pg.text(t, cy + 49.9, "told it", F["it"], 10, LABEL)
     pg.line([t, r], [cy + 54.5] * 2, lw=.5)
-    rows = [("wash", C["cargo"], "Cargo ships", "darkest in the lanes"),
+    rows = [("wash", C["cargo"], "Cargo ships", "pencil, densest in the lanes"),
             ("line", C["ferry"], "Ferries", "and other passenger ships"),
             ("dots", C["fishing"], "Fishing boats", "a dot for 8 hours out"),
             ("dots", C["small"], "Small boats", f"a dot for {ci.BOATS_PER_DOT} boat-days")]

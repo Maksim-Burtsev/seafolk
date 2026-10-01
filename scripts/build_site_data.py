@@ -78,15 +78,17 @@ PRIVATE = ("leisure", "small_boat", "sailing", "private", "marina")
 # here with what the number actually counts; nothing gets out of this guard by
 # accident, and a new entry is a thing a reviewer reads.
 EXEMPT = {
+    # (Round 4: the chapters are parts of site/index.html, so their keys can
+    # arrive prefixed — "storms_" in n, "part_how." in the data.)
     # how.html H1 is a DRAWING of the >= 5 rule: seven hexagons holding
     # invented counts of 1 to 12 boats, so a reader can see which of them the
     # floor deletes. No fleet behind them; the figure's caption says so.
-    r"picture\.rows\[\d+\]\[\d+\]": "invented boats in the drawing of the rule",
+    r"(?:part_how\.)?picture\.rows\[\d+\]\[\d+\]": "invented boats in the drawing of the rule",
     # storms, not boats: how many of the fourteen had a private fleet big
     # enough to draw at all (site_data.sailing_storms).
-    r"n\.sailing_storms": "a count of storms",
+    r"n\.(?:storms_)?sailing_storms": "a count of storms",
     # hours, not boats: where the pooled sailing onset falls (site_data.onset).
-    r"n\.sailing_hours": "a count of hours",
+    r"n\.(?:storms_)?sailing_hours": "a count of hours",
 }
 EXEMPT_RE = re.compile("|".join(f"(?:{p})" for p in EXEMPT)).fullmatch
 

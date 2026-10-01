@@ -10,7 +10,7 @@ files the chapters already use. Nothing on this page is hand-typed.
     I4     every storm at once, two fleets     sql/52_who_stays.sql  block 1
     I5     who stays in on a storm day         sql/52_who_stays.sql  block 1
     I7     a day that cannot happen            sql/60_coverage_index.sql block 6
-    I6     the sea empties                     site/media/, rendered by S14
+    T4     storm Amy, three chart sheets      site/media/charts, scripts/charts_storms.py
     prose  the ferry nobody can see            sql/44_hidden_fleet.sql   block 3
     prose  what was loaded, and how big        vessel_day, load_log, du
 
@@ -36,7 +36,7 @@ from collections import defaultdict
 from . import (A1, A1_INT, A4, B6, B6_INT, CAP_A, D1, D1_INT, FLEET_KEY,
                FLEET_NAME, H1, H1_INT, H3, H3_INT, K_FLOOR, REPORT_SECONDS,
                ROOT, STOP_ORDER, W, W_INT, WINDOW_DAYS, YEARS, blocks, clips,
-               hourly_series, media_key, onset, onset_words, private_count,
+               hourly_series, onset, onset_words, private_count,
                sailing_storms, sp, typed)
 
 FL = "year flag share".split()
@@ -244,27 +244,13 @@ def storm_curves(day_rows, ndays):
     assert len(whole) >= 5, \
         f"only {len(whole)} storms have a whole window — a mean of that is one storm"
 
-    out = {"offsets": OFFSETS, "storms": whole,
-           "media": media_key(deepest(by, whole))}
+    out = {"offsets": OFFSETS, "storms": whole}
     for g in ("fishing", "cargo"):
         out[FLEET_KEY[g]] = {
             "mean": [[o, round(statistics.mean(by[(g, s)][o] for s in whole), 1)]
                      for o in OFFSETS],
             "each": [[[o, by[(g, s)][o]] for o in OFFSETS] for s in whole]}
     return out
-
-
-def deepest(by, whole):
-    """Which storm chart I6 plays: among the storms S14 rendered a clip for,
-    the one whose fishing fleet shows the whole arc — went in AND came back:
-    the smaller of (day -1 minus the storm day) and (day +2 minus the storm
-    day), maximised. Depth alone picked Pia, whose "after" is Christmas, so the
-    sea on screen never filled again and the headline above it was false.
-    Chosen from the data, so a clip added later can win without an edit here."""
-    def arc(s):
-        d = by[("fishing", s)]
-        return min(d[-1] - d[0], d[2] - d[0])
-    return max(clips(whole).values(), key=arc)
 
 
 # ------------------------------------------------------------------- I5 ----
@@ -497,4 +483,14 @@ def build(ch):
         "hidden_ship_type": ship["type"],
         "hidden_ship_days": sp(ship["days"]),
     }
+    # Round 4: the site is this one page. The old chapters are its parts —
+    # site_data/_<part>.py, skipped by the driver's discovery — and each part's
+    # numbers arrive here as "<part>_<key>", its figures' data as "part_<part>".
+    # Only the parts the page draws from; _season and _storms stay importable
+    # for the chart builders' constants and for whoever brings a part back.
+    from . import _ferries, _how, _pulse
+    for name, part in (("pulse", _pulse), ("ferries", _ferries), ("how", _how)):
+        d = part.build(ch)
+        charts["n"].update({f"{name}_{k}": v for k, v in d.pop("n", {}).items()})
+        charts[f"part_{name}"] = d
     return charts

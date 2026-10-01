@@ -319,3 +319,41 @@ that a Danish teenager would scroll through, and he chose the direction:
 5. Numbers in prose only through `data-n`; `uv run scripts/test_site.py` must
    pass; no radio ID or 9-digit integer anywhere under `site/`.
 6. Page weight: images WebP; one page's media under ~12 MB.
+
+## Round 4 — one page, drawn by hand (owner's review 2026-10-01; binding, overrides everything above)
+
+**The verdict on round 3.** The hero chart with the ferries drawn by a pen was
+loved; everything else still read as "a generated artifact with a yellow
+background": the headline is a stock AI phrase, red accents on serif, the
+sailboat glyphs look like warning triangles, the flags chart like emoji
+stickers, the magenta cargo wash like cyberpunk. What he wants: **every figure
+looks like handwork — a navigator who spent two weeks annotating a printed chart
+and a logbook in ballpoint (blue, red), pencil and green fineliner.** Human,
+modest voice ("I came, counted, didn't know what was in there"), one page with
+the results, no AI tells.
+
+**What the page is now.** `site/index.html` is the only page (the five chapters
+became its sections; their numbers come from `scripts/site_data/_<part>.py`,
+merged by `index.py` as `<part>_<key>` and `part_<part>`). `site/explore/` stays
+as a linked map.
+
+- **Two kinds of paper on a table**: printed chart sheets (chartkit images) the
+  author drew on, and log pages (blue rules, red margin) / graph paper where he
+  counted. Print = ink-navy Source Serif; everything added by the author = a pen
+  in `--hand` (Annie Use Your Telescope) or a rough.js stroke.
+- **Inks** (`site.css`): `--pen` blue ballpoint (small boats, notes),
+  `--redpen` (ferries; the one thing a note points at), `--graphite` pencil
+  (cargo, "everything else"), `--greenpen` (fishing). No magenta, no orange.
+- **Kit**: `site/js/hand.js` (rough.js from jsDelivr: pen lines, curves,
+  pencil shading, tally strokes, sketched boats, handwriting),
+  `chart.sheet(..., {notes})` for handwritten notes with drawn leaders,
+  `chartkit.Sheet.flow()` — cargo as pencil strokes laid along the lanes (the
+  idea came from Kimi Code's second-opinion sketch), `.hatch()`, pen tremor on
+  `tracks(hand=True)`, uneven ink dots in `stipple`.
+- **Figures**: season curve on graph paper (2015 pencil, 2026 pen); tally
+  strokes for small boats vs ships and for flags (hand-shaded ensigns);
+  stipple sheets with handwritten notes; the day as four pen compass roses;
+  ELLEN vs SKJOLDNAES drawn on the chart with ten-minute marks; storm curves
+  on graph paper with sketched boats; the storm-day harbour as a pen drawing;
+  Amy as three sheets; the radio ceiling as pencil-shaded strips; the pipeline
+  as a pencil sketch.

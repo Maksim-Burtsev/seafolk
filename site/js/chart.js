@@ -138,6 +138,51 @@ chart.sheet = function (el, id, o) {
     Object.assign(s.style, { left: "3%", top: "auto", bottom: "4.5%", transform: "none", width: w + "%" });
     s.innerHTML = `<span></span><span></span><em>${nm} nautical miles</em>`;
   }
+  // Notes in the author's hand: { text, at: [lon, lat] where the writing
+  // starts, to: [lon, lat] what it points at, ink: "red"|"grey"|"green",
+  // rot: degrees }. The leader is drawn by hand too (rough.js when the page
+  // loads it), in the sheet's own pixel space so it scales with the image.
+  (o.notes || []).forEach((n, i) => {
+    const t = box.appendChild(document.createElement("div"));
+    t.className = "note" + (n.ink ? " " + n.ink : "");
+    t.textContent = n.text;
+    const p = at(...n.at);
+    Object.assign(t.style, { left: p.left, top: p.top });
+    if (n.rot != null) t.style.setProperty("--rot", n.rot + "deg");
+    if (n.anchor === "end") t.style.translate = "-100% 0";
+    if (!n.to) return;
+    let lead = box.querySelector("svg.leaders");
+    if (!lead) {
+      lead = box.appendChild(document.createElementNS(ns, "svg"));
+      lead.setAttribute("class", "leaders");
+      lead.setAttribute("viewBox", `0 0 ${m.w} ${m.h}`);
+      lead.setAttribute("preserveAspectRatio", "none");
+    }
+    const [ax, ay] = chart.project(m.box, m.w, m.h, ...(n.from || n.at));
+    const [bx, by] = chart.project(m.box, m.w, m.h, ...n.to);
+    const mx = (ax + bx) / 2 + (by - ay) * .18, my = (ay + by) / 2 - (bx - ax) * .18;
+    const ink = getComputedStyle(document.documentElement)
+      .getPropertyValue(n.ink === "red" ? "--redpen" : n.ink === "grey" ? "--graphite"
+                        : n.ink === "green" ? "--greenpen" : "--pen").trim();
+    const d = `M ${ax} ${ay} Q ${mx} ${my} ${bx} ${by}`;
+    const ang = Math.atan2(by - my, bx - mx), hl = m.w / 90;
+    const head = `M ${bx - hl * Math.cos(ang - .45)} ${by - hl * Math.sin(ang - .45)} L ${bx} ${by} ` +
+                 `L ${bx - hl * Math.cos(ang + .45)} ${by - hl * Math.sin(ang + .45)}`;
+    const w = Math.max(1.4, m.w / 900);
+    if (window.rough) {
+      const rc = rough.svg(lead);
+      const opt = { stroke: ink, strokeWidth: w, roughness: .9, bowing: 1.5, seed: 11 + i };
+      lead.appendChild(rc.path(d, opt));
+      lead.appendChild(rc.path(head, { ...opt, bowing: .5 }));
+    } else {
+      [d, head].forEach(pd => {
+        const p2 = lead.appendChild(document.createElementNS(ns, "path"));
+        Object.entries({ d: pd, fill: "none", stroke: ink, "stroke-width": w, "stroke-linecap": "round" })
+          .forEach(([k, v]) => p2.setAttribute(k, v));
+      });
+    }
+  });
+
   if (o.tag) {
     const t = label(o.tag, "tag", { left: "auto", right: "2.2%", top: "3.2%" });
     t.style.transform = "none";
